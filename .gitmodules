@@ -1,0 +1,6 @@
+[submodule "boogie"]
+	path = boogie
+	url = https://github.com/boogie-org/boogie
+[submodule "boogaloo"]
+	path = boogaloo
+	url = ./boogaloo/

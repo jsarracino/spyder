@@ -3,7 +3,17 @@ module Language.Spyder.AST.Imp (
   , Expr(..)
   , Bop(..)
   , Uop(..)
+  , Type(..)
+  , Block(..)
+  , VDecl
+  , Type
 ) where
+
+import qualified Language.Boogie.AST as BST
+
+-- type Type = BST.Type
+
+
 
 data Bop =
     Plus | Minus | Mul | Div
@@ -18,21 +28,39 @@ data Uop =
 
 data Expr =
     VConst String       -- Variables
-  | IConst Integer      -- Integers
-  | SConst String       -- Strings
+  | IConst Int      -- Integers
+  -- | SConst String       -- Strings
   | BConst Bool         -- Booleans
   | AConst [Expr]       -- Arrays
   | BinOp Bop Expr Expr -- Binary operations
-  | UnOP Uop Expr       -- Unary operations
+  | UnOp Uop Expr       -- Unary operations
   | Index Expr Expr     -- Array indexing e.g. foo[bar]
+  | App Expr Expr
+
   deriving (Eq, Show, Ord)
 
 
--- types of statements
+data Type =
+    BaseTy String
+  | ArrTy Type
+  | FuncTy Type Type
+  | Void
+  deriving (Eq, Show, Ord)
+
+type VDecl = (String, Type)
+
+-- simple statements
 data Statement =
-    Decl String Expr                  -- variable decls
+    Decl VDecl (Maybe Expr)           -- variable decls
   | Assgn Expr Expr                   -- assignment e.g. x = y
-  | Loop [String] [Expr] Statement    -- for-in loops
-  | Seq [Statement]                   -- sequences of statements
-  | Ensure                            -- ensure tags
+  | Loop [VDecl] [Expr] Block        -- forin loops
+  | While Expr Block                 -- while loops
   deriving (Eq, Show, Ord)
+
+
+
+-- complex statements
+data Block =
+    Seq [Statement]
+  deriving (Eq, Show, Ord)
+

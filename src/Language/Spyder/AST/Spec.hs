@@ -1,12 +1,22 @@
 module Language.Spyder.AST.Spec (
-    InvDecl(..)
-  , Program
+  BaseRel(..),
+  RelType(..)
 ) where
 import qualified Language.Spyder.AST.Imp as Imp
 
-data InvDecl =
-    BaseInv Imp.Expr          -- a simple invariant that should hold over variables
-  | ArrInv Imp.Expr Imp.Expr Imp.Expr -- foo ~ bar | foo = bar ==== elementwise equality between foo and bar
+
+data BaseRel = 
+    Exp Imp.Expr
+  | ForEach2 Imp.Expr Imp.Expr BaseRel
   deriving (Eq, Show, Ord)
 
-type Program = ([InvDecl], Imp.Statement)
+-- basic types of relations
+
+data RelType = 
+    SimpRel -- basic relations
+  | FuncRel RelType RelType -- functions
+  | TupRel RelType RelType  -- ghost tuples
+  deriving (Eq, Show, Ord)
+
+
+

@@ -6,5 +6,6 @@ module Language.Spyder.AST (
 
 import qualified Language.Spyder.AST.Imp as Imp
 import qualified Language.Spyder.AST.Spec as Spec
+import Language.Spyder.AST.Component(Component)
 
-type Program = Spec.Program
+type Program = ([Component], Component)

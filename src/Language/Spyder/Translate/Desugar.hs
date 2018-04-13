@@ -1,0 +1,210 @@
+module Language.Spyder.Translate.Desugar (
+    uniqifyNames
+  , stripLt
+  , simplArrAccess
+  , gatherDecls
+  , convertArr
+  , translateArrs
+  , generateBoogieBlock
+) where
+
+import Language.Spyder.AST.Imp
+import Language.Spyder.AST.Spec
+import qualified Data.Map.Strict as Map
+import Data.Set (union, empty, Set, singleton, toList)
+import Control.Monad (liftM)
+
+-- need to know the length variable for the array, as well as the index variable.
+type ArrInfo = VDecl
+
+-- convert an array lvalue to an identifier and list of arguments
+-- todo: fix this hack
+simplArrAccess :: Expr -> (String, [Expr])
+simplArrAccess e = worker (e, [])
+  where worker (VConst s, args) = (s, args)
+        worker (Index l r, args) = worker (l, r:args)
+        worker (x, _) = undefined $ "tried to convert to array access: " ++ show x
+
+-- desugar lt into ! (geq)
+stripLt :: Block -> Block
+stripLt (Seq ss) = Seq $ map stmtWorker ss
+  where
+    stmtWorker (Decl d rhs) = Decl d $ liftM exprWorker rhs
+    stmtWorker (Assgn l r) = Assgn (exprWorker l) (exprWorker r)
+    stmtWorker (Loop vs arrs bod) = Loop vs (map exprWorker arrs) (stripLt bod)
+    stmtWorker (While c b) = While (exprWorker c) (stripLt b)
+
+    exprWorker x@(VConst _) = x
+    exprWorker x@(IConst _) = x
+    exprWorker x@(BConst _) = x
+    exprWorker (AConst vs) = AConst $ map exprWorker vs
+    exprWorker (UnOp o i) = UnOp o $ exprWorker i
+    exprWorker (BinOp Lt l r) = UnOp Not $ BinOp Ge l r
+    exprWorker (BinOp o l r) = BinOp o (exprWorker l) (exprWorker r)
+    exprWorker (Index l r) = Index (exprWorker l) (exprWorker r)
+    exprWorker (App l r) = App (exprWorker l) (exprWorker r)
+
+-- gather decls into a thinger and convert to assignments
+-- not sure yet
+gatherDecls :: Block -> Set VDecl
+gatherDecls (Seq ss) = foldl union empty (map stmtWorker ss)
+  where
+    stmtWorker (Decl d _) = singleton d
+    stmtWorker (Loop _ _ bod) = gatherDecls bod -- assumes vs have been moved around
+    stmtWorker (While _ bod) = gatherDecls bod
+    stmtWorker (Assgn _ _) = empty
+-- transform all decls to assigns
+-- we use a concatMap because a blank decl e.g. let foo: int should be hoisted and just elided
+convertDecls :: Block -> Block
+convertDecls (Seq ss) = Seq $ concatMap stmtWorker ss
+  where
+    stmtWorker (Decl (l,_) (Just r)) = [Assgn (VConst l) r]
+    stmtWorker (Decl _ Nothing) = [] -- holy hell this is a hack...TODO
+    stmtWorker (Loop vs ars bod) = [Loop vs ars (convertDecls bod)]
+    stmtWorker (While c bod) = [While c (convertDecls bod)]
+    stmtWorker x@(Assgn _ _) = [x]
+
+
+-- convert an array constant into an initialization sequence, as well
+-- as an ArrInfo. the sequence is prefixed by variable decls for the array's variables.
+convertArr :: Integer -> Type -> [Expr] -> ([Statement], String, ArrInfo)
+convertArr suffix bty es = (decls ++ assns, arrVar, arrInfo)
+  where
+    lenVar = "_len" ++ (show suffix)
+    len = IConst $ length es
+    arrVar = "_arr" ++ (show suffix)
+    arrDecl = (arrVar, ArrTy bty)
+    arr = VConst arrVar
+    decls = [Decl arrInfo (Just len), Decl arrDecl Nothing]
+    arrInfo = (lenVar, BaseTy "int")
+    assns = map worker (es `zip` [0..])
+    worker (e, i) = Assgn (Index arr (IConst i)) e
+
+type ArrInfos = Map.Map String ArrInfo
+
+type TranslateState = (Integer, ArrInfos)
+
+translateArrs :: Block -> TranslateState -> (Block, TranslateState)
+translateArrs (Seq ss) (initSeed, oldArrs) = let (newSeed, arrs, ss') = foldl sWorker start ss in
+  (Seq ss', (newSeed, arrs))
+  where
+    start = (initSeed, oldArrs, [])
+    sWorker (seed, arrs, acc) s = case s of
+      (Decl (v, ty) (Just (AConst es))) ->
+        let (ss', arrNme, arrInfo) = convertArr seed (unpack ty) es in
+        let s' = Decl (v, ty) (Just $ VConst arrNme) in
+        (seed+1, Map.insert v arrInfo arrs, acc ++ ss' ++ [s'])
+      -- (Assgn l r@(AConst _)) ->
+      --   let (ss', arrNme, arrInfo) = convertArr seed (unpack ty) r in
+      --   let s' = Assgn l (Just $ VConst arrNme) in
+      --   (seed+1, Map.insert l arrInfo arrs, acc ++ [s'] ++ ss')
+      (Assgn _ _) -> (seed, arrs, acc ++ [s]) -- TODO: make work for rhs constants...maybe
+      (Decl _ _) -> (seed, arrs, acc ++ [s])
+      -- assumes arr primitives in arrs have been hoisted above the loop
+      (Loop vs vars bod) ->
+        let (bod', (seed', arrs')) = translateArrs bod (seed, arrs) in
+        (seed', arrs', acc ++ [Loop vs vars bod'])
+      (While c bod) ->
+        let (bod', (seed', arrs')) = translateArrs bod (seed, arrs) in
+        (seed', arrs', acc ++ [While c bod'])
+
+    unpack (ArrTy ty) = ty
+    unpack x@_ = undefined ("Type error, not an array type: " ++ (show x))
+
+-- convert for-in loop to while loop
+-- add a decl for each parallel assignment, and loop while the indices
+-- are within the length. add assignments for bumping the indices at the end of the loop.
+
+-- convert for (decls) in (arrs) bod to
+-- [let decl <- arr[arr_index]]
+-- while (BIGAND [arr_index < arr_length]) Seq [decl <- arr[arr_index]] ++ bod ++ [arr_index <- arr_index + 1]
+convertForStmt :: ArrInfos -> Statement -> ([Statement], Statement)
+convertForStmt arrInfo (Loop vs arrs (Seq bod)) = (decls, loop)
+  where
+    loop = While cond (Seq bod')
+    idx (VConst v) = v ++ "_idx"
+    idx _ = undefined "Error: can only loop over variables (for now)"
+    len (VConst v) =
+      let (lName, _) = (Map.!) arrInfo v in
+      VConst lName
+    len _ = undefined "Error: can only loop over variables (for now)"
+    bnds = vs `zip` arrs
+    decls = (map buildIndex arrs) ++ (map buildIdent bnds)
+    buildIndex arr = Decl (idx arr, BaseTy "number") (Just $ IConst 0)
+    buildIdent (v, arr) = Decl v (Just $ Index arr (VConst $ idx arr))
+    cond = foldl (BinOp And) tru arrConds
+    arrConds = map (\arr -> BinOp Lt (VConst $ idx arr) (len arr)) arrs
+    tru = BConst True
+    incr i = Assgn i (BinOp Plus i (IConst 1))
+    bod' = bod ++ (map (incr . len) arrs)
+convertForStmt _ x@_ = ([], x)
+
+-- desugarLoopS :: ArrInfo -> Statement ->
+convertForBlock :: ArrInfos -> Block -> Block
+convertForBlock arrs (Seq ss) = Seq $ concatMap worker ss'
+  where
+    ss' = map (convertForStmt arrs) ss
+    worker (pres, s) = pres ++ [s]
+
+-- variable renaming, add an int to the end of each variable name for uniqification ;)
+uniqifyNames :: Block -> Block
+uniqifyNames x = (Seq . snd) $ blockWorker start x
+  where
+    start = Map.empty
+    blockWorker vars (Seq ss) = foldl stmtWorker (vars, []) ss
+    stmtWorker (vars, ss) s = case s of
+      (Decl (nme, ty) rhs) ->
+        let suffix = get nme vars + 1 in
+        let nme' = nme ++ show suffix in
+        let rhs' = liftM (renameExpr vars) rhs in
+        let vars' = Map.insert nme suffix vars in
+        (vars', ss ++ [Decl (nme', ty) rhs'])
+      (Assgn l r) ->
+        let s' = Assgn (renameExpr vars l) (renameExpr vars r) in
+        (vars, ss ++ [s'])
+      -- assumes vs have been lowered into/hoisted above bod
+      (Loop vs arrs bod) ->
+        let (vars', bod') = blockWorker vars bod in
+        (vars', ss ++ [Loop vs arrs (Seq bod')])
+      (While c bod) ->
+        let (vars', bod') = blockWorker vars bod in
+        (vars', ss ++ [While c (Seq bod')])
+
+    get = Map.findWithDefault 0
+    renameExpr vars (VConst v) = VConst $ merge v vars
+    renameExpr vars (BinOp o l r) =
+      let recur = renameExpr vars in
+      let (l', r') = (recur l, recur r) in
+      BinOp o l' r'
+    renameExpr vars (UnOp o i) = UnOp o $ renameExpr vars i
+    renameExpr vars (Index l r) =
+      let recur = renameExpr vars in
+      let (l', r') = (recur l, recur r) in
+      Index l' r'
+    renameExpr _ z@(IConst _) = z
+    renameExpr _ z@(BConst _) = z
+    renameExpr _ (AConst _) = undefined "Error: rename assumes arrays are lifted"
+    merge nme vars =
+      let suffix = get nme vars in
+      nme ++ show suffix
+
+-- phases: the ordering within a phase doesn't matter but the order
+-- between phases does
+-- 0) ** array constants -- introduces decls
+-- 1) ** loop conversion -- introduces conditions, decls
+-- 2) everything else:
+--    ** uniqify names -- introduces decls
+--    ** condition simplification
+-- 3) decl hoisting      -- not a simplification but needs to be run before decl conversion
+-- 4) decl conversion    -- removes decls
+
+-- the resulting block can be directly translated to boogie code
+generateBoogieBlock :: Block -> ([VDecl], [Statement])
+generateBoogieBlock b =
+  let start = (0, Map.empty) in
+  let (convArrs, (_, arrInfos)) = translateArrs b start in
+  let passes = [stripLt, uniqifyNames, (convertForBlock arrInfos)] in
+  let beforeDecs = foldr (.) id passes convArrs in
+  let decls = gatherDecls beforeDecs in
+  let (Seq final) =  convertDecls beforeDecs in
+  (toList decls, final)

@@ -1,0 +1,7 @@
+// old style syntax
+
+Require {
+
+} in {
+  let x : number = 3;
+}

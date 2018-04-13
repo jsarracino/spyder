@@ -4,11 +4,16 @@ module Language.Spyder.Parser (
   , str2Expr
   , str2Stmt
   , str2Prog
+  , str2Block
+  , fromFile
 ) where
-
+import Language.Spyder.AST                                    (Program)
+import Language.Spyder.AST.Spec
 import qualified Language.Spyder.Parser.Lexer as Lexer
 import qualified Language.Spyder.Parser.Parser as Parser
 import Text.Parsec
+import Control.Monad (liftM)
+
 
 
 str2A :: (Show a) => Lexer.Parser a -> String -> a
@@ -19,3 +24,8 @@ str2A p s = case parse p "" s of
 str2Expr = str2A Parser.expr
 str2Stmt = str2A Parser.stmt
 str2Prog = str2A Parser.prog
+str2Block = str2A Parser.block
+
+
+fromFile :: FilePath -> IO Program
+fromFile inp = liftM str2Prog (readFile inp)

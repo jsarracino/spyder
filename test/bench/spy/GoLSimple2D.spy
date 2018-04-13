@@ -1,0 +1,81 @@
+
+Component 2DGoL {
+  data cells :: bool[][]; // arguments
+  data rendered :: color[][];
+
+  relation cell2color cell color =
+    cell ==> color = black &&
+    !cell ==> color = white
+
+  relation cellRow2ColorRow cellRow colorRow =
+    foreach2 cellRow colorRow cell2color
+
+  relation cells2colors =
+    foreach2 cells rendered cellRow2ColorRow
+
+  always $ cells2colors cells rendered;
+}
+
+Component Startable {
+  data running :: bool;
+  data start :: button;
+  data stop :: button;
+
+  relation goodConfig =
+    running <=> stop.enabled && !stop.enabled <=> start.enabled
+
+  always goodConfig;
+}
+
+Component Main {
+  // the model
+  data cells :: bool[][];
+  data running :: bool;
+
+  // the view
+  data rendered :: color[][];
+  data start :: button;
+  data stop :: button;
+
+  using Startable(running, start, stop);
+  using 2DGoL(cells, rendered);
+
+  init() { // only the main component can have an init
+    cells = ... blah ...; // for main, values need to be initialized.
+    rendered = ... blah ...;
+
+    for row in rendered:
+      for color in row:
+        color.onclick = colorOnClick;
+
+    start.onclick = toggleButtons;
+    start.enabled = true;
+    stop.onclick = toggleButtons;
+    stop.enabled = false;
+    running = false;
+
+    setInterval golLogic 1000;
+  }
+
+  function colorOnClick(clickedColor) {
+    if (clickedColor == White) {
+      clickedColor = Black;
+    } else {
+      clickedColor = White;
+    }
+  }
+
+  function toggleButtons(clickedButton) {
+    start.enabled = !start.enabled;
+    stop.enabled = !stop.enabled;
+
+    // @ inferred:
+    running = !running;
+  }
+
+  function golLogic(){
+    for (row, i) in enumerate cells:
+      for (cell, j) in enumerate row:
+        ... blah using i, j...
+  }
+}

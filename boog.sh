@@ -1,3 +1,3 @@
 #!/bin/sh
 
-mono boogie/Binaries/Boogie.exe $1
+mono -O=all boogie/Binaries/Boogie.exe $1

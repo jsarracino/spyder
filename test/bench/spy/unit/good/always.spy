@@ -1,0 +1,7 @@
+Component Foo {
+  always true;
+}
+
+Component Main {
+  
+}

@@ -1,5 +1,6 @@
-module Language.Spyder (
-  file2Boogie
+module Spyder (
+  file2Boogie,
+  hs
 ) where
 
 import qualified Language.Spyder.AST.Imp as IST
@@ -23,4 +24,4 @@ file2Boogie inp outp = do {
   }
 }
 
-main = undefined "TODO"
+hs = undefined "TODO"

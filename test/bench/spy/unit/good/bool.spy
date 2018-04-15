@@ -1,0 +1,3 @@
+Component Foo {
+  data arr : bool;
+}

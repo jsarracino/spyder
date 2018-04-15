@@ -1,0 +1,10 @@
+Component Foo {
+  data arr : number;
+}
+Component Bar {
+  data baz : number;
+}
+
+Component Main {
+  
+}

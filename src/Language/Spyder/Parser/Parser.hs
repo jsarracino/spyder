@@ -9,11 +9,13 @@ import Text.Parsec
 import Text.Parsec.Expr
 import qualified Text.Parsec.Token as Tok
 import Language.Spyder.Parser.Lexer         (spyderLexer, Parser)
+import Language.Spyder.AST.Component
 import Language.Spyder.AST.Imp
 import Language.Spyder.AST.Spec
 import Language.Spyder.AST                  (Program)
 
 import Control.Monad                        (liftM, liftM2)
+import Data.List                            (partition)
 
 
 lexer = spyderLexer
@@ -30,7 +32,7 @@ followedBy :: Parser a -> Parser b -> Parser a
 followedBy p q = do {r <- p; q; return r}
 
 spaced :: Parser a -> Parser [a]
-spaced p = p `sepBy` (Tok.whiteSpace lexer)
+spaced p = p `sepBy` Tok.whiteSpace lexer
 semis p = p `sepBy` semi
 
 ints = liftM (IConst . fromIntegral) $ Tok.integer lexer
@@ -142,7 +144,36 @@ stmt =
   <|> try (liftM2 Assgn expr ((symb "=" >> expr) `followedBy` semi))
   <?> "Statement"
 
+compDeclP :: Parser CMemberDecl
+compDeclP = 
+      try dataDeclP
+  <?> "Component Member"
+
+dataDeclP :: Parser CMemberDecl
+dataDeclP = do {
+  res "data";
+  (name, ty) <- vdecl;
+  semi;
+  return $ DataDecl name ty
+}
+
+comp :: Parser Component
+comp = do {
+  res "Component";
+  name <- ident;
+  decls <- braces $ spaced compDeclP;
+  return $ Comp name decls
+}
+
+
+
 
 
 prog :: Parser Program
-prog = undefined "TODO"
+prog = do {
+  comps <- spaced comp;
+  let (others, [it]) = partition takeMain comps in 
+    return (others, it)
+} where
+    takeMain (Comp "Main" _) = True
+    takeMain _ = False

@@ -1,0 +1,29 @@
+Component Logging {
+  internal data logPrefix :: bool;
+  internal data logSuffix :: bool;
+
+  function logEntry(){
+    logPrefix = true;
+  }
+  function logExit() {
+    logSuffix = true;
+  }
+
+  relation haveLogged = logPrefix && logSuffix
+
+  always haveLogged;
+}
+
+
+
+procedure logMe()
+  requires logPrefix;
+  ensures !logSuffix;
+{
+
+}
+
+procedure Main()
+{
+
+}

@@ -1,0 +1,9 @@
+Component Foo {
+  procedure bar() {
+
+  }
+}
+
+Component Main {
+  
+}

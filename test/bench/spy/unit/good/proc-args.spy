@@ -1,0 +1,9 @@
+Component Foo {
+  procedure bar( boo : number, baz : number[]) {
+
+  } 
+}
+
+Component Main {
+  
+}

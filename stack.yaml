@@ -6,7 +6,7 @@ flags:
 extra-package-dbs: []
 packages:
 - .
-- ../boogaloo
+- ./boogaloo
 extra-deps:
 - lens-4.13
 - z3-4.2.0

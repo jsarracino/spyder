@@ -1,0 +1,7 @@
+Component Foo {
+  data arr : number[];
+}
+
+Component Main {
+  
+}

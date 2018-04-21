@@ -29,7 +29,8 @@ library
     Language.Spyder.Translate,
     Language.Spyder.Translate.Desugar,
     Language.Spyder.Translate.Main,
-    Language.Spyder.Translate.Derived
+    Language.Spyder.Translate.Derived,
+    Language.Spyder.Translate.Rename
   build-depends: base >= 4.7 && < 5
                , parsec
                , pretty
@@ -55,6 +56,7 @@ executable spyder
     Language.Spyder.Translate.Desugar
     Language.Spyder.Translate.Main
     Language.Spyder.Translate.Derived
+    Language.Spyder.Translate.Rename
   build-depends:       base
                      , spyder
                      , parsec

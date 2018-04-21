@@ -14,7 +14,7 @@ import qualified Data.Map.Strict as Map
 import Data.Set (union, empty, Set, singleton, toList)
 import Control.Monad (liftM)
 
--- need to know the length variable for the array, as well as the index variable.
+-- need to know the dimensions of each array.
 type ArrInfo = VDecl
 
 -- convert an array lvalue to an identifier and list of arguments
@@ -70,15 +70,15 @@ convertDecls (Seq ss) = Seq $ concatMap stmtWorker ss
 convertArr :: Integer -> Type -> [Expr] -> ([Statement], String, ArrInfo)
 convertArr suffix bty es = (decls ++ assns, arrVar, arrInfo)
   where
-    lenVar = "_len" ++ (show suffix)
+    lenVar = "_len" ++ show suffix
     len = IConst $ length es
-    arrVar = "_arr" ++ (show suffix)
+    arrVar = "_arr" ++ show suffix
     arrDecl = (arrVar, ArrTy bty)
     arr = VConst arrVar
     decls = [Decl arrInfo (Just len), Decl arrDecl Nothing]
     arrInfo = (lenVar, BaseTy "int")
-    assns = map worker (es `zip` [0..])
-    worker (e, i) = Assgn (Index arr (IConst i)) e
+    assns = zipWith worker es [0..]
+    worker e i = Assgn (Index arr (IConst i)) e
 
 type ArrInfos = Map.Map String ArrInfo
 
@@ -109,7 +109,7 @@ translateArrs (Seq ss) (initSeed, oldArrs) = let (newSeed, arrs, ss') = foldl sW
         (seed', arrs', acc ++ [While c bod'])
 
     unpack (ArrTy ty) = ty
-    unpack x@_ = undefined ("Type error, not an array type: " ++ (show x))
+    unpack x@_ = undefined $ "Type error, not an array type: " ++ show x
 
 -- convert for-in loop to while loop
 -- add a decl for each parallel assignment, and loop while the indices
@@ -129,14 +129,14 @@ convertForStmt arrInfo (Loop vs arrs (Seq bod)) = (decls, loop)
       VConst lName
     len _ = undefined "Error: can only loop over variables (for now)"
     bnds = vs `zip` arrs
-    decls = (map buildIndex arrs) ++ (map buildIdent bnds)
+    decls = map buildIndex arrs ++ map buildIdent bnds
     buildIndex arr = Decl (idx arr, BaseTy "number") (Just $ IConst 0)
     buildIdent (v, arr) = Decl v (Just $ Index arr (VConst $ idx arr))
     cond = foldl (BinOp And) tru arrConds
     arrConds = map (\arr -> BinOp Lt (VConst $ idx arr) (len arr)) arrs
     tru = BConst True
     incr i = Assgn i (BinOp Plus i (IConst 1))
-    bod' = bod ++ (map (incr . len) arrs)
+    bod' = bod ++ map (incr . len) arrs
 convertForStmt _ x@_ = ([], x)
 
 -- desugarLoopS :: ArrInfo -> Statement ->
@@ -203,8 +203,10 @@ generateBoogieBlock :: Block -> ([VDecl], [Statement])
 generateBoogieBlock b =
   let start = (0, Map.empty) in
   let (convArrs, (_, arrInfos)) = translateArrs b start in
-  let passes = [stripLt, uniqifyNames, (convertForBlock arrInfos)] in
+  let passes = [stripLt, uniqifyNames, convertForBlock arrInfos] in
   let beforeDecs = foldr (.) id passes convArrs in
   let decls = gatherDecls beforeDecs in
   let (Seq final) =  convertDecls beforeDecs in
   (toList decls, final)
+
+  

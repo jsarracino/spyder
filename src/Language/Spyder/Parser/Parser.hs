@@ -3,6 +3,10 @@ module Language.Spyder.Parser.Parser (
   , stmt
   , prog
   , block
+  , relDeclP
+  , relP
+  , comp
+  , spaced
 ) where
 
 import Text.Parsec
@@ -17,6 +21,8 @@ import Language.Spyder.AST                  (Program)
 import Control.Monad                        (liftM, liftM2)
 import Data.List                            (partition)
 
+import Language.Boogie.Parser as BP
+-- import
 
 lexer = spyderLexer
 res = Tok.reserved lexer
@@ -24,6 +30,7 @@ parens = Tok.parens lexer
 symb = Tok.symbol lexer
 ident = Tok.identifier lexer
 semi = Tok.semi lexer
+comma = Tok.comma lexer
 commas = Tok.commaSep lexer
 braces = Tok.braces lexer
 brackets = Tok.brackets lexer
@@ -51,7 +58,6 @@ arrPrim = liftM AConst (brackets $ commas expr)
 
  -- TODO:
  -- | UnOP Uop Expr
- -- | Index Expr Expr
 term :: Parser Expr
 term    =  parens expr
   <|> try ints
@@ -144,25 +150,70 @@ stmt =
   <|> try (liftM2 Assgn expr ((symb "=" >> expr) `followedBy` semi))
   <?> "Statement"
 
-compDeclP :: Parser CMemberDecl
-compDeclP = 
-      try dataDeclP
+derivCompP :: Parser DerivDecl
+derivCompP = 
+      try (liftM DeriveDDecl dataDeclP)
+  <|> try relDeclP
+  <|> try alwaysP
   <?> "Component Member"
 
-dataDeclP :: Parser CMemberDecl
-dataDeclP = do {
-  res "data";
-  (name, ty) <- vdecl;
+
+alwaysP :: Parser DerivDecl
+alwaysP = res "always" >> liftM (InvClaus . BE) BP.atom `followedBy` semi
+
+usingP :: Parser UseClause
+usingP = do {
+  res "using";
+  cname <- ident;
+  args <- parens $ ident `sepBy` comma;
   semi;
-  return $ DataDecl name ty
+  return (cname, args )
+}
+
+dataDeclP :: Parser VDecl
+dataDeclP = res "data" >> vdecl `followedBy` semi
+  
+
+relP :: Parser BaseRel 
+relP = liftM injectForeach2  BP.atom
+
+mainCompP :: Parser MainDecl
+mainCompP = 
+      try (liftM MainDDecl dataDeclP)
+  <|> try procP
+  <|> try (liftM MainUD usingP)
+  <?> "Main decl parser"
+
+relDeclP :: Parser DerivDecl
+relDeclP = do {
+  res "relation";
+  name <- ident;
+  formals <- parens $ commas vdecl;
+  bod <- braces relP;
+  return $ RelDecl name formals bod;
+}
+
+
+procP :: Parser MainDecl
+procP = do {
+  res "procedure";
+  name <- ident;
+  args <- parens $ commas vdecl;
+  bod <- braces block;
+  return $ ProcDecl name args Void bod
 }
 
 comp :: Parser Component
 comp = do {
   res "Component";
   name <- ident;
-  decls <- braces $ spaced compDeclP;
-  return $ Comp name decls
+  if name=="Main" then do {
+    decls <- braces $ spaced mainCompP;
+    return $ MainComp decls
+  } else do {
+    decls <- braces $ spaced derivCompP;
+    return $ DerivComp name decls
+  }
 }
 
 
@@ -172,8 +223,8 @@ comp = do {
 prog :: Parser Program
 prog = do {
   comps <- spaced comp;
-  let (others, [it]) = partition takeMain comps in 
+  let ([it], others) = partition takeMain comps in 
     return (others, it)
 } where
-    takeMain (Comp "Main" _) = True
+    takeMain MainComp{} = True
     takeMain _ = False

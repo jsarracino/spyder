@@ -1,7 +1,7 @@
 Component Foo {
-  using Bar(1);
+  
 }
 
 Component Main {
-  
+  using Bar(1);
 }

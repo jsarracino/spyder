@@ -7,6 +7,7 @@ module Language.Spyder.AST.Imp (
   , Block(..)
   , VDecl
   , Type
+  , stripTy
 ) where
 
 import qualified Language.Boogie.AST as BST
@@ -48,6 +49,8 @@ data Type =
   deriving (Eq, Show, Ord)
 
 type VDecl = (String, Type)
+stripTy :: VDecl -> String
+stripTy (v,t) = v
 
 -- simple statements
 data Statement =
@@ -64,3 +67,4 @@ data Block =
     Seq [Statement]
   deriving (Eq, Show, Ord)
 
+  

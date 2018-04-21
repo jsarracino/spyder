@@ -19,10 +19,23 @@ Component Startable {
   start :: button;
   stop :: button;
 
-  relation goodConfig =
-    running <=> stop.enabled && !stop.enabled <=> start.enabled ;
+  relation goodConfig() {
+    running <=> stop.enabled && !stop.enabled <=> start.enabled 
+  }
 
-  always goodConfig;
+  always goodConfig();
+
+  procedure start() {
+    running = true;
+    start = false;
+    stop = true;
+  }
+
+  procedure stop() {
+    running = false;
+    start = true;
+    stop = false;
+  }
 
 }
 
@@ -38,6 +51,7 @@ Component Main {
 
   using Startable(running, start, stop);
   using 1DGoL(cells, rendered);
+  using History(cells, index, history);
 
   init() { // only the main component can have an init
     cells = ...; // for main, values need to be initialized.

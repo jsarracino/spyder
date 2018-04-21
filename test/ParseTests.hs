@@ -22,7 +22,7 @@ parseFail s = TestCase $ readFile s >>= runner
       Left _ -> assert()
       Right _ -> assertFailure $ "shouldn't have parsed: " ++ s
 
-unitPrefix = "./bench/spy/unit/"
+unitPrefix = "./test/bench/spy/unit/"
 unitSuccPrefix = unitPrefix ++ "good/"
 unitSuccBenches = TestList benches
   where

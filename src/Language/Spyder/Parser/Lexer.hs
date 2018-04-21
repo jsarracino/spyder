@@ -23,8 +23,9 @@ opLetter = oneOf "+*/-<>=!&|\\^@"
 
 reservedNames :: [String]
 reservedNames =
-  [ "let", "in", "function", "for", "main"] ++
-  [ "Require", "Ensure"]
+  [ "let", "in", "function", "for", "main", "procedure"] ++
+  [ "Component", "foreach", "foreach2", "relation", "using", "always", "forall"]
+
 
 reservedOpNames :: [String]
 reservedOpNames =

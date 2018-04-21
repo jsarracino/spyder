@@ -1,9 +1,11 @@
 Component Foo {
-  data arr : number[];
-  data boo : number;
-  data bill : number[][];
+  data arr : int[];
+  data boo : int;
+  data bill : int[][];
 }
 
 Component Main {
-  
+  data arr : int[];
+  data boo : int;
+  data bill : int[][];
 }

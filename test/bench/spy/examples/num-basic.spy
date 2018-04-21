@@ -1,0 +1,42 @@
+Component Sum2Ten {
+  
+  data lhs : int;
+  data rhs: int;
+
+  
+  relation toTen() {
+    (lhs + rhs == 10)
+  }
+  
+  
+
+  always toTen();
+  
+}
+
+Component Main {
+  
+  data x: int;
+  data y: int;
+
+  
+  using Sum2Ten(x, y);
+  
+  
+  procedure init() {
+  
+    x = 3;
+    y = 7;
+    
+  }
+
+  procedure decX() {
+    
+    x = x - 1;
+    y = y + 1;
+    
+  }
+  
+  
+
+}

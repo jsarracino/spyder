@@ -1,5 +1,7 @@
 Component Foo {
-  relation bar = true;
+  relation bar() {
+    true
+  }
 }
 
 Component Main {

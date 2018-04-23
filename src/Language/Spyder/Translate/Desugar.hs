@@ -42,7 +42,7 @@ stripLt (Seq ss) = Seq $ map stmtWorker ss
     exprWorker (BinOp Lt l r) = UnOp Not $ BinOp Ge l r
     exprWorker (BinOp o l r) = BinOp o (exprWorker l) (exprWorker r)
     exprWorker (Index l r) = Index (exprWorker l) (exprWorker r)
-    exprWorker (App l r) = App (exprWorker l) (exprWorker r)
+    exprWorker (App l r) = App (exprWorker l) (map exprWorker r)
 
 -- gather decls into a thinger and convert to assignments
 -- not sure yet
@@ -203,7 +203,8 @@ generateBoogieBlock :: Block -> ([VDecl], [Statement])
 generateBoogieBlock b =
   let start = (0, Map.empty) in
   let (convArrs, (_, arrInfos)) = translateArrs b start in
-  let passes = [stripLt, uniqifyNames, convertForBlock arrInfos] in
+  let passes = [stripLt, convertForBlock arrInfos] in
+  -- let passes = [stripLt, uniqifyNames, convertForBlock arrInfos] in
   let beforeDecs = foldr (.) id passes convArrs in
   let decls = gatherDecls beforeDecs in
   let (Seq final) =  convertDecls beforeDecs in

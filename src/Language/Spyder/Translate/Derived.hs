@@ -30,5 +30,5 @@ instantiate concretes c@(DerivComp nme decs) = DerivComp nme newDecs
     fmals = formals c
     fmals' = map stripTy fmals
     env = Map.fromList $ zip fmals' concretes
-    newDecs = map (alphaExpr env) decs
+    newDecs = map (alphaDDecl env) decs
 

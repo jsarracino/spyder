@@ -4,13 +4,13 @@ Component Sum2Ten {
   data rhs: int;
 
   
-  relation toTen() {
-    (lhs + rhs == 10)
+  relation toTen(x: int, y: int) {
+    (x + y == 10)
   }
   
   
 
-  always toTen();
+  always toTen(lhs, rhs);
   
 }
 

@@ -4,6 +4,7 @@ module Language.Spyder.Translate.Main (
 
 import Language.Spyder.AST.Component    (Component(..), MainDecl(..))
 import Language.Spyder.AST.Imp          (VDecl, Type(..))
+import Language.Spyder.Translate.Rename
 
 
 gatherDDecls :: [MainDecl] -> [VDecl]

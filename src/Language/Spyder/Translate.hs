@@ -18,6 +18,7 @@ import Language.Spyder.Translate.Main
 import qualified Data.Map.Strict as Map
 import Language.Spyder.Translate.Derived          (instantiate)
 import Data.List                                  (find)
+import Language.Spyder.Translate.Rename
 
 translateBop :: Bop -> BST.BinOp
 translateBop = \case
@@ -53,6 +54,7 @@ translateExpr (UnOp o i) =
   BST.UnaryExpression (translateUop o) (transWithGen i)
 translateExpr (Index ar i) =
   BST.MapSelection (transWithGen ar) [transWithGen i]
+translateExpr (App (VConst f) r) = BST.Application f (map transWithGen r)
 translateExpr (AConst _) = undefined "Error: translation assumes array constants have been desugared"
 
 translateBlock :: Block -> BST.Block
@@ -61,6 +63,7 @@ translateBlock (Seq ss) = map worker ss
 
 translateStmt :: Statement -> BST.BareStatement
 translateStmt (Decl _ _) = undefined "Error: translation assumes decls are lifted"
+translateStmt (Assgn (VConst lid) rhs) = BST.Assign [(lid, [])] [transWithGen rhs]
 translateStmt (Assgn lhs rhs) = BST.Assign [(lid, largs)] [transWithGen rhs]
   where
     (lid, lacc) = simplArrAccess lhs
@@ -73,21 +76,34 @@ translateStmt (While c bod) = BST.While (BST.Expr c') spec bod'
 
 
 toBoogie :: Program -> BST.Program
-toBoogie (comps, MainComp decls) = BST.Program allDecs
+toBoogie (comps, MainComp decls) = BST.Program (map Pos.gen allDecs)
   where
     vars = mangleVars "Main" $ gatherDDecls decls
-    varMap = Map.fromList $ zipWith stripTy (gatherDDecls decls) vars
-    stripTy (l, _) (r, _) = (l, r)
+    varMap = Map.fromList $ zipWith stripTy2 (gatherDDecls decls) vars
+    stripTy2 (l, _) (r, _) = (l, r)
     vDecls = map translateVDecl vars
-    comps' = map (processUsing varMap comps) (filter takeUsing decls) 
 
-    -- relNames = fmap getRelNames comps'
+    comps' = map (processUsing varMap comps) (filter takeUsing decls) 
     relDecls = comps' >>= translateRels
-    procDecls = []
-    allDecs = relDecls ++ vDecls ++ procDecls
+
+
+    procs = map (alphaProc varMap) $ filter takeProcs decls
+
+
+    procDecls = map translateProc procs
+    withModifies = map (addModifies $ map stripTy vars) procDecls
+    
+    invs = comps' >>= buildInvs
+    
+    withRequires = map (addRequires invs) withModifies
+    withContracts = map (addEnsures invs) withRequires
+
+    allDecs = relDecls ++ vDecls ++ withContracts
 
     takeUsing MainUD{} = True
     takeUsing _ = False
+    takeProcs ProcDecl{} = True
+    takeProcs _ = False
 
 
 
@@ -109,8 +125,8 @@ translateTy (BaseTy _) = undefined "Error: bad type tag"
 -- int[][] to [int][int]int, which should be indexed like a[x][y]
 translateTy (ArrTy inner) = BST.MapType [] [BST.IntType] $ translateTy inner
 
-translateVDecl :: VDecl -> BST.Decl
-translateVDecl (nme, ty) = (Pos.gen . BST.VarDecl) [BST.IdTypeWhere nme (translateTy ty) (Pos.gen BST.tt)]
+translateVDecl :: VDecl -> BST.BareDecl
+translateVDecl v = BST.VarDecl [translateITW v]
 
 mangleVars :: String -> [VDecl] -> [VDecl]
 mangleVars prefix = map worker 
@@ -137,20 +153,63 @@ getRelNames (DerivComp nme decs) = map worker relDecs
     takeRD RelDecl{} = True
     takeRD _ = False
 
-translateRels :: Component -> [BST.Decl]
+translateRels :: Component -> [BST.BareDecl]
 translateRels (DerivComp nme decs) = map buildRel $ filter takeRD decs
   where
     takeRD RelDecl{} = True
     takeRD _ = False
 
--- FunctionDecl [Attribute] Id [Id] [FArg] FArg (Maybe Expression) |            -- ^ 'FunctionDecl' @name type_args formals ret body@
-buildRel :: DerivDecl -> BST.Decl
-buildRel (RelDecl nme formals bod) = Pos.gen $ BST.FunctionDecl [] nme [] formals' retTy body
+    -- ProcedureDecl Id [Id] [IdTypeWhere] [IdTypeWhere] [Contract] (Maybe Body) |  -- ^ 'ProcedureDecl' @name type_args formals rets contract body@
+translateProc :: MainDecl -> BST.BareDecl
+translateProc (ProcDecl nme formals rt body) = BST.ProcedureDecl nme [] formals' [] inv body'
   where
-    formals' = map buildFormal formals
-    buildFormal (v, t) = (Just v, translateTy t)
+    formals' = map translateITW formals
+    (decs, bod) = generateBoogieBlock body
+    -- ([[translateVDecl v] | v <- decs], translateBlock (Seq bod))
+    body' = Just ([[translateITW v] | v <- decs], translateBlock $ Seq bod)
+    inv = []
+
+buildRel :: DerivDecl -> BST.BareDecl
+buildRel (RelDecl nme formals bod) = BST.FunctionDecl [] nme [] formals' retTy body
+  where
+    formals' = map translateFormal formals
     retTy = (Nothing, BST.BoolType )
     body = Just $ (Pos.gen . buildExpr) bod
     buildExpr (BE i) = i
     buildExpr _ = undefined "TODO"
 buildRel _ = undefined "TODO"
+
+translateFormal :: VDecl -> BST.FArg
+translateFormal (v, t) = (Just v, translateTy t)
+translateITW :: VDecl -> BST.IdTypeWhere
+translateITW (v, t) = BST.IdTypeWhere v (translateTy t) (Pos.gen BST.tt)
+
+
+addModifies :: [String] -> BST.BareDecl -> BST.BareDecl
+addModifies vars (BST.ProcedureDecl nme tyargs formals rets contract bod) = 
+  BST.ProcedureDecl nme tyargs formals rets (contract ++ map buildModify vars) bod
+  where
+    buildModify s = BST.Modifies False [s]
+addModifies _ v@_ = v
+
+addRequires :: [BST.BareExpression] -> BST.BareDecl -> BST.BareDecl
+addRequires invs (BST.ProcedureDecl nme tyargs formals rets contract bod) = 
+  BST.ProcedureDecl nme tyargs formals rets (contract ++ map buildReq invs) bod
+  where
+    buildReq e = BST.Requires False (Pos.gen e)
+addRequires _ v@_ = v
+
+addEnsures :: [BST.BareExpression] -> BST.BareDecl -> BST.BareDecl
+addEnsures invs (BST.ProcedureDecl nme tyargs formals rets contract bod) = 
+  BST.ProcedureDecl nme tyargs formals rets (contract ++ map buildReq invs) bod
+  where
+    buildReq e = BST.Ensures False (Pos.gen e)
+addEnsures _ v@_ = v
+
+buildInvs :: Component -> [BST.BareExpression]
+buildInvs (DerivComp _ decs) = map buildExpr alwaysDecs
+  where
+    takeAlways InvClaus{} = True
+    takeAlways _ = False
+    buildExpr (InvClaus (BE e)) = e
+    alwaysDecs = filter takeAlways decs

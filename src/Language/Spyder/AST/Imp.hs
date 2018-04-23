@@ -36,7 +36,7 @@ data Expr =
   | BinOp Bop Expr Expr -- Binary operations
   | UnOp Uop Expr       -- Unary operations
   | Index Expr Expr     -- Array indexing e.g. foo[bar]
-  | App Expr Expr
+  | App Expr [Expr]       -- function calls (not procedure calls)
 
   deriving (Eq, Show, Ord)
 

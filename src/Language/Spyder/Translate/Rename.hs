@@ -81,8 +81,8 @@ alphaDDecl env (RelDecl nme formals body) = RelDecl nme formals body'
     --   UnaryExpression UnOp Expression |
     --   BinaryExpression BinOp Expression Expression |
     --   Quantified QOp [Id] [IdType] Expression         -- ^ 'Quantified' @qop type_vars bound_vars expr@
-alphaRel :: Map.Map String String -> BaseRel -> BareExpression
-alphaRel env (BE e) = recurBE env e
+alphaRel :: Map.Map String String -> BaseRel -> Expression
+alphaRel env (BE e) = recurE env e
   where 
     recurBE :: Map.Map String String -> BareExpression -> BareExpression
     recurE :: Map.Map String String -> Expression -> Expression

@@ -9,15 +9,15 @@ import Language.Boogie.PrettyAST -- for show typeclass
 
 
 data BaseRel = 
-    BE BAST.BareExpression
-  | ForEach2 BAST.BareExpression BAST.BareExpression BaseRel
+    BE BAST.Expression
+  | ForEach2 BAST.Expression BAST.Expression BaseRel
   deriving (Eq, Show, Ord)
 
 -- basic types of relations
 
 
 -- TODO when covering arrays
-injectForeach2 :: BAST.BareExpression -> BaseRel
+injectForeach2 :: BAST.Expression -> BaseRel
 injectForeach2 = BE
 -- data BareExpression = 
 --   Literal Value |

@@ -7,6 +7,8 @@ module Language.Spyder.Translate (
   , translateBlock
 ) where
 
+import Language.Spyder.Translate.Direct
+
 import Language.Spyder.AST                        (Program)
 import Language.Spyder.AST.Imp
 import Language.Spyder.AST.Spec
@@ -17,88 +19,61 @@ import Language.Spyder.Translate.Desugar
 import Language.Spyder.Translate.Main
 import qualified Data.Map.Strict as Map
 import Language.Spyder.Translate.Derived          (instantiate)
-import Data.List                                  (find)
+import Data.List                                  (find, partition)
 import Language.Spyder.Translate.Rename
-
-translateBop :: Bop -> BST.BinOp
-translateBop = \case
-  Plus -> BST.Plus
-  Minus -> BST.Minus
-  Mul -> BST.Times
-  Div -> BST.Div
-  Lt -> undefined "Error: translation assumes LT has been desugared"
-  Le -> BST.Leq
-  Gt -> BST.Gt
-  Ge -> BST.Geq
-  And -> BST.And
-  Or -> BST.Or
-  Eq -> BST.Eq
-  Neq -> BST.Neq
-
-translateUop :: Uop -> BST.UnOp
-translateUop = \case
-  Neg -> BST.Neg
-  Not -> BST.Not
-
-transWithGen :: Expr -> BST.Expression
-transWithGen = Pos.gen . translateExpr
-
-translateExpr :: Expr -> BST.BareExpression
-translateExpr (VConst s) = BST.Var s
-translateExpr (IConst i) = BST.numeral $ toInteger i
-translateExpr (BConst b) = (BST.Literal . BST.BoolValue) b
-translateExpr (BinOp o l r) = BST.BinaryExpression op l' r'
-  where op = translateBop o
-        (l', r') = (transWithGen l, transWithGen r)
-translateExpr (UnOp o i) =
-  BST.UnaryExpression (translateUop o) (transWithGen i)
-translateExpr (Index ar i) =
-  BST.MapSelection (transWithGen ar) [transWithGen i]
-translateExpr (App (VConst f) r) = BST.Application f (map transWithGen r)
-translateExpr (AConst _) = undefined "Error: translation assumes array constants have been desugared"
-
-translateBlock :: Block -> BST.Block
-translateBlock (Seq ss) = map worker ss
-  where worker s = Pos.gen ([], (Pos.gen . translateStmt) s)
-
-translateStmt :: Statement -> BST.BareStatement
-translateStmt (Decl _ _) = undefined "Error: translation assumes decls are lifted"
-translateStmt (Assgn (VConst lid) rhs) = BST.Assign [(lid, [])] [transWithGen rhs]
-translateStmt (Assgn lhs rhs) = BST.Assign [(lid, largs)] [transWithGen rhs]
-  where
-    (lid, lacc) = simplArrAccess lhs
-    largs = [map transWithGen lacc]
-translateStmt (While c bod) = BST.While (BST.Expr c') spec bod'
-  where
-    spec = []
-    c' = transWithGen c
-    bod' = translateBlock bod
+import Language.Spyder.Synth.Verify               (checkProgFile)
+import Language.Spyder.Synth                      (fixProc)
+import Language.Boogie.Pretty                     (pretty)
+import System.IO.Unsafe                           (unsafePerformIO)
 
 
 toBoogie :: Program -> BST.Program
-toBoogie (comps, MainComp decls) = BST.Program (map Pos.gen allDecs)
+toBoogie prog@(comps, MainComp decls) = outProg 
   where
-    vars = mangleVars "Main" $ gatherDDecls decls
-    varMap = Map.fromList $ zipWith stripTy2 (gatherDDecls decls) vars
+    globalVars = mangleVars "Main" $ gatherDDecls decls
+    varMap = Map.fromList $ zipWith stripTy2 (gatherDDecls decls) globalVars
     stripTy2 (l, _) (r, _) = (l, r)
-    vDecls = map translateVDecl vars
+    vDecls = map translateVDecl globalVars
 
     comps' = map (processUsing varMap comps) (filter takeUsing decls) 
     relDecls = comps' >>= translateRels
 
+    invs = comps' >>= buildInvs
+
+    
 
     procs = map (alphaProc varMap) $ filter takeProcs decls
 
-
     procDecls = map translateProc procs
-    withModifies = map (addModifies $ map stripTy vars) procDecls
-    
-    invs = comps' >>= buildInvs
-    
+
+    withModifies = map (addModifies $ map stripTy globalVars) procDecls
     withRequires = map (addRequires invs) withModifies
     withContracts = map (addEnsures invs) withRequires
+    
+    -- attempt to gen the program. if the initial translated program verifies, then we're good to go. otherwise, 
+    -- for each procedure that doesn't verify, synthesize a fix.
+    boogHeader :: [BST.BareDecl]
+    boogHeader = relDecls ++ vDecls
 
-    allDecs = relDecls ++ vDecls ++ withContracts
+    (okProcs, brokenProcs) = partition (checkBoogie . linkHeader) withContracts
+    
+    linkHeader :: BST.BareDecl -> BST.Program
+    linkHeader pd = BST.Program $ map Pos.gen $ boogHeader ++ [pd]
+
+
+
+    finalProcs :: [BST.BareDecl]
+    finalProcs = okProcs ++ map repairProc brokenProcs
+
+    allDecs = relDecls ++ vDecls ++ finalProcs 
+
+    outProg = BST.Program (map Pos.gen allDecs)
+
+    -- ProcedureDecl Id [Id] [IdTypeWhere] [IdTypeWhere] [Contract] (Maybe Body)
+    repairProc (BST.ProcedureDecl nme tyargs formals rets contract (Just (procVars, bod))) = BST.ProcedureDecl nme tyargs formals rets contract bod'
+      where 
+        bod' = Just (procVars, fixProc invs (map Pos.gen boogHeader) globals prog varMap bod)
+        globals = map stripTy globalVars
 
     takeUsing MainUD{} = True
     takeUsing _ = False
@@ -174,7 +149,7 @@ buildRel (RelDecl nme formals bod) = BST.FunctionDecl [] nme [] formals' retTy b
   where
     formals' = map translateFormal formals
     retTy = (Nothing, BST.BoolType )
-    body = Just $ (Pos.gen . buildExpr) bod
+    body = Just $ buildExpr bod
     buildExpr (BE i) = i
     buildExpr _ = undefined "TODO"
 buildRel _ = undefined "TODO"
@@ -192,24 +167,34 @@ addModifies vars (BST.ProcedureDecl nme tyargs formals rets contract bod) =
     buildModify s = BST.Modifies False [s]
 addModifies _ v@_ = v
 
-addRequires :: [BST.BareExpression] -> BST.BareDecl -> BST.BareDecl
+addRequires :: [BST.Expression] -> BST.BareDecl -> BST.BareDecl
 addRequires invs (BST.ProcedureDecl nme tyargs formals rets contract bod) = 
   BST.ProcedureDecl nme tyargs formals rets (contract ++ map buildReq invs) bod
   where
-    buildReq e = BST.Requires False (Pos.gen e)
+    buildReq = BST.Requires False
 addRequires _ v@_ = v
 
-addEnsures :: [BST.BareExpression] -> BST.BareDecl -> BST.BareDecl
+addEnsures :: [BST.Expression] -> BST.BareDecl -> BST.BareDecl
 addEnsures invs (BST.ProcedureDecl nme tyargs formals rets contract bod) = 
   BST.ProcedureDecl nme tyargs formals rets (contract ++ map buildReq invs) bod
   where
-    buildReq e = BST.Ensures False (Pos.gen e)
+    buildReq = BST.Ensures False
 addEnsures _ v@_ = v
 
-buildInvs :: Component -> [BST.BareExpression]
+buildInvs :: Component -> [BST.Expression]
 buildInvs (DerivComp _ decs) = map buildExpr alwaysDecs
   where
     takeAlways InvClaus{} = True
     takeAlways _ = False
     buildExpr (InvClaus (BE e)) = e
     alwaysDecs = filter takeAlways decs
+
+
+-- checkProg :: Program -> Bool
+-- checkProg = checkBoogie . toBoogie
+
+checkBoogie :: BST.Program -> Bool
+checkBoogie prog = unsafePerformIO $ compileProg >> checkProgFile outp
+  where
+    outp = "tmp.bpl"
+    compileProg = writeFile outp (show $ pretty prog)

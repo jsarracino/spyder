@@ -41,6 +41,7 @@ data Expr =
   deriving (Eq, Show, Ord)
 
 
+  
 data Type =
     BaseTy String
   | ArrTy Type

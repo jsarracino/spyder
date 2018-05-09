@@ -159,7 +159,7 @@ derivCompP =
 
 
 alwaysP :: Parser DerivDecl
-alwaysP = res "always" >> liftM (InvClaus . BE) BP.atom `followedBy` semi
+alwaysP = res "always" >> liftM (InvClaus . BE) BP.expression `followedBy` semi
 
 usingP :: Parser UseClause
 usingP = do {
@@ -175,7 +175,7 @@ dataDeclP = res "data" >> vdecl `followedBy` semi
   
 
 relP :: Parser BaseRel 
-relP = liftM injectForeach2  BP.atom
+relP = liftM injectForeach2  BP.expression
 
 mainCompP :: Parser MainDecl
 mainCompP = 

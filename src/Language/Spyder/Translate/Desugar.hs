@@ -1,7 +1,6 @@
 module Language.Spyder.Translate.Desugar (
     uniqifyNames
   , stripLt
-  , simplArrAccess
   , gatherDecls
   , convertArr
   , translateArrs
@@ -17,13 +16,7 @@ import Control.Monad (liftM)
 -- need to know the dimensions of each array.
 type ArrInfo = VDecl
 
--- convert an array lvalue to an identifier and list of arguments
--- todo: fix this hack
-simplArrAccess :: Expr -> (String, [Expr])
-simplArrAccess e = worker (e, [])
-  where worker (VConst s, args) = (s, args)
-        worker (Index l r, args) = worker (l, r:args)
-        worker (x, _) = undefined $ "tried to convert to array access: " ++ show x
+
 
 -- desugar lt into ! (geq)
 stripLt :: Block -> Block

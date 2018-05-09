@@ -25,18 +25,28 @@ library
     Language.Spyder.Parser.Parser,
     Language.Spyder.Pretty,
     Language.Spyder.Pretty.Printer,
-    Language.Spyder.Synth,
     Language.Spyder.Translate,
     Language.Spyder.Translate.Desugar,
     Language.Spyder.Translate.Main,
     Language.Spyder.Translate.Derived,
-    Language.Spyder.Translate.Rename
+    Language.Spyder.Translate.Rename,
+    Language.Spyder.Synth,
+    Language.Spyder.Synth.Cegis,
+    Language.Spyder.Synth.Context,
+    Language.Spyder.Synth.Enum,
+    Language.Spyder.Synth.Verify,
+    Language.Spyder.Util
   build-depends: base >= 4.7 && < 5
                , parsec
                , pretty
                , language-boogie
                , containers
                , ansi-wl-pprint
+               , process
+               , set-monad
+               , logict
+               , stream-monad
+               , lens
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N -main-is Spyder.hs -fno-warn-missing-signatures -fno-warn-dodgy-exports -fno-warn-unused-do-bind
   default-language:    Haskell2010
 
@@ -56,13 +66,25 @@ executable spyder
     Language.Spyder.Translate.Desugar
     Language.Spyder.Translate.Main
     Language.Spyder.Translate.Derived
-    Language.Spyder.Translate.Rename
+    Language.Spyder.Translate.Rename,
+    Language.Spyder.Synth,
+    Language.Spyder.Synth.Cegis,
+    Language.Spyder.Synth.Context,
+    Language.Spyder.Synth.Enum,
+    Language.Spyder.Synth.Verify,
+    Language.Spyder.Util
+    
   build-depends:       base
                      , spyder
                      , parsec
                      , pretty
                      , language-boogie
                      , containers
+                     , process
+                     , set-monad
+                     , logict
+                     , stream-monad
+                     , lens
   default-language:    Haskell2010
 
 test-suite spyder-test
@@ -78,6 +100,7 @@ test-suite spyder-test
                      , language-boogie
                      , containers
                      , HUnit
+                     , process
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N -main-is Test.hs -fno-warn-missing-signatures -fno-warn-dodgy-exports -fno-warn-unused-do-bind
   default-language:    Haskell2010
 
@@ -92,6 +115,7 @@ executable spyder-tests
                      , language-boogie
                      , containers
                      , HUnit
+                     , process
   other-modules: 
     ParseTests
   default-language:    Haskell2010

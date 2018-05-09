@@ -1,30 +1,31 @@
 
 Component 1DGoL {
-  data cells : bool[]; // arguments
+  data cells : bool[]; 
   data rendered : color[];
 
-  relation cell2color cell color =
-    cell ==> color = black &&
-    !cell ==> color = white ;
+  relation cell2color(cell : bool, color : color) {
+    cell ==> color = black && !cell ==> color = white 
+  }
 
+  relation cells2colors(clls : bool[], rndered: color[]) {
+    ForEach2(clls, rndered, cell2color)
+  }
 
-  relation cells2colors =
-    foreach2 cells rendered cell2color ;
-
-  always cells2colors;
+  always cells2colors(cells, rendered);
 }
 
 Component Startable {
-  running :: bool;
-  start :: button;
-  stop :: button;
+  running : bool;
+  start : button;
+  stop : button;
 
-  relation goodConfig() {
-    running <=> stop.enabled && !stop.enabled <=> start.enabled 
+  relation goodConfig(run: bool, strt: button, stp: button) {
+    run <=> strt.enabled && !stp.enabled <=> start.enabled 
   }
 
-  always goodConfig();
+  always goodConfig(running, start, stop);
 
+  /*
   procedure start() {
     running = true;
     start = false;
@@ -35,7 +36,8 @@ Component Startable {
     running = false;
     start = true;
     stop = false;
-  }
+  } 
+  */
 
 }
 

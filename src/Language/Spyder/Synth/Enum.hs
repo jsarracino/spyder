@@ -61,7 +61,7 @@ isVar RVConst{} = True
 isVar _ = False
 
 instance Enumerable RhsExpr where
-  expand _ es =
+  expand ctx es =
     [BinOp l r | l <- es, isInt l, r <- es, isInt r] ++
     [UnOp v | v <- es, isInt v]
   bases _ = [IConst, RVConst]
@@ -69,16 +69,22 @@ instance Enumerable RhsExpr where
 instance Translateable RhsExpr SAST.Expr where
   translate (Ctx.SynthCtx vars _) RVConst = [ SAST.VConst v | v <- vars]
   translate (Ctx.SynthCtx _ ints) IConst = [ SAST.IConst v | v <- ints]
-  translate ctx@(Ctx.SynthCtx vars ints) (BinOp l r) = fmap worker [(o, a) | o <- ops, a <- res]
+  translate ctx@(Ctx.SynthCtx vars ints) (BinOp l r) = filter checker $ fmap worker [(o, a) | o <- ops, a <- res]
     where
       worker (o,(a,b)) = SAST.BinOp o a b
-      ops = [SAST.Plus, SAST.Minus, SAST.Mul, SAST.Div, SAST.Lt, SAST.Gt, SAST.Le, SAST.Ge , SAST.And, SAST.Or, SAST.Eq, SAST.Neq]
+      ops = [SAST.Plus, SAST.Minus, SAST.Mul, SAST.Lt, SAST.Gt, SAST.Le, SAST.Ge , SAST.And, SAST.Or, SAST.Eq, SAST.Neq] -- ++[SAST.Div]
       res = [(x,y) | x <- recur l, y <- recur r]
       recur = translate ctx
-  translate ctx@(Ctx.SynthCtx vars ints) (UnOp i) = [(o, i) | o <- ops] >>= worker
+      checker e = case SAST.typecheck e of
+        (Just (SAST.BaseTy "int")) -> True
+        _                          -> False
+  translate ctx@(Ctx.SynthCtx vars ints) (UnOp i) = filter checker $ [(o, i) | o <- ops] >>= worker
     where
       worker (o,i) = fmap (SAST.UnOp o) (translate ctx i)
       ops =  [ SAST.Neg, SAST.Not]
+      checker e = case SAST.typecheck e of
+        (Just (SAST.BaseTy "int")) -> True
+        _                          -> False
 
 -- grammar for lhs expressions. for now, just variables.
 data LhsExpr = 

@@ -5,12 +5,13 @@ module Language.Spyder.Util (
   , flat
   , breadthFirst
   , allocateFreshVar
+  , stripPos
 ) where
 
 -- import Data.List
 import Control.Monad (join)
 import Language.Boogie.AST      (Decl(..))
-
+import qualified Language.Boogie.Position as Pos
 --- prefix x y: is x a prefix of y?
 prefix :: String -> String -> Bool
 prefix (x:xs) (y:ys) = if (x == y) then prefix xs ys else False
@@ -49,6 +50,8 @@ allocateFreshVar decs suffix = makeVar finalVar
     makeVar = undefined "TODO"
     finalVar = undefined "TODO"
 
+stripPos :: Pos.Pos a -> a
+stripPos = Pos.node
 
 -- TypeDecl [NewType] |
 -- ConstantDecl Bool [Id] Type ParentInfo Bool |                                -- ^ 'ConstantDecl' @unique names type orderSpec complete@

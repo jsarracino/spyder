@@ -1,7 +1,9 @@
 module Language.Spyder.Synth.Verify (
     checkProgFile
   , debugBoogie
+  , debugBlock
   , checkProg
+  , debugProg
 ) where
 
 import System.Process
@@ -11,6 +13,7 @@ import System.Exit
 import Language.Boogie.Pretty                     (pretty)
 import Language.Boogie.AST
 import Language.Boogie.PrettyAST
+import qualified Language.Boogie.Position as Pos
 import System.IO.Unsafe                           (unsafePerformIO)
 
 -- unsafe, oops
@@ -25,10 +28,16 @@ checkProgFile f = do {
 } where cmd     = prefix ++ " && ./boog.sh " ++ f ++ " | grep Error"
         prefix  = "echo \" CHECKING BOOGIE AT " ++ f ++ "\":"
 
+debugProg :: Program -> Program
+debugProg p = unsafePerformIO $ compileProg p >> return p
+
 debugBoogie :: [Decl] -> [Decl]
 debugBoogie p = unsafePerformIO $ compileProg (Program p) >> return p
-  where
-    outp = "debug.bpl"
+
+debugBlock :: Block -> Block
+debugBlock b = unsafePerformIO $ compileProg prog >> return b
+  where 
+    prog = Program [Pos.gen $ ProcedureDecl "Main" [] [] [] [] $ Just ([], b)]
 
 compileProg :: Program -> IO ()
 compileProg p = writeFile "debug.bpl" (show $ pretty $ p)

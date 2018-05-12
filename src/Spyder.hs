@@ -24,4 +24,4 @@ file2Boogiefile inp outp = do {
   return boog
 }
 
-hs = undefined "TODO"
+hs = file2Boogiefile "/Users/john/spyder/test/bench/spy/examples/num-basic.spy" "out.bpl"

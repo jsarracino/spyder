@@ -3,12 +3,13 @@ Component Sum2Ten {
   data rhs: int;
 
   relation toTen(x: int, y: int) {
-    x + y == 10
+    x - y == 10
   }
   
   always toTen(lhs, rhs);
   
 }
+
 
 Component Main {
   
@@ -24,8 +25,8 @@ Component Main {
   }
 
   procedure decX() {
-    x = x - 1;
-    //y = y + 1;
+    //x = x + 1;
+    x = y + 1;
   }
 
   

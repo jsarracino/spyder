@@ -5,6 +5,8 @@ Spyder requires Boogaloo and Boogie as submodules, as well as a local installati
 Spyder, and then clone Boogaloo. To get everything, run
 `git clone --recurse-submodules https://github.com/jsarracino/spyder.git && cd spyder && hg clone https://bitbucket.org/nadiapolikarpova/boogaloo`.
 
+You also have to build Boogie -- follow the directions in boogie/README.md. The script `boog.sh` calls Boogie using Mono -- to use in other platforms, tweak `boog.sh` to invoke Boogie properly.
+
 Spyder uses Stack -- to build, run
 `stack build`.
 ## Running

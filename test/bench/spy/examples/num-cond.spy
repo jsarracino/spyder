@@ -3,7 +3,7 @@ Component Sum2Ten {
   data rhs: int;
 
   relation toTen(x: int, y: int) {
-    x + y == (8+2)
+    x + y == 10
   }
   
   always toTen(lhs, rhs);
@@ -19,14 +19,14 @@ Component Main {
   using Sum2Ten(x, y);
   
   
-  procedure init() {
-    x = 3;
-    y = 7;
+  procedure init(inp: int) {
+    if (inp == 0) {
+      x = x + 1;
+    } else {
+      y = y + 1;
+    }
   }
 
-  procedure decX() {
-    x = x + 1;
-  }
 
   
 }

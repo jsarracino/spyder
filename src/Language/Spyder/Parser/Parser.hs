@@ -138,6 +138,16 @@ declP = do {
   return $ Decl vname rhs
 }
 
+condP :: Parser Statement
+condP = do {
+  res "if";
+  cond <- parens expr;
+  tru <- braces block;
+  fls <- option (Seq []) tail;
+  return $ Cond cond tru fls;
+} where
+    tail = try (res "else" >> braces block)
+
 block :: Parser Block
 block = liftM Seq (spaced stmt)
   <?> "Block"
@@ -147,6 +157,7 @@ stmt =
       try declP
   <|> try loopP
   <|> try whileP
+  <|> try condP
   <|> try (liftM2 Assgn expr ((symb "=" >> expr) `followedBy` semi))
   <?> "Statement"
 

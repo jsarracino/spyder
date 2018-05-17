@@ -4,7 +4,6 @@ module Language.Spyder.Translate (
     toBoogie
   , translateExpr
   , translateStmt
-  , translateBlock
 ) where
 
 import Language.Spyder.Translate.Direct
@@ -18,13 +17,16 @@ import qualified Language.Boogie.Position as Pos
 import Language.Spyder.Translate.Desugar
 import Language.Spyder.Translate.Main
 import qualified Data.Map.Strict as Map
-import Language.Spyder.Translate.Derived          (instantiate)
+import qualified Data.Set as Set
+import Language.Spyder.Translate.Derived          (instantiate, prefixApps)
 import Data.List                                  (find, partition)
 import Language.Spyder.Translate.Rename
 import Language.Spyder.Synth.Verify               (checkProgFile)
 import Language.Spyder.Synth                      (fixProc)
 import Language.Boogie.Pretty                     (pretty)
 import System.IO.Unsafe                           (unsafePerformIO)
+
+import Language.Spyder.Opt
 
 
 toBoogie :: Program -> BST.Program
@@ -36,9 +38,9 @@ toBoogie prog@(comps, MainComp decls) = outProg
     vDecls = map translateVDecl globalVars
 
     comps' = map (processUsing varMap comps) (filter takeUsing decls) 
-    relDecls = comps' >>= translateRels
+    relDecls = (comps' `zip` [0..]) >>= translateRels
 
-    invs = comps' >>= buildInvs
+    invs = (comps' `zip` [0..]) >>= buildInvs
 
     
 
@@ -60,20 +62,17 @@ toBoogie prog@(comps, MainComp decls) = outProg
     linkHeader :: BST.BareDecl -> BST.Program
     linkHeader pd = BST.Program $ map Pos.gen $ boogHeader ++ [pd]
 
+    outProg = foldl repProc (BST.Program $ map Pos.gen $ boogHeader ++ okProcs) brokenProcs
 
-
-    finalProcs :: [BST.BareDecl]
-    finalProcs = okProcs ++ map repairProc brokenProcs
-
-    allDecs = relDecls ++ vDecls ++ finalProcs 
-
-    outProg = BST.Program (map Pos.gen allDecs)
-
-    -- ProcedureDecl Id [Id] [IdTypeWhere] [IdTypeWhere] [Contract] (Maybe Body)
-    repairProc (BST.ProcedureDecl nme tyargs formals rets contract (Just (procVars, bod))) = BST.ProcedureDecl nme tyargs formals rets contract bod'
-      where 
-        bod' = Just (procVars, fixProc invs (map Pos.gen boogHeader) globals prog varMap bod)
+    repProc :: BST.Program -> BST.BareDecl -> BST.Program
+    repProc p (BST.ProcedureDecl nme tyargs formals rets contr (Just bod@(oldvars, fixme))) = optimize $ BST.Program $ decs ++ [newProc]
+      where
+        decs = case newProg of BST.Program i -> i
+        newProc = Pos.gen $ BST.ProcedureDecl nme tyargs formals rets contr (Just (newvars, fixed))
+        (fixed, newProg, (newvars, _)) = fixProc invs p bod globals prog varMap fixme  
         globals = map stripTy globalVars
+        
+
 
     takeUsing MainUD{} = True
     takeUsing _ = False
@@ -82,14 +81,6 @@ toBoogie prog@(comps, MainComp decls) = outProg
 
 
 
-
-
-
-buildFun :: [VDecl] -> [Statement] -> BST.Decl
--- buildFun decs bod = Pos.gen $ BST.ProcedureDecl "main" [] [] [] [] $ Just bod'
---   where
---     bod' = ([[translateVDecl v] | v <- decs], translateBlock (Seq bod))
-buildFun = undefined "TODO"
 
 translateTy :: Type -> BST.Type
 translateTy (BaseTy "int") = BST.IntType
@@ -110,14 +101,14 @@ mangleVars prefix = map worker
 -- renamed main vars (orig -> new), components, use, returns component instantiated with args
 processUsing :: Map.Map String String -> [Component] -> MainDecl -> Component
 processUsing vs comps (MainUD (nme, args)) = case usedComp of 
-    Just c  -> renamedComp c
+    Just c  -> renamedComp c 
     Nothing -> undefined "couldn't find the used component"
   where
     usedComp = find takeNme comps
     takeNme (DerivComp n _) = n == nme
     -- two steps: rename the concrete args using vs, and then rename the component using the new args
     args' = map (vs Map.!) args
-    renamedComp = instantiate args'
+    renamedComp c  = case instantiate args' c of (DerivComp nme decs) -> DerivComp nme decs
 
 getRelNames :: Component -> [String]
 getRelNames (DerivComp nme decs) = map worker relDecs
@@ -128,31 +119,29 @@ getRelNames (DerivComp nme decs) = map worker relDecs
     takeRD RelDecl{} = True
     takeRD _ = False
 
-translateRels :: Component -> [BST.BareDecl]
-translateRels (DerivComp nme decs) = map buildRel $ filter takeRD decs
+translateRels :: (Component, Int) -> [BST.BareDecl]
+translateRels (DerivComp nme decs, x) = map (buildRel $ mangleFunc nme x) $ filter takeRD decs
   where
     takeRD RelDecl{} = True
     takeRD _ = False
 
-    -- ProcedureDecl Id [Id] [IdTypeWhere] [IdTypeWhere] [Contract] (Maybe Body) |  -- ^ 'ProcedureDecl' @name type_args formals rets contract body@
 translateProc :: MainDecl -> BST.BareDecl
 translateProc (ProcDecl nme formals rt body) = BST.ProcedureDecl nme [] formals' [] inv body'
   where
     formals' = map translateITW formals
     (decs, bod) = generateBoogieBlock body
-    -- ([[translateVDecl v] | v <- decs], translateBlock (Seq bod))
     body' = Just ([[translateITW v] | v <- decs], translateBlock $ Seq bod)
     inv = []
 
-buildRel :: DerivDecl -> BST.BareDecl
-buildRel (RelDecl nme formals bod) = BST.FunctionDecl [] nme [] formals' retTy body
+buildRel :: String -> DerivDecl -> BST.BareDecl
+buildRel prefix (RelDecl nme formals bod) = BST.FunctionDecl [] (prefix ++ nme) [] formals' retTy body
   where
     formals' = map translateFormal formals
     retTy = (Nothing, BST.BoolType )
     body = Just $ buildExpr bod
     buildExpr (BE i) = i
     buildExpr _ = undefined "TODO"
-buildRel _ = undefined "TODO"
+buildRel _ _ = undefined "TODO"
 
 translateFormal :: VDecl -> BST.FArg
 translateFormal (v, t) = (Just v, translateTy t)
@@ -181,15 +170,17 @@ addEnsures invs (BST.ProcedureDecl nme tyargs formals rets contract bod) =
     buildReq = BST.Ensures False
 addEnsures _ v@_ = v
 
-buildInvs :: Component -> [BST.Expression]
-buildInvs (DerivComp _ decs) = map buildExpr alwaysDecs
+buildInvs :: (Component, Int) -> [BST.Expression]
+buildInvs (DerivComp nme decs, x) = map (buildExpr $ mangleFunc nme x) alwaysDecs
   where
     takeAlways InvClaus{} = True
     takeAlways _ = False
-    buildExpr (InvClaus (BE e)) = e
+    buildExpr pref (InvClaus (BE e)) = prefixApps pref e
     alwaysDecs = filter takeAlways decs
 
 
+mangleFunc :: String -> Int -> String
+mangleFunc prefix count = prefix ++ "__" ++ show count ++ "_"
 -- checkProg :: Program -> Bool
 -- checkProg = checkBoogie . toBoogie
 

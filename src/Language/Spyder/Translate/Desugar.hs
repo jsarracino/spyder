@@ -8,7 +8,6 @@ module Language.Spyder.Translate.Desugar (
 ) where
 
 import Language.Spyder.AST.Imp
-import Language.Spyder.AST.Spec
 import qualified Data.Map.Strict as Map
 import Data.Set (union, empty, Set, singleton, toList)
 import Control.Monad (liftM)
@@ -26,6 +25,7 @@ stripLt (Seq ss) = Seq $ map stmtWorker ss
     stmtWorker (Assgn l r) = Assgn (exprWorker l) (exprWorker r)
     stmtWorker (Loop vs arrs bod) = Loop vs (map exprWorker arrs) (stripLt bod)
     stmtWorker (While c b) = While (exprWorker c) (stripLt b)
+    stmtWorker (Cond c tr fl) = Cond (exprWorker c) (stripLt tr) (stripLt fl)
 
     exprWorker x@(VConst _) = x
     exprWorker x@(IConst _) = x
@@ -46,6 +46,7 @@ gatherDecls (Seq ss) = foldl union empty (map stmtWorker ss)
     stmtWorker (Loop _ _ bod) = gatherDecls bod -- assumes vs have been moved around
     stmtWorker (While _ bod) = gatherDecls bod
     stmtWorker (Assgn _ _) = empty
+    stmtWorker (Cond _ tr fl) = gatherDecls tr `union` gatherDecls fl
 -- transform all decls to assigns
 -- we use a concatMap because a blank decl e.g. let foo: int should be hoisted and just elided
 convertDecls :: Block -> Block
@@ -55,6 +56,7 @@ convertDecls (Seq ss) = Seq $ concatMap stmtWorker ss
     stmtWorker (Decl _ Nothing) = [] -- holy hell this is a hack...TODO
     stmtWorker (Loop vs ars bod) = [Loop vs ars (convertDecls bod)]
     stmtWorker (While c bod) = [While c (convertDecls bod)]
+    stmtWorker (Cond c tr fl) = [Cond c (convertDecls tr) (convertDecls fl)]
     stmtWorker x@(Assgn _ _) = [x]
 
 
@@ -100,6 +102,11 @@ translateArrs (Seq ss) (initSeed, oldArrs) = let (newSeed, arrs, ss') = foldl sW
       (While c bod) ->
         let (bod', (seed', arrs')) = translateArrs bod (seed, arrs) in
         (seed', arrs', acc ++ [While c bod'])
+      (Cond c tr fl) -> 
+        let (tr', (seed', arrs'))    = translateArrs tr (seed, arrs) 
+            (fl', (seed'', arrs'')) = translateArrs fl (seed', arrs') in
+          (seed'', arrs'', acc ++ [Cond c tr' fl'])
+        -- (seed', arrs', acc ++ [While c bod'])
 
     unpack (ArrTy ty) = ty
     unpack x@_ = undefined $ "Type error, not an array type: " ++ show x

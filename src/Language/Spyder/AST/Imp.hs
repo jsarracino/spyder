@@ -58,6 +58,7 @@ data Statement =
     Decl VDecl (Maybe Expr)           -- variable decls
   | Assgn Expr Expr                   -- assignment e.g. x = y
   | Loop [VDecl] [Expr] Block        -- forin loops
+  | Cond Expr Block Block
   | While Expr Block                 -- while loops
   deriving (Eq, Show, Ord)
 

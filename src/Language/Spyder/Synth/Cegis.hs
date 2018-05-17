@@ -29,21 +29,47 @@ import Language.Spyder.Synth.Verify   (debugBoogie, checkProg, debugBlock, debug
 import Language.Spyder.Translate.Direct
 import qualified Data.Map.Strict as Map
 import qualified Data.Set.Monad as Set
-import Data.List                      (intersperse, foldl')
+import Data.List                      (intersperse, foldl', nub, sortBy)
 import Control.Monad.Logic
 import Control.Monad.Stream
 import Control.Lens hiding (Context, at)
 import Language.Spyder.Util                       (stripPos)
+import Data.Ord                                   (comparing)
+
+import Language.Spyder.Config                     (concretSize)
+import Language.Spyder.Opt
+
 
 -- get = (Map.!)
 
+
 -- assumes the const is an int
+-- params prefix, where to allocate, variable type, program (to check for global clashes)
+-- returns (name of var, new program (with var))
 allocFreshConst :: Program -> (String, Program)
 allocFreshConst (Program decs) = (name ++ show suffix, Program $ vdec:decs)
   where
-    name = "__cegisvar__"
+    name = "__cegis__const"
     suffix = worker 0 $ Set.fromList $ (map stripPos decs) >>= getNames
     vdec = Pos.gen $ ConstantDecl True [name ++ show suffix] IntType (Just []) True
+
+    getNames :: BareDecl -> [String]
+    getNames (ConstantDecl _ xs _ _ _) = xs
+    getNames (VarDecl itws ) = map itwId itws
+    getNames _ = []
+    -- check name clashes with other variables and constants
+    worker :: Int -> Set.Set String -> Int
+    worker suf names = if (name ++ show suf) `Set.member` names then worker (suf+1) names else suf
+
+allocFreshLocal :: Program -> Body -> (String, Body, Program)
+allocFreshLocal prog@(Program decs) (itws, blk)  = (name ++ show suffix, ([vdec]:itws, blk), prog)
+  where
+    name = "__cegis__local"
+    suffix = worker 0 $ Set.fromList $ decNames ++ locNames
+    decNames = (map stripPos decs) >>= getNames
+    locNames = itws >>= (map itwId)
+    vdec = IdTypeWhere (name ++ show suffix) IntType tru 
+    tru = Pos.gen tt
 
     getNames :: BareDecl -> [String]
     getNames (ConstantDecl _ xs _ _ _) = xs
@@ -66,45 +92,55 @@ generateSwitch es lhs prog = (controlName, finalBlock, finalProg)
     buildAssgn l r = stmt $ Assign [(l, [])] [r]
     buildIT a cond = stmt $ If (Expr $ eq (Var controlName) (Literal $ IntValue cond)) [a] Nothing
    
--- given a depth, candidate variables, lhs for assign, program, and block to fix, generate a fix involving assignments to lhs using the candidates.
+-- given a depth, candidate variables, lhs for assign, program, function scope, and block to fix, generate a fix involving assignments to lhs using the candidates.
 -- also add in an axiom for the size of the switch variable.
-generateFix :: Int -> [String] -> String -> Program -> Block -> (Program, Block)
+-- TODO: refactor to use state monad for variable bookkeeping
+generateFix :: Int -> [String] -> String -> Program -> Body -> Block -> (Program, Body, Block)
 -- at depth 0, allocate a constant variable, and choose between the candidates and the constant.
-generateFix 0 cands lhs prog fixme = (finalProg, fixme ++ newBlock)
+generateFix 0 cands lhs prog scope fixme = (finalProg, scope, fixme ++ newBlock)
   where
     (constVar, withConst) = allocFreshConst prog
     rhsEs = map (Pos.gen . Var) (constVar:cands)
     (switchVar, newBlock, withSwitch) = generateSwitch rhsEs lhs withConst
     finalProg = addBounds withSwitch
-    addBounds (Program decs) = Program $ bounds ++ decs
-      where bounds = map (Pos.gen . AxiomDecl) (buildBounds (length rhsEs) switchVar)
+    addBounds (Program decs) = Program $ decs ++ configBounds ++ constBounds
+      where 
+        configBounds = map (Pos.gen . AxiomDecl) $ buildBounds 0 (length rhsEs) switchVar
+        constBounds = map (Pos.gen . AxiomDecl) $ buildBounds 0 (2^upperPower - 1) constVar
+        upperPower = concretSize
+
 
 -- at depth n, allocate two variables for n-1 depths, and build binops/unops from the smaller vars
-generateFix n cands lhs prog fixme = (finalProg, rBlock ++ newBlock)
+generateFix n cands lhs prog scope fixme = (finalProg, newScope, rBlock ++ newBlock)
   where
-    (lvar, withL) = allocFreshConst prog
-    (rvar, withR) = allocFreshConst withL
+    (lvar, scope', prog') = allocFreshLocal prog scope
+    (rvar, scope'', prog'') = allocFreshLocal prog' scope'
 
-    (recurL, lBlock) = generateFix (n-1) cands lvar withR fixme
-    (recurR, rBlock) = generateFix (n-1) cands rvar recurL lBlock
+    (recurL, scope_, lBlock) = generateFix 0 cands lvar prog'' scope'' fixme
+    (recurR, scopeR, rBlock) = generateFix (n-1) cands rvar recurL scope_ lBlock
     
-    rhsEs = lv:binops ++ unops
+    rhsEs = [lv, rv] ++ binops ++ unops
 
-    (switchVar, newBlock, withSwitch) = generateSwitch rhsEs lhs recurR
+    (resVar, newScope, resProg) = allocFreshLocal recurR scopeR
+
+    (switchConst, withRes, withSwitch) = generateSwitch rhsEs resVar resProg
+    newBlock = withRes ++ [stmt $ Assign [(lhs, [])] [Pos.gen $ Var resVar]]
     finalProg = addBounds withSwitch
+
     addBounds (Program decs) = Program $ bounds ++ decs
       where 
-        bounds = map (Pos.gen . AxiomDecl) (buildBounds (length rhsEs) switchVar)
+        bounds = map (Pos.gen . AxiomDecl) (buildBounds 0 (length rhsEs) switchConst)
     
     lv = Pos.gen $ Var lvar
     rv = Pos.gen $ Var rvar
-    binops = [Pos.gen $ BinaryExpression op lv rv | op <- [Plus, Minus, Times]]
-    unops = [Pos.gen $ UnaryExpression Neg lv]
-buildBounds :: Int -> String -> [Expression]
-buildBounds upper name = [lo, hi]
+    binops = [Pos.gen $ BinaryExpression op lv rv | op <- [Plus, Minus]]
+    unops = [Pos.gen $ UnaryExpression Neg rv]
+    
+buildBounds :: Int -> Int -> String -> [Expression]
+buildBounds lower upper name = [lo, hi]
   where 
     v = Pos.gen $ Var name
-    lo = Pos.gen $ BinaryExpression Leq (Pos.gen $ numeral 0) v
+    lo = Pos.gen $ BinaryExpression Leq (Pos.gen $ numeral $ fromIntegral lower) v
     hi = Pos.gen $ BinaryExpression Gt (Pos.gen $ numeral $ fromIntegral upper) v
 -- initialize E := depth 1, IO := {}
 -- 1: does it verify in boogie? if yes, done
@@ -130,87 +166,99 @@ buildBounds upper name = [lo, hi]
           --   run boogaloo exec on prog'. if it succeeds with config c, return c.
             --   otherwise, signal failure.
             
-type Config = Map.Map String Int
-type IOExamples = [Map.Map String Value]
+type Candidate = Map.Map String Int -- lhs depths
+type Config = Map.Map String Int    -- control var to value
+type IOExamples = [Map.Map String Value] -- list of states, where each state is a map from (global) variables to values
          
 -- find a repair for a single lhs expr
--- given a set of invariants, a program preamble, global variables, a set of rhs expression seeds, a set of lhs expression seeds, and a basic block for repair, return a repair.
-repairBlock :: [Expression] -> [Decl] -> [String] -> SC.Context -> VDecl -> Block -> Block
--- repairBlock invs prog globals rhsCtx lhsVar blk =  blk ++ fix
---   where
---     initConfig = Map.fromList [(c, 0)]
---     c = "cegis__control" --allocateFreshVar prog (Just "cegis__control")
---     prog' = prog ++ addCegisVars initConfig
-    
---     firstEx = case checkConfig invs prog' globals initConfig blk of 
---       Left _ -> undefined "inconceivable"
---       Right io -> io
---     initIO = [firstEx]
+-- params: invariants, program preamble, global variables, rhs expression seeds, lhs expressions to fix, enclosing function scope, and a basic block for repair.
+-- returns: the repaired block, a new program, and a new function scope
+repairBlock :: [Expression] -> Program -> [String] -> [String] -> [String] -> Body -> Block -> (Block, Program, Body)
+repairBlock invs prog globals lhsVars rhsVars scope blk =  (fixedBlock, optimize newProg, newScope)
+  where
+    initConfig = Map.fromList []
 
---     rhsExprs = bases rhsCtx
---     finalExpr = searchAllConfigs invs prog' globals blk rhsCtx rhsExprs lhsVar initConfig initIO
---     lhsAssgn = stmt $ Assign [(stripTy lhsVar, [])] [finalExpr]
---     fix = [lhsAssgn]
-repairBlock = undefined "TODO"
+    firstEx = case checkConfig invs prog globals initConfig scope of 
+      Left _ -> undefined "inconceivable"
+      Right io -> io
+    initIO = [firstEx]
+    initCandDepths = [Map.fromList $ lhsVars `zip` (repeat 0)]
+
+    (newProg, newScope, fixedBlock) = searchAllConfigs invs prog globals scope blk lhsVars rhsVars initCandDepths initConfig initIO
     
 -- given a set of invariants, a preamble, global variables, a block to fix, a set of base values, and a variable to add an edit, use cegis to
 -- search for a configuration that correctly edits the variable. return the resulting block.
 
 -- assumes at least one IO example
-searchAllConfigs :: [Expression] -> [Decl] -> [String] -> Block -> SC.Context -> [RhsExpr] -> VDecl -> Config -> IOExamples -> Expression
--- searchAllConfigs invs prog globals blk ctx rhsEs lhs conf examples = result
---   where
---     -- (cname, configResult) = conf
---     candExprs = map (Pos.gen . translateExpr) $ rhsEs >>= translate ctx
---     procs = map buildProc $ [0..] `zip` examples
+searchAllConfigs :: [Expression] -> Program -> [String] -> Body -> Block -> [String] -> [String] -> [Candidate] -> Config -> IOExamples -> (Program, Body, Block)
     
---     buildProc :: (Int, Map.Map String Value) -> Decl
---     buildProc (n, io) = Pos.gen $ ProcedureDecl nme [] [] [] [Modifies False globals] (Just bod)
---       where
---         nme = makeName n
---         bod = ([], addAssumes invs io withExprs)
---     withExprs = linkExpressions candExprs conf (stripTy lhs) blk
---     procNames = take (length examples) $ map makeName [0..]
---     makeName n = "__spy__cegis" ++ show n
+searchAllConfigs invs prog globals scope blk lhses rhses (cand:cands) conf examples = result
+  where
+    -- (cname, configResult) = conf
+    -- foreach lhs -> depth, look for a fix using depth. link all together.
+    (searchProg, searchScope, searchBlock) = Map.foldlWithKey genFix (prog, scope, blk) cand
 
---     bounds = buildBounds conf "cegis__control"
+    genFix :: (Program, Body, Block) -> String -> Int -> (Program, Body, Block)
+    genFix (p, scop, bloc) lhs depth = generateFix depth rhses lhs p scop bloc
+
+    searchBody = case searchScope of (vars, _) -> (vars, searchBlock)
+        
+
+
+
+    procs = map buildProc $ [0..] `zip` examples
     
---     confAxioms = map (Pos.gen . AxiomDecl) bounds
+    buildProc :: (Int, Map.Map String Value) -> Decl
+    buildProc (n, io) = Pos.gen $ ProcedureDecl nme [] [] [] [Modifies False globals] (Just bod)
+      where
+        nme = makeName n
+        (varNames, _) = searchScope
+        bod = (varNames, addAssumes invs io searchBlock)
+    procNames = take (length examples) $ map makeName [0..]
+    makeName n = "__cegis__func" ++ show n
+
+    newCands = sortBy (comparing maxVal) $ map buildCand (Map.toList cand)
+    buildCand (c, v) = Map.insert c (v+1) cand
+    maxVal mp = maximum $ Map.elems mp 
+    
   
---     prog' = prog ++ confAxioms
---     checkMe = Program $ prog' ++ procs ++ [buildMainSearch globals procNames]
+    checkMe = debugProg $ optimize $ buildMainSearch globals procNames $ case searchProg of Program x -> Program $ x ++ procs
+
+    buildAns :: Config -> (Program, Body, Block)
+    buildAns cs = (finalProg, searchBody, searchBlock )
+      where
+        synthDecs = case searchProg of Program decs -> decs
+        finalProg = Program $ synthDecs ++ buildConfVal cs
     
---     result = case boogExec checkMe "Main" of
---       x:xs -> 
---         let newConfig = Map.map asInt $ takeConsts x-- a new challenger appears
---             newResult = checkConfig invs prog' globals newConfig withExprs in
---         case newResult of 
---           Left c    -> 
---             if checkProg $ Program $ prog' ++ [buildConfVal c] ++ [buildMain invs globals withExprs] --the candidate seems to work...use expensive check. if that fails, get more expressions
---             then candExprs !! snd c  -- we have a winner!
---             else searchAllConfigs invs prog' globals blk ctx (grow ctx rhsEs) lhs conf examples -- get more exprs
---           Right io  -> searchAllConfigs invs prog globals blk ctx rhsEs lhs newConfig (io:examples) -- retry current exprs
+    result = case boogExec checkMe "Main" of
+      x:xs -> 
+        let newConfig = Map.map asInt $ takeConsts x-- a new challenger appears
+            newResult = checkConfig invs searchProg globals newConfig searchBody in
+        case newResult of 
+          Left c    -> 
+            if checkProg $ case searchProg of (Program decs) -> optimize $ Program $ decs ++ buildConfVal c ++ [buildMain invs globals searchBody] --the candidate seems to work...use expensive check. if that fails, get more expressions
+            then buildAns c  -- we have a winner!
+            else searchAllConfigs invs prog globals scope blk lhses rhses (cands ++ newCands) newConfig examples -- get more exprs
+          Right io  -> searchAllConfigs invs prog globals scope blk lhses rhses (cand:cands) newConfig (io:examples) -- retry current exprs
       
---       []   -> searchAllConfigs invs prog globals blk ctx (grow ctx rhsEs) lhs conf examples -- can't find a new candidate...O.O
-searchAllConfigs = undefined "TODO"
+      []   -> searchAllConfigs invs prog globals scope blk lhses rhses (cands ++ newCands) conf examples -- can't find a new candidate...O.O
 
 
+
       
-buildConfVal :: Config -> Decl
--- buildConfVal (name, val) = Pos.gen $ AxiomDecl $ eq (Var name) (numeral $ toInteger val)
-buildConfVal = undefined "TODO"
--- given a set of invariants, a preamble, a set of globals, and a block to check, either return the block (if it passes boogie test) or return more counterexamples
-checkConfig :: [Expression] -> [Decl] -> [String] -> Config -> Block -> Either Config (Map.Map String Value)
--- checkConfig invs header globals config blk = result
---   where
---     prog =  Program $ header ++ [main] ++ [buildConfVal config]
+buildConfVal :: Config -> [Decl]
+buildConfVal cs = map buildAsn $ Map.toList cs 
+  where buildAsn (name, val) = Pos.gen $ AxiomDecl $ eq (Var name) (numeral $ toInteger val)
+-- given a set of invariants, a preamble, a set of globals, and a body to check, either return the body (if it passes boogie test) or return more counterexamples
+checkConfig :: [Expression] -> Program -> [String] -> Config -> Body -> Either Config (Map.Map String Value)
+checkConfig invs (Program header) globals config bod = result
+  where
+    prog =  optimize $ Program $ header ++ [main] ++ buildConfVal config
     
---     main = buildMain invs globals blk 
---     result = case boogTest prog "Main" of 
---       []    -> Left config
---       x:xs  -> Right $ buildIO x 
---     verifies = True
-checkConfig = undefined "TODO"
+    main = buildMain invs globals bod 
+    result = case boogTest prog "Main" of 
+      []    -> Left config
+      x:xs  -> Right $ buildIO x 
 
 -- given invs and a set of io, add assumes to the begin/end of the block to specialize to the IO.
 addAssumes :: [Expression] -> Map.Map String Value -> Block -> Block
@@ -229,16 +277,16 @@ eq :: BareExpression -> BareExpression -> Expression
 eq l r = Pos.gen $ BinaryExpression Eq (Pos.gen l) (Pos.gen r)
 
 -- build main function for exec phase
-buildMainSearch :: [String] -> [String] -> Decl
-buildMainSearch globals functions = Pos.gen $ ProcedureDecl "Main" [] [] [] [Modifies False globals] (Just bod)
+buildMainSearch :: [String] -> [String] -> Program -> Program
+buildMainSearch globals functions (Program decs) = Program $ decs ++ [Pos.gen $ ProcedureDecl "Main" [] [] [] [Modifies False globals] (Just bod)]
   where
     bod = ([], havoc `intersperse` map buildCalls functions)
     buildCalls fname = stmt $ Call [] fname []
     havoc = stmt $ Havoc globals
 
 -- build main function for test/verify phases
-buildMain :: [Expression] -> [String] -> Block -> Decl
-buildMain invs globals bod = Pos.gen $ ProcedureDecl "Main" [] [] [] (reqs ++ ensures ++ modifies) (Just ([], bod))
+buildMain :: [Expression] -> [String] -> Body -> Decl
+buildMain invs globals bod = Pos.gen $ ProcedureDecl "Main" [] [] [] (reqs ++ ensures ++ modifies) (Just bod)
   where 
     reqs = map (Requires False) invs
     ensures = map (Ensures False) invs
@@ -276,12 +324,12 @@ boogExec p pname = case typeCheckProgram p of
 
     int = interpreter branch_max rec_max loop_max minimize concretize True
 
-    branch_max = Nothing--Just 
-    exec_max = Nothing -- 2048
-    rec_max = Nothing -- Just (-1)
-    loop_max = Nothing --Just (-1)
+    branch_max = Nothing   
+    exec_max = Nothing --Just 4096
+    rec_max = Nothing 
+    loop_max = Nothing 
     minimize = True
-    concretize = True
+    concretize = False
     maybeTake = \case
       Nothing -> id
       Just n -> take n
@@ -324,19 +372,7 @@ buildIO tc@(TestCase _ mem conMem _) = buildMap $ mem'^.memOld -- we use memOld 
     mem' = userMemory conMem mem
     buildMap :: Map.Map String Expression -> Map.Map String Value
     buildMap = Map.map (\case (Pos.Pos _ e) -> eval' e)
--- I could just use eval, but I'm not sure how the monads work, and we shouldn't
--- get any free variables in these expressions anyway (because it's a thunk)
-eval' :: BareExpression -> Value
-eval' (Literal v) = v
-eval' _ = undefined "TODO"
 
-unvalue :: Value -> Expression
-unvalue v@IntValue{} = Pos.gen $ Literal v
-unvalue _ = undefined "TODO"
-
-asInt :: Value -> Int 
-asInt (IntValue v) = fromIntegral v
-asInt _ = undefined "inconceivable"
 
 --       -- | Default backtracking strategy
 -- defaultBT = DF

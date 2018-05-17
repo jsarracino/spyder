@@ -17,6 +17,7 @@ import qualified Language.Boogie.Position as Pos
 import System.IO.Unsafe                           (unsafePerformIO)
 
 -- unsafe, oops
+{-# NOINLINE checkProg #-}
 checkProg :: Program -> Bool
 checkProg p = unsafePerformIO $ compileProg p >> checkProgFile "debug.bpl" 
 
@@ -28,6 +29,7 @@ checkProgFile f = do {
 } where cmd     = prefix ++ " && ./boog.sh " ++ f ++ " | grep Error"
         prefix  = "echo \" CHECKING BOOGIE AT " ++ f ++ "\":"
 
+
 debugProg :: Program -> Program
 debugProg p = unsafePerformIO $ compileProg p >> return p
 
@@ -38,6 +40,6 @@ debugBlock :: Block -> Block
 debugBlock b = unsafePerformIO $ compileProg prog >> return b
   where 
     prog = Program [Pos.gen $ ProcedureDecl "Main" [] [] [] [] $ Just ([], b)]
-
+{-# NOINLINE compileProg #-}
 compileProg :: Program -> IO ()
 compileProg p = writeFile "debug.bpl" (show $ pretty $ p)

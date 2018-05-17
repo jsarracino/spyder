@@ -31,7 +31,7 @@ alphaProc mp (ProcDecl nme formals rt body) = ProcDecl nme formals' rt body'
     formals' = map (`fwdVD` mp) formals
     body' = alphaBlock mp body
 
--- TODO: doesn't work for scoping
+
 alphaBlock :: Env -> Block -> Block    
 alphaBlock mp (Seq stmts) = Seq $ map recur stmts
   where 
@@ -39,6 +39,7 @@ alphaBlock mp (Seq stmts) = Seq $ map recur stmts
     recur v@Decl{} = v
     recur (Assgn l r) = Assgn (alphaExpr mp l) (alphaExpr mp r)
     recur (While c b) = While (alphaExpr mp c) (alphaBlock mp b)
+    recur (Cond c t f) = Cond (alphaExpr mp c) (alphaBlock mp t) (alphaBlock mp f)
     -- recur (Loop [VDecl] [Expr] Block)
 
 alphaExpr :: Env -> Expr -> Expr

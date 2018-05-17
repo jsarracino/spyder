@@ -13,6 +13,10 @@ import Language.Boogie.Pretty (pretty)
 import Language.Boogie.PrettyAST ()
 import System.Environment (getArgs)
 import Control.Monad                        (liftM, liftM2)
+import Data.IORef
+import Language.Spyder.Config
+
+import Options.Applicative
 
 file2Boogie :: FilePath -> IO BST.Program
 file2Boogie inp = liftM Translate.toBoogie (Parser.fromFile inp)
@@ -24,4 +28,53 @@ file2Boogiefile inp outp = do {
   return boog
 }
 
-hs = file2Boogiefile "/Users/john/spyder/test/bench/spy/examples/num-basic.spy" "out.bpl"
+data SpyOptions = SpyOpts { 
+    inFile     :: FilePath  -- path to input file
+  , outFile    :: FilePath  -- path to output file
+  , intBounds  :: Int       -- bounds on int constants 
+  } deriving (Eq, Show, Ord)
+
+runOpts :: SpyOptions -> IO BST.Program
+runOpts opts = setBounds >> file2Boogiefile (inFile opts) (outFile opts)
+  where 
+    setBounds = writeIORef concretSizeRef (intBounds opts)
+
+
+parseOpts :: Parser SpyOptions
+parseOpts = SpyOpts <$> inp <*> outp <*> intp
+  where
+    inp = strOption ( 
+            long "input"
+        <>  short 'i'
+        <>  metavar "INPUT"
+        <> help "Input file location" 
+      )
+    outp = strOption ( 
+            long "output"
+        <>  short 'o'
+        <>  metavar "OUTPUT"
+        <> showDefault
+        <> value "out.bpl"
+        <> help "Output file location" 
+      )
+    intp = option auto ( 
+            long "int-bound"
+        <>  short 'b'
+        <>  metavar "BOUNDS"
+        <> showDefault
+        <> value 4
+        <> help "Size of integer bounds" 
+      )
+      
+
+
+
+hs = runOpts =<< execParser opts
+  where
+    opts = info (parseOpts <**> helper) ( 
+            fullDesc
+        <>  progDesc "Compile INPUT Spyder file to OUTPUT Boogie file using BOUNDS for ints"
+        <>  header "Spyder -- a language for managing synthesis" 
+      )
+  
+ 

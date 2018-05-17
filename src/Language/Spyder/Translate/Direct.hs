@@ -4,6 +4,9 @@ module Language.Spyder.Translate.Direct (
     translateExpr
   , translateBlock
   , translateStmt
+  , eval'
+  , unvalue
+  , asInt
 ) where
 
 
@@ -68,7 +71,12 @@ translateStmt (While c bod) = BST.While (BST.Expr c') spec bod'
     spec = []
     c' = transWithGen c
     bod' = translateBlock bod
-
+translateStmt (Cond c tr fl) = BST.If cond (translateBlock tr) fls
+  where
+    cond = BST.Expr (transWithGen c)
+    fls = case fl of 
+      (Seq []) -> Nothing
+      (Seq _) -> Just $ translateBlock fl
 
 
 -- convert an array lvalue to an identifier and list of arguments
@@ -78,3 +86,18 @@ simplArrAccess e = worker (e, [])
   where worker (VConst s, args) = (s, args)
         worker (Index l r, args) = worker (l, r:args)
         worker (x, _) = undefined $ "tried to convert to array access: " ++ show x
+
+
+-- I could just use eval, but I'm not sure how the monads work, and we shouldn't
+-- get any free variables in these expressions anyway (because it's a thunk)
+eval' :: BST.BareExpression -> BST.Value
+eval' (BST.Literal v) = v
+eval' _ = undefined "TODO"
+
+unvalue :: BST.Value -> BST.Expression
+unvalue v@BST.IntValue{} = Pos.gen $ BST.Literal v
+unvalue _ = undefined "TODO"
+
+asInt :: BST.Value -> Int 
+asInt (BST.IntValue v) = fromIntegral v
+asInt _ = undefined "inconceivable"

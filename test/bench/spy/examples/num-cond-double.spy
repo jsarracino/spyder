@@ -3,7 +3,7 @@ Component Sum2Ten {
   data rhs: int;
 
   relation toTen(x: int, y: int) {
-    x + y == (8+2)
+    x + y == 10
   }
   
   always toTen(lhs, rhs);

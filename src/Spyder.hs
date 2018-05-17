@@ -31,17 +31,14 @@ file2Boogiefile inp outp = do {
 data SpyOptions = SpyOpts { 
     inFile     :: FilePath  -- path to input file
   , outFile    :: FilePath  -- path to output file
-  , intBounds  :: Int       -- bounds on int constants 
   } deriving (Eq, Show, Ord)
 
 runOpts :: SpyOptions -> IO BST.Program
-runOpts opts = setBounds >> file2Boogiefile (inFile opts) (outFile opts)
-  where 
-    setBounds = writeIORef concretSizeRef (intBounds opts)
+runOpts opts = file2Boogiefile (inFile opts) (outFile opts)
 
 
 parseOpts :: Parser SpyOptions
-parseOpts = SpyOpts <$> inp <*> outp <*> intp
+parseOpts = SpyOpts <$> inp <*> outp
   where
     inp = strOption ( 
             long "input"
@@ -57,14 +54,6 @@ parseOpts = SpyOpts <$> inp <*> outp <*> intp
         <> value "out.bpl"
         <> help "Output file location" 
       )
-    intp = option auto ( 
-            long "int-bound"
-        <>  short 'b'
-        <>  metavar "BOUNDS"
-        <> showDefault
-        <> value 4
-        <> help "Size of integer bounds" 
-      )
       
 
 
@@ -73,8 +62,8 @@ hs = runOpts =<< execParser opts
   where
     opts = info (parseOpts <**> helper) ( 
             fullDesc
-        <>  progDesc "Compile INPUT Spyder file to OUTPUT Boogie file using BOUNDS for ints"
-        <>  header "Spyder -- a language for managing synthesis" 
+        <>  progDesc "Compile INPUT Spyder file to OUTPUT Boogie file"
+        <>  header "Spyder -- synthesis of web model-view programs" 
       )
   
  

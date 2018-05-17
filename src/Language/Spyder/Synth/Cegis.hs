@@ -103,11 +103,9 @@ generateFix 0 cands lhs prog scope fixme = (finalProg, scope, fixme ++ newBlock)
     rhsEs = map (Pos.gen . Var) (constVar:cands)
     (switchVar, newBlock, withSwitch) = generateSwitch rhsEs lhs withConst
     finalProg = addBounds withSwitch
-    addBounds (Program decs) = Program $ decs ++ configBounds ++ constBounds
+    addBounds (Program decs) = Program $ decs ++ configBounds 
       where 
         configBounds = map (Pos.gen . AxiomDecl) $ buildBounds 0 (length rhsEs) switchVar
-        constBounds = map (Pos.gen . AxiomDecl) $ buildBounds 0 (2^upperPower - 1) constVar
-        upperPower = concretSize
 
 
 -- at depth n, allocate two variables for n-1 depths, and build binops/unops from the smaller vars
@@ -350,7 +348,7 @@ boogTest p pname = case typeCheckProgram p of
     rec_max = Nothing -- Just (-1)
     loop_max = Nothing -- (-1)
     minimize = True
-    concretize = True
+    concretize = False
     maybeTake = \case
       Nothing -> id
       Just n -> take n

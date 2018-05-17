@@ -15,3 +15,5 @@ concretSizeRef = unsafePerformIO $ newIORef 4
 {-# NOINLINE concretSize #-}
 concretSize :: Int
 concretSize = unsafePerformIO $ readIORef concretSizeRef
+
+-- currently unused

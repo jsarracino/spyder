@@ -60,7 +60,7 @@ deadCodeElim :: Map.Map String BareExpression -> Program -> Program
 deadCodeElim _ (Program decs) = Program $ map simpl decs 
   where
     simpl :: Decl -> Decl
-    simpl (Pos.Pos x (ProcedureDecl nme tys args rets con (Just bod))) = Pos.Pos x (ProcedureDecl nme tys args rets con (Just $ bod'))
+    simpl (Pos.Pos x (ProcedureDecl nme tys args rets con (Just bod))) = Pos.Pos x (ProcedureDecl nme tys args rets con (Just bod'))
       where
         bod' = (fst bod, simplBlk $ snd bod)
     simpl x = x
@@ -71,7 +71,12 @@ deadCodeElim _ (Program decs) = Program $ map simpl decs
     simplSS :: Statement -> [Statement]
     simplSS (Pos.Pos _ (If (Expr (Pos.Pos _ (BinaryExpression Eq (Pos.Pos _ (Literal l)) (Pos.Pos _ (Literal r))))) tr fls)) = 
       if l == r 
-        then map (snd . Pos.node) tr 
-        else case fls of (Just b) ->  map (snd . Pos.node) b
+        then map (snd . Pos.node) (simplBlk tr) 
+        else case fls of (Just b) ->  map (snd . Pos.node) (simplBlk b)
                          Nothing  -> []
+    simplSS (Pos.Pos x (If e tr fls)) = [Pos.Pos x $ If e tr' fls']
+      where
+        tr' = simplBlk tr
+        fls' =  simplBlk `fmap` fls
     simplSS x = [x]
+

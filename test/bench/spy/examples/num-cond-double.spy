@@ -15,17 +15,27 @@ Component Main {
   
   data x: int;
   data y: int;
+  data z: int;
+  data w: int;
+  data t: int;
 
   using Sum2Ten(x, y);
+  using Sum2Ten(z, w);
   
   
   procedure init() {
-    x = 3;
-    y = 7;
-  }
 
-  procedure decX() {
-    x = x + 1;
+    if (t == 0) {
+      x = x + 1;
+    } else {
+      x = x - 1;
+    }
+    t = 1;
+    if (t == 2) {
+      z = z + 1;
+    } else {
+      w = w - 1;
+    }
   }
 
   

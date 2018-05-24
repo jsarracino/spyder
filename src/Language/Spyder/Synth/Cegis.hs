@@ -51,7 +51,7 @@ allocFreshConst (Program decs) = (name ++ show suffix, Program $ vdec:decs)
   where
     name = "__cegis__const"
     suffix = worker 0 $ Set.fromList $ (map stripPos decs) >>= getNames
-    vdec = Pos.gen $ ConstantDecl True [name ++ show suffix] IntType (Just []) True
+    vdec = Pos.gen $ ConstantDecl False [name ++ show suffix] IntType (Just []) True
 
     getNames :: BareDecl -> [String]
     getNames (ConstantDecl _ xs _ _ _) = xs
@@ -107,6 +107,7 @@ generateFix 0 cands lhs prog scope fixme = (finalProg, scope, fixme ++ newBlock)
       where 
         configBounds = map (Pos.gen . AxiomDecl) $ buildBounds 0 (length rhsEs) switchVar
 
+-- TODO: error in num-cond2.spy with depth=1 (i think)
 
 -- at depth n, allocate two variables for n-1 depths, and build binops/unops from the smaller vars
 generateFix n cands lhs prog scope fixme = (finalProg, newScope, rBlock ++ newBlock)
@@ -176,7 +177,7 @@ repairBlock invs prog globals lhsVars rhsVars scope blk =  (fixedBlock, optimize
   where
     initConfig = Map.fromList []
 
-    firstEx = case checkConfig invs prog globals initConfig scope of 
+    firstEx = case checkConfig invs prog globals initConfig scope blk of 
       Left _ -> undefined "inconceivable"
       Right io -> io
     initIO = [firstEx]
@@ -231,7 +232,7 @@ searchAllConfigs invs prog globals scope blk lhses rhses (cand:cands) conf examp
     result = case boogExec checkMe "Main" of
       x:xs -> 
         let newConfig = Map.map asInt $ takeConsts x-- a new challenger appears
-            newResult = checkConfig invs searchProg globals newConfig searchBody in
+            newResult = checkConfig invs searchProg globals newConfig searchBody searchBlock in
         case newResult of 
           Left c    -> 
             if checkProg $ case searchProg of (Program decs) -> optimize $ Program $ decs ++ buildConfVal c ++ [buildMain invs globals searchBody] --the candidate seems to work...use expensive check. if that fails, get more expressions
@@ -248,11 +249,11 @@ buildConfVal :: Config -> [Decl]
 buildConfVal cs = map buildAsn $ Map.toList cs 
   where buildAsn (name, val) = Pos.gen $ AxiomDecl $ eq (Var name) (numeral $ toInteger val)
 -- given a set of invariants, a preamble, a set of globals, and a body to check, either return the body (if it passes boogie test) or return more counterexamples
-checkConfig :: [Expression] -> Program -> [String] -> Config -> Body -> Either Config (Map.Map String Value)
-checkConfig invs (Program header) globals config bod = result
+checkConfig :: [Expression] -> Program -> [String] -> Config -> Body -> Block -> Either Config (Map.Map String Value)
+checkConfig invs (Program header) globals config (vs, _) blk = result
   where
     prog =  optimize $ Program $ header ++ [main] ++ buildConfVal config
-    
+    bod = (vs, blk)
     main = buildMain invs globals bod 
     result = case boogTest prog "Main" of 
       []    -> Left config
@@ -300,14 +301,6 @@ buildMain invs globals bod = Pos.gen $ ProcedureDecl "Main" [] [] [] (reqs ++ en
 
 --     buildAssgn l r = stmt $ Assign [(l, [])] [r]
 --     buildIT (a, cond) = stmt $ If (Expr $ eq (Var control) (Literal $ IntValue cond)) [a] Nothing
-
-
--- add a control var decl                           
-addCegisVars :: Config -> [Decl]
--- addCegisVars name = [Pos.gen vardec]
---   where
---     vardec = ConstantDecl True [name] IntType (Just []) True
-addCegisVars = undefined "TODO"
 
 stmt :: BareStatement -> LStatement
 stmt s = Pos.gen ([], Pos.gen s)

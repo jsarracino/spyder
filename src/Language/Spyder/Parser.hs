@@ -18,6 +18,7 @@ import Text.Parsec
 import Control.Monad (liftM)
 
 
+-- TODO: there's a parse error when atoms are preceeded by a newline
 
 str2A :: (Show a) => Lexer.Parser a -> String -> a
 str2A p s = case parse p "" s of

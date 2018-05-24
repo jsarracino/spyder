@@ -26,6 +26,8 @@ import Language.Spyder.Synth                      (fixProc)
 import Language.Boogie.Pretty                     (pretty)
 import System.IO.Unsafe                           (unsafePerformIO)
 
+import Language.Spyder.Translate.Related
+
 import Language.Spyder.Opt
 
 
@@ -42,7 +44,7 @@ toBoogie prog@(comps, MainComp decls) = outProg
 
     invs = (comps' `zip` [0..]) >>= buildInvs
 
-    
+    reledVars = alphaRels (relatedVars prog) varMap
 
     procs = map (alphaProc varMap) $ filter takeProcs decls
 
@@ -69,7 +71,7 @@ toBoogie prog@(comps, MainComp decls) = outProg
       where
         decs = case newProg of BST.Program i -> i
         newProc = Pos.gen $ BST.ProcedureDecl nme tyargs formals rets contr (Just (newvars, fixed))
-        (fixed, newProg, (newvars, _)) = fixProc invs p bod globals prog varMap fixme  
+        (fixed, newProg, (newvars, _)) = fixProc invs reledVars p bod globals prog fixme  
         globals = map stripTy globalVars
         
 

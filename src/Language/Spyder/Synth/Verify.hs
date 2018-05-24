@@ -19,7 +19,7 @@ import System.IO.Unsafe                           (unsafePerformIO)
 -- unsafe, oops
 {-# NOINLINE checkProg #-}
 checkProg :: Program -> Bool
-checkProg p = unsafePerformIO $ compileProg p >> checkProgFile "debug.bpl" 
+checkProg p = unsafePerformIO $! compileProg "check.bpl" p >> checkProgFile "check.bpl" 
 
 checkProgFile :: FilePath -> IO Bool
 checkProgFile f = do {
@@ -31,15 +31,15 @@ checkProgFile f = do {
 
 
 debugProg :: Program -> Program
-debugProg p = unsafePerformIO $ compileProg p >> return p
+debugProg p = unsafePerformIO $! compileProg "debug.bpl" p >> return p
 
 debugBoogie :: [Decl] -> [Decl]
-debugBoogie p = unsafePerformIO $ compileProg (Program p) >> return p
+debugBoogie p = unsafePerformIO $! compileProg "debug.bpl"  (Program p) >> return p
 
 debugBlock :: Block -> Block
-debugBlock b = unsafePerformIO $ compileProg prog >> return b
+debugBlock b = unsafePerformIO $! compileProg "debug.bpl" prog >> return b
   where 
     prog = Program [Pos.gen $ ProcedureDecl "Main" [] [] [] [] $ Just ([], b)]
 {-# NOINLINE compileProg #-}
-compileProg :: Program -> IO ()
-compileProg p = writeFile "debug.bpl" (show $ pretty $ p)
+compileProg :: String -> Program -> IO ()
+compileProg path p = writeFile path (show $ pretty $ p)

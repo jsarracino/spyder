@@ -27,7 +27,6 @@ library
     Language.Spyder.Pretty.Printer,
     Language.Spyder.Translate,
     Language.Spyder.Translate.Desugar,
-    Language.Spyder.Translate.Main,
     Language.Spyder.Translate.Derived,
     Language.Spyder.Translate.Rename,
     Language.Spyder.Synth,
@@ -65,14 +64,13 @@ executable spyder
     Language.Spyder.Parser.Parser
     Language.Spyder.Translate
     Language.Spyder.Translate.Desugar
-    Language.Spyder.Translate.Main
     Language.Spyder.Translate.Derived
-    Language.Spyder.Translate.Rename,
+    Language.Spyder.Translate.Rename
     Language.Spyder.Synth,
-    Language.Spyder.Synth.Cegis,
-    Language.Spyder.Synth.Context,
-    Language.Spyder.Synth.Enum,
-    Language.Spyder.Synth.Verify,
+    Language.Spyder.Synth.Cegis
+    Language.Spyder.Synth.Context
+    Language.Spyder.Synth.Enum
+    Language.Spyder.Synth.Verify
     Language.Spyder.Util
     
   build-depends:       base

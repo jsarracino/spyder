@@ -30,8 +30,8 @@ checkProgFile f = do {
         prefix  = "echo \" CHECKING BOOGIE AT " ++ f ++ "\":"
 
 
-debugProg :: Program -> Program
-debugProg p = unsafePerformIO $! compileProg "debug.bpl" p >> return p
+debugProg :: FilePath -> Program -> Program
+debugProg f p = unsafePerformIO $! compileProg f p >> return p
 
 debugBoogie :: [Decl] -> [Decl]
 debugBoogie p = unsafePerformIO $! compileProg "debug.bpl"  (Program p) >> return p

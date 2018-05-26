@@ -221,7 +221,7 @@ searchAllConfigs invs prog globals scope blk lhses rhses (cand:cands) conf examp
     maxVal mp = maximum $ Map.elems mp 
     
   
-    checkMe = debugProg $ optimize $ buildMainSearch globals procNames $ case searchProg of Program x -> Program $ x ++ procs
+    checkMe = debugProg "cegis-debug.bpl" $ optimize $ buildMainSearch globals procNames $ case searchProg of Program x -> Program $ x ++ procs
 
     buildAns :: Config -> (Program, Body, Block)
     buildAns cs = (finalProg, searchBody, searchBlock )

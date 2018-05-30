@@ -4,14 +4,17 @@ module Language.Spyder.Util (
   , incSpan
   , flat
   , breadthFirst
-  , allocateFreshVar
+  , allocFreshLocal
   , stripPos
 ) where
 
 -- import Data.List
 import Control.Monad (join)
-import Language.Boogie.AST      (Decl(..))
+import Language.Boogie.AST
 import qualified Language.Boogie.Position as Pos
+import qualified Data.Set as Set
+
+
 --- prefix x y: is x a prefix of y?
 prefix :: String -> String -> Bool
 prefix (x:xs) (y:ys) = if (x == y) then prefix xs ys else False
@@ -44,19 +47,21 @@ breadthFirst = foldl worker [[]]
   where worker acc xs = do {x <- xs; a <- acc; return $ a ++ [x]}
 -- let foo xs ys = do {x <- xs; y <- ys; return $ x:y}
 
-allocateFreshVar :: [Decl] -> Maybe String -> String
-allocateFreshVar decs suffix = makeVar finalVar
-  where
-    makeVar = undefined "TODO"
-    finalVar = undefined "TODO"
-
 stripPos :: Pos.Pos a -> a
 stripPos = Pos.node
 
--- TypeDecl [NewType] |
--- ConstantDecl Bool [Id] Type ParentInfo Bool |                                -- ^ 'ConstantDecl' @unique names type orderSpec complete@
--- FunctionDecl [Attribute] Id [Id] [FArg] FArg (Maybe Expression) |            -- ^ 'FunctionDecl' @name type_args formals ret body@
--- AxiomDecl Expression |
--- VarDecl [IdTypeWhere] |
--- ProcedureDecl Id [Id] [IdTypeWhere] [IdTypeWhere] [Contract] (Maybe Body) |  -- ^ 'ProcedureDecl' @name type_args formals rets contract body@
--- ImplementationDecl Id [Id] [IdType] [IdType] [Body]                          -- ^ 'ImplementationDecl' @name type_args formals rets body@
+
+-- given a overall scope, a prefix, and a list of variables, allocate a new variable (of int type)
+-- return the name of the variable and the new list of variables
+allocFreshLocal :: String -> [IdTypeWhere] -> (String, [IdTypeWhere])
+allocFreshLocal prefix itws  = (mk prefix suffix, vdec:itws)
+  where
+    mk pref suf = if suf == 0 then pref else pref ++ show suf -- TODO: hack for loops
+    suffix = worker 0 $ Set.fromList locNames
+    locNames = map itwId itws
+    vdec = IdTypeWhere (mk prefix suffix) IntType tru 
+    tru = Pos.gen tt
+
+    -- check name clashes with other variables and constants
+    worker :: Int -> Set.Set String -> Int
+    worker suf names = if mk prefix suf `Set.member` names then worker (suf+1) names else suf

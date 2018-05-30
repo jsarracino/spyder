@@ -17,17 +17,17 @@ import Language.Spyder.AST.Spec
 import Language.Spyder.AST.Component
 
 import Language.Spyder.Translate.Desugar
-import Language.Spyder.Translate.Related
 import Language.Spyder.Translate.Rename
 
 import Language.Spyder.Synth.Verify
 
 import Language.Spyder.Translate.Derived          (instantiate, prefixApps)
-import Data.List                                  (find, partition)
+import Data.List                                  (find)
 
 import qualified Language.Boogie.AST as BST
 import qualified Language.Boogie.Position as Pos
 import qualified Data.Map.Strict as Map
+import Language.Spyder.Util
 
 translateBop :: Bop -> BST.BinOp
 translateBop = \case
@@ -80,35 +80,103 @@ translateExpr (Index ar i) =
 translateExpr (App (VConst f) r) = BST.Application f (map transWithGen r)
 translateExpr (AConst _) = undefined "Error: translation assumes array constants have been desugared"
 
-translateBlock :: Block -> BST.Block
-translateBlock (Seq ss) = map worker ss
-  where worker s = Pos.gen ([], (Pos.gen . translateStmt) s)
+translateBlock :: (Block, [BST.IdTypeWhere])  -> (BST.Block, [BST.IdTypeWhere])
+translateBlock (Seq ss, vs) = foldl worker ([], vs) ss
+  where 
+    worker :: (BST.Block, [BST.IdTypeWhere]) -> Statement -> (BST.Block, [BST.IdTypeWhere])
+    worker (olds, vs) s = (olds ++ news, vs')
+      where 
+        (bareS, vs') = translateStmt (s, vs)
+        news = map (\t -> Pos.gen ([], Pos.gen t)) bareS
 
-translateStmt :: Statement -> BST.BareStatement
-translateStmt (Decl _ _) = undefined "Error: translation assumes decls are lifted"
-translateStmt (Assgn (VConst lid) rhs) = BST.Assign [(lid, [])] [transWithGen rhs]
-translateStmt (Assgn lhs rhs) = BST.Assign [(lid, largs)] [transWithGen rhs]
+-- for loops, we need to insert multiple statements, so we return a list.
+-- also, we need to introduce variables, so we plumb a scope around.
+translateStmt :: (Statement, [BST.IdTypeWhere]) -> ([BST.BareStatement], [BST.IdTypeWhere])
+-- we can do this now TODO
+translateStmt (Decl _ _, vs) = error "Error: translation assumes decls are lifted"
+-- convert 
+--  for (vs) <- (arrs) {
+--    bod 
+--  } 
+
+--  {idx_i := 0};
+--  while (BIG_AND {idx_i < len_i}) {
+--    {v_i := arr_i[idx_i];}
+--    bod;
+--    {arr[idx_i] := v_i;}
+--    {idx_i := idx_i + 1;}
+--  }
+-- assumes length is stored at arr[-1]
+translateStmt (For vs arrs bod, vars) = (idxInit ++ [BST.While (BST.Expr cond) spec (iterUpdate ++ bod' ++ arrUpdate ++ idxUpdate)], vars')
+  where
+    decls = vs `zip` arrs
+
+    --loopVars :: [BST.IdTypeWhere]
+    (newVars, ivars, lvars) = foldl buildLVars (vars, [], []) decls
+    -- allocate new variables for the indices, as well as the actual loop vars. keep track of the names for later.
+    -- TODO: handle ty
+    buildLVars :: ([BST.IdTypeWhere], [String], [String]) -> (VDecl, Expr) -> ([BST.IdTypeWhere], [String], [String])
+    buildLVars (vs, idxs, lvars) ((name, _), _) = (vs'', idxs ++ [idx], lvars ++ [lvar])
+      where 
+        (idx, vs')    = allocFreshLocal "__loop_idx" vs
+        (lvar, vs'' ) = allocFreshLocal name vs'
+        
+
+    spec = []
+
+    liftLS :: BST.BareStatement -> BST.LStatement
+    liftLS s = Pos.gen ([], Pos.gen s)
+
+    idxInit = map buildInit ivars
+    idxUpdate = map (liftLS . buildIdxUp) ivars
+    iterUpdate = map (liftLS . buildIterUp) (decls `zip` ivars)
+    arrUpdate = map (liftLS . buildArrUp) (decls `zip` ivars)
+
+
+    buildInit :: String -> BST.BareStatement
+    buildInit name = BST.Assign [(name, [])] [Pos.gen $ BST.numeral 0]
+    buildIdxUp :: String -> BST.BareStatement
+    buildIdxUp name = BST.Assign [(name, [])] [Pos.gen $ BST.BinaryExpression BST.Plus (Pos.gen $ BST.Var name) (Pos.gen $ BST.numeral 1)]
+    buildIterUp :: ((VDecl, Expr), String) -> BST.BareStatement
+    buildIterUp (((l, _), r), i) = BST.Assign [(l, [])] [Pos.gen $ BST.MapSelection (transWithGen r) [Pos.gen $ BST.Var i]]
+    buildArrUp :: ((VDecl, Expr), String) -> BST.BareStatement
+    buildArrUp (((r, _), VConst l), i) = BST.Assign [(l, [[Pos.gen $ BST.Var i]])] [Pos.gen $ BST.Var r]
+
+
+    (bod', vars') = translateBlock (bod, newVars)
+
+    cond = foldl buildCond (Pos.gen BST.tt) (ivars `zip` arrs)
+
+    buildCond :: BST.Expression -> (String, Expr) -> BST.Expression
+    buildCond e (idx, VConst arr) = Pos.gen $ BST.BinaryExpression BST.And e (Pos.gen $ idx `lt` arr)
+      where
+        lt l r = BST.UnaryExpression BST.Not $ Pos.gen $ BST.BinaryExpression BST.Geq (Pos.gen $ BST.Var l) $ Pos.gen $ BST.MapSelection (Pos.gen $ BST.Var r) [Pos.gen $ BST.numeral (-1)]
+translateStmt (Assgn (VConst lid) rhs, vars) = ([BST.Assign [(lid, [])] [transWithGen rhs]], vars)
+translateStmt (Assgn lhs rhs, vars) = ([BST.Assign [(lid, largs)] [transWithGen rhs]], vars)
   where
     (lid, lacc) = simplArrAccess lhs
     largs = [map transWithGen lacc]
-translateStmt (While c bod) = BST.While (BST.Expr c') spec bod'
+translateStmt (While c bod, vars) = ([BST.While (BST.Expr c') spec bod'], vars')
   where
     spec = []
     c' = transWithGen c
-    bod' = translateBlock bod
-translateStmt (Cond c tr fl) = BST.If cond (translateBlock tr) fls
+    (bod', vars') = translateBlock (bod, vars)
+translateStmt (Cond c tr fl, vars) = ([BST.If cond ts fls], vars'')
   where
     cond = BST.Expr (transWithGen c)
-    fls = case fl of 
-      (Seq []) -> Nothing
-      (Seq _) -> Just $ translateBlock fl
+    (ts, vars') = translateBlock (tr, vars)
+    
+    (fls, vars'') = case fl of 
+      (Seq []) -> (Nothing, vars')
+      (Seq _) -> let (fs, vs) = translateBlock (fl, vars') in (Just fs, vs)
 
 translateProc :: MainDecl -> BST.BareDecl
-translateProc (ProcDecl nme formals rt body) = BST.ProcedureDecl nme [] formals' [] inv body'
+translateProc (ProcDecl nme formals rt body) = BST.ProcedureDecl nme [] formals' [] inv $ Just (decs', body')
   where
     formals' = map translateITW formals
-    (decs, bod) = generateBoogieBlock body
-    body' = Just ([[translateITW v] | v <- decs], translateBlock $ Seq bod)
+    (vs, bod) = generateBoogieBlock body
+    (body', decs) = translateBlock (Seq bod, map translateITW vs)
+    decs' = map (\x -> [x]) decs
     inv = []
 
 translateRels :: (Component, Int) -> [BST.BareDecl]
@@ -241,7 +309,7 @@ unvalue _ = undefined "TODO"
 
 asInt :: BST.Value -> Int 
 asInt (BST.IntValue v) = fromIntegral v
-asInt _ = undefined "inconceivable"
+asInt _ = error "inconceivable"
 
 gatherDDecls :: [MainDecl] -> [VDecl]
 gatherDDecls decs = map unwrap $ filter takeDD decs
@@ -249,4 +317,4 @@ gatherDDecls decs = map unwrap $ filter takeDD decs
     takeDD MainDDecl{} = True
     takeDD _ = False
     unwrap (MainDDecl decs) = decs
-    unwrap _ = undefined "unexpected argument to unwrap"
+    unwrap _ = error "unexpected argument to unwrap"

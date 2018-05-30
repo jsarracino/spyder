@@ -23,7 +23,7 @@ stripLt (Seq ss) = Seq $ map stmtWorker ss
   where
     stmtWorker (Decl d rhs) = Decl d $ liftM exprWorker rhs
     stmtWorker (Assgn l r) = Assgn (exprWorker l) (exprWorker r)
-    stmtWorker (Loop vs arrs bod) = Loop vs (map exprWorker arrs) (stripLt bod)
+    stmtWorker (For vs arrs bod) = For vs (map exprWorker arrs) (stripLt bod)
     stmtWorker (While c b) = While (exprWorker c) (stripLt b)
     stmtWorker (Cond c tr fl) = Cond (exprWorker c) (stripLt tr) (stripLt fl)
 
@@ -38,12 +38,11 @@ stripLt (Seq ss) = Seq $ map stmtWorker ss
     exprWorker (App l r) = App (exprWorker l) (map exprWorker r)
 
 -- gather decls into a thinger and convert to assignments
--- not sure yet
 gatherDecls :: Block -> Set VDecl
 gatherDecls (Seq ss) = foldl union empty (map stmtWorker ss)
   where
     stmtWorker (Decl d _) = singleton d
-    stmtWorker (Loop _ _ bod) = gatherDecls bod -- assumes vs have been moved around
+    stmtWorker (For _ _ bod) = gatherDecls bod -- assumes vs have been moved around
     stmtWorker (While _ bod) = gatherDecls bod
     stmtWorker (Assgn _ _) = empty
     stmtWorker (Cond _ tr fl) = gatherDecls tr `union` gatherDecls fl
@@ -53,8 +52,8 @@ convertDecls :: Block -> Block
 convertDecls (Seq ss) = Seq $ concatMap stmtWorker ss
   where
     stmtWorker (Decl (l,_) (Just r)) = [Assgn (VConst l) r]
-    stmtWorker (Decl _ Nothing) = [] -- holy hell this is a hack...TODO
-    stmtWorker (Loop vs ars bod) = [Loop vs ars (convertDecls bod)]
+    stmtWorker (Decl _ Nothing) = []
+    stmtWorker (For vs ars bod) = [For vs ars (convertDecls bod)]
     stmtWorker (While c bod) = [While c (convertDecls bod)]
     stmtWorker (Cond c tr fl) = [Cond c (convertDecls tr) (convertDecls fl)]
     stmtWorker x@(Assgn _ _) = [x]
@@ -96,9 +95,9 @@ translateArrs (Seq ss) (initSeed, oldArrs) = let (newSeed, arrs, ss') = foldl sW
       (Assgn _ _) -> (seed, arrs, acc ++ [s]) -- TODO: make work for rhs constants...maybe
       (Decl _ _) -> (seed, arrs, acc ++ [s])
       -- assumes arr primitives in arrs have been hoisted above the loop
-      (Loop vs vars bod) ->
+      (For vs vars bod) ->
         let (bod', (seed', arrs')) = translateArrs bod (seed, arrs) in
-        (seed', arrs', acc ++ [Loop vs vars bod'])
+        (seed', arrs', acc ++ [For vs vars bod'])
       (While c bod) ->
         let (bod', (seed', arrs')) = translateArrs bod (seed, arrs) in
         (seed', arrs', acc ++ [While c bod'])
@@ -117,26 +116,33 @@ translateArrs (Seq ss) (initSeed, oldArrs) = let (newSeed, arrs, ss') = foldl sW
 
 -- convert for (decls) in (arrs) bod to
 -- [let decl <- arr[arr_index]]
--- while (BIGAND [arr_index < arr_length]) Seq [decl <- arr[arr_index]] ++ bod ++ [arr_index <- arr_index + 1]
+-- while (BIGAND [arr_index < arr_length]) Seq [decl <- arr[arr_index]] ++ bod ++ [arr[arr_index] <- decl] ++ [arr_index <- arr_index + 1]
 convertForStmt :: ArrInfos -> Statement -> ([Statement], Statement)
-convertForStmt arrInfo (Loop vs arrs (Seq bod)) = (decls, loop)
+convertForStmt arrInfo (For vs arrs (Seq bod)) = (decls, loop)
   where
     loop = While cond (Seq bod')
     idx (VConst v) = v ++ "_idx"
     idx _ = undefined "Error: can only loop over variables (for now)"
-    len (VConst v) =
-      let (lName, _) = (Map.!) arrInfo v in
-      VConst lName
+    varIdx = VConst . idx
+    len a =
+      Index a (IConst (-1))
     len _ = undefined "Error: can only loop over variables (for now)"
     bnds = vs `zip` arrs
     decls = map buildIndex arrs ++ map buildIdent bnds
-    buildIndex arr = Decl (idx arr, BaseTy "number") (Just $ IConst 0)
-    buildIdent (v, arr) = Decl v (Just $ Index arr (VConst $ idx arr))
+    buildIndex arr = Decl (idx arr, BaseTy "int") (Just $ IConst 0)
+    buildIdent (v, arr) = Decl v (Just $ Index arr (varIdx arr))
     cond = foldl (BinOp And) tru arrConds
-    arrConds = map (\arr -> BinOp Lt (VConst $ idx arr) (len arr)) arrs
+    arrConds = map (\arr -> BinOp Lt (varIdx arr) (len arr)) arrs
     tru = BConst True
     incr i = Assgn i (BinOp Plus i (IConst 1))
-    bod' = bod ++ map (incr . len) arrs
+
+    preUpdates = undefined "TODO"
+    postUpdates = undefined "TODO"
+    -- TODO: need to calculate the actual updates to iteration variables
+    -- i.e. itr <- arr[idx]
+    -- at both beginning and end of loop, but before the idxs are incremented
+
+    bod' = preUpdates ++ bod ++ postUpdates ++ map (incr . varIdx) arrs
 convertForStmt _ x@_ = ([], x)
 
 -- desugarLoopS :: ArrInfo -> Statement ->
@@ -163,9 +169,9 @@ uniqifyNames x = (Seq . snd) $ blockWorker start x
         let s' = Assgn (renameExpr vars l) (renameExpr vars r) in
         (vars, ss ++ [s'])
       -- assumes vs have been lowered into/hoisted above bod
-      (Loop vs arrs bod) ->
+      (For vs arrs bod) ->
         let (vars', bod') = blockWorker vars bod in
-        (vars', ss ++ [Loop vs arrs (Seq bod')])
+        (vars', ss ++ [For vs arrs (Seq bod')])
       (While c bod) ->
         let (vars', bod') = blockWorker vars bod in
         (vars', ss ++ [While c (Seq bod')])
@@ -203,7 +209,7 @@ generateBoogieBlock :: Block -> ([VDecl], [Statement])
 generateBoogieBlock b =
   let start = (0, Map.empty) in
   let (convArrs, (_, arrInfos)) = translateArrs b start in
-  let passes = [stripLt, convertForBlock arrInfos] in
+  let passes = [stripLt] in
   -- let passes = [stripLt, uniqifyNames, convertForBlock arrInfos] in
   let beforeDecs = foldr (.) id passes convArrs in
   let decls = gatherDecls beforeDecs in

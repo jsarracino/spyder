@@ -7,6 +7,10 @@ module Language.Spyder.Parser.Parser (
   , relP
   , comp
   , spaced
+  , typ
+  , dataDeclP
+  , mainCompP
+  , derivCompP
 ) where
 
 import Text.Parsec
@@ -118,7 +122,7 @@ loopP = do {
   res "in";
   arrs <- parens $ commas expr;
   body <- braces block;
-  return $ Loop vs arrs body
+  return $ For vs arrs body
 }
 
 whileP :: Parser Statement

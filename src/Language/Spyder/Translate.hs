@@ -2,8 +2,6 @@
 
 module Language.Spyder.Translate (
     toBoogie
-  , translateExpr
-  , translateStmt
 ) where
 
 import Language.Spyder.Translate.Direct

@@ -30,10 +30,11 @@ import Language.Spyder.Translate.Direct
 import qualified Data.Map.Strict as Map
 import qualified Data.Set.Monad as Set
 import Data.List                      (intersperse, foldl', nub, sortBy)
+import Control.Monad
 import Control.Monad.Logic
 import Control.Monad.Stream
 import Control.Lens hiding (Context, at)
-import Language.Spyder.Util                       (stripPos)
+import Language.Spyder.Util                       (stripPos, allocFreshLocal)
 import Data.Ord                                   (comparing)
 
 import Language.Spyder.Config                     (concretSize)
@@ -61,23 +62,12 @@ allocFreshConst (Program decs) = (name ++ show suffix, Program $ vdec:decs)
     worker :: Int -> Set.Set String -> Int
     worker suf names = if (name ++ show suf) `Set.member` names then worker (suf+1) names else suf
 
-allocFreshLocal :: Program -> Body -> (String, Body, Program)
-allocFreshLocal prog@(Program decs) (itws, blk)  = (name ++ show suffix, ([vdec]:itws, blk), prog)
+-- TODO: refactor and eliminate Program
+allocCegisLocal :: Program -> Body -> (String, Body, Program)
+allocCegisLocal prog (itws, blk)  = (var, ([itws'], blk), prog)
   where
-    name = "__cegis__local"
-    suffix = worker 0 $ Set.fromList $ decNames ++ locNames
-    decNames = (map stripPos decs) >>= getNames
-    locNames = itws >>= (map itwId)
-    vdec = IdTypeWhere (name ++ show suffix) IntType tru 
-    tru = Pos.gen tt
+    (var, itws') = allocFreshLocal "__cegis__local" (join itws)
 
-    getNames :: BareDecl -> [String]
-    getNames (ConstantDecl _ xs _ _ _) = xs
-    getNames (VarDecl itws ) = map itwId itws
-    getNames _ = []
-    -- check name clashes with other variables and constants
-    worker :: Int -> Set.Set String -> Int
-    worker suf names = if (name ++ show suf) `Set.member` names then worker (suf+1) names else suf
 
 -- given a list of rhs expressions and a lhs assignment, generate a switch for lhs := rhs_0 | rhs_1 | ... | rhs_n. return the name of the control variable
 -- for choosing the expression, as well as the switch in block form.
@@ -112,15 +102,15 @@ generateFix 0 cands lhs prog scope fixme = (finalProg, scope, fixme ++ newBlock)
 -- at depth n, allocate two variables for n-1 depths, and build binops/unops from the smaller vars
 generateFix n cands lhs prog scope fixme = (finalProg, newScope, rBlock ++ newBlock)
   where
-    (lvar, scope', prog') = allocFreshLocal prog scope
-    (rvar, scope'', prog'') = allocFreshLocal prog' scope'
+    (lvar, scope', prog') = allocCegisLocal prog scope
+    (rvar, scope'', prog'') = allocCegisLocal prog' scope'
 
     (recurL, scope_, lBlock) = generateFix 0 cands lvar prog'' scope'' fixme
     (recurR, scopeR, rBlock) = generateFix (n-1) cands rvar recurL scope_ lBlock
     
     rhsEs = [lv, rv] ++ binops ++ unops
 
-    (resVar, newScope, resProg) = allocFreshLocal recurR scopeR
+    (resVar, newScope, resProg) = allocCegisLocal recurR scopeR
 
     (switchConst, withRes, withSwitch) = generateSwitch rhsEs resVar resProg
     newBlock = withRes ++ [stmt $ Assign [(lhs, [])] [Pos.gen $ Var resVar]]

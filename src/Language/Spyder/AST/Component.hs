@@ -5,8 +5,8 @@ module Language.Spyder.AST.Component (
   , UseClause
 ) where
 
-import Language.Spyder.AST.Imp (Type, VDecl, Expr, Block)
-import Language.Spyder.AST.Spec (BaseRel, RelType)
+import Language.Spyder.AST.Imp (Type, VDecl, Block)
+import Language.Spyder.AST.Spec (BaseRel)
 
 type UseClause = (String, [String])
 

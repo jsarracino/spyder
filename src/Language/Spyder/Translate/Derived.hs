@@ -5,7 +5,7 @@ module Language.Spyder.Translate.Derived (
 ) where
 
 import Language.Spyder.AST.Component
-import Language.Spyder.AST.Imp            (Expr, VDecl, stripTy)
+import Language.Spyder.AST.Imp            (VDecl, stripTy)
 import qualified Data.Map.Strict as Map
 import Language.Boogie.AST                (BareExpression(..), Expression)
 import Language.Spyder.AST.Spec           (BaseRel(..))

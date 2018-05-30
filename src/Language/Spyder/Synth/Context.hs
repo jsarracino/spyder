@@ -44,7 +44,7 @@ gatherNumsStmt :: Statement -> [Int]
 gatherNumsStmt (Decl _ (Just e)) = gatherNumsExpr e
 gatherNumsStmt (Decl _ Nothing) = []
 gatherNumsStmt (Assgn l r) = [l, r] >>= gatherNumsExpr
-gatherNumsStmt (Loop _ rhs (Seq bod)) = (rhs >>= gatherNumsExpr) ++ (bod >>= gatherNumsStmt)
+gatherNumsStmt (For _ rhs (Seq bod)) = (rhs >>= gatherNumsExpr) ++ (bod >>= gatherNumsStmt)
 gatherNumsStmt (While c (Seq bod)) = gatherNumsExpr c ++ (bod >>= gatherNumsStmt)
 
 gatherNumsExpr :: Expr -> [Int]

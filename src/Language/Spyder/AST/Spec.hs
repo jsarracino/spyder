@@ -3,11 +3,10 @@ module Language.Spyder.AST.Spec (
   RelType(..),
   injectForeach2
 ) where
-import qualified Language.Spyder.AST.Imp as Imp
 import qualified Language.Boogie.AST as BAST
-import Language.Boogie.PrettyAST -- for show typeclass
+import Language.Boogie.PrettyAST() -- for show typeclass
 
-
+-- TODO arrays
 data BaseRel = 
     BE BAST.Expression
   | ForEach2 BAST.Expression BAST.Expression BaseRel

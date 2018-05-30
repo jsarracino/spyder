@@ -6,14 +6,10 @@ module Language.Spyder.AST.Imp (
   , Type(..)
   , Block(..)
   , VDecl
-  , Type
   , stripTy
   , typecheck
 ) where
 
-import qualified Language.Boogie.AST as BST
-
--- type Type = BST.Type
 
 
 
@@ -51,13 +47,13 @@ data Type =
 
 type VDecl = (String, Type)
 stripTy :: VDecl -> String
-stripTy (v,t) = v
+stripTy = fst
 
 -- simple statements
 data Statement =
     Decl VDecl (Maybe Expr)           -- variable decls
   | Assgn Expr Expr                   -- assignment e.g. x = y
-  | Loop [VDecl] [Expr] Block        -- forin loops
+  | For [VDecl] [Expr] Block        -- forin loops
   | Cond Expr Block Block
   | While Expr Block                 -- while loops
   deriving (Eq, Show, Ord)

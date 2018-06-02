@@ -12,16 +12,17 @@ module Language.Spyder.Translate.Direct (
 
 
 import Language.Spyder.AST
-import Language.Spyder.AST.Imp
-import Language.Spyder.AST.Spec
+import qualified Language.Spyder.AST.Imp    as Imp
+import qualified Language.Spyder.AST.Spec   as Spec
 import Language.Spyder.AST.Component
+import Language.Spyder.Translate.Specs
 
 import Language.Spyder.Translate.Desugar
 import Language.Spyder.Translate.Rename
 
 import Language.Spyder.Synth.Verify
 
-import Language.Spyder.Translate.Derived          (instantiate, prefixApps)
+import Language.Spyder.Translate.Derived          (instantiate)
 import Data.List                                  (find)
 
 import qualified Language.Boogie.AST as BST
@@ -29,61 +30,72 @@ import qualified Language.Boogie.Position as Pos
 import qualified Data.Map.Strict as Map
 import Language.Spyder.Util
 
-translateBop :: Bop -> BST.BinOp
+translateBop :: Imp.Bop -> BST.BinOp
 translateBop = \case
-  Plus -> BST.Plus
-  Minus -> BST.Minus
-  Mul -> BST.Times
-  Div -> BST.Div
-  Lt -> undefined "Error: translation assumes LT has been desugared"
-  Le -> BST.Leq
-  Gt -> BST.Gt
-  Ge -> BST.Geq
-  And -> BST.And
-  Or -> BST.Or
-  Eq -> BST.Eq
-  Neq -> BST.Neq
+  Imp.Plus -> BST.Plus
+  Imp.Minus -> BST.Minus
+  Imp.Mul -> BST.Times
+  Imp.Div -> BST.Div
+  Imp.Lt -> undefined "Error: translation assumes LT has been desugared"
+  Imp.Le -> BST.Leq
+  Imp.Gt -> BST.Gt
+  Imp.Ge -> BST.Geq
+  Imp.And -> BST.And
+  Imp.Or -> BST.Or
+  Imp.Eq -> BST.Eq
+  Imp.Neq -> BST.Neq
 
-translateUop :: Uop -> BST.UnOp
+translateUop :: Imp.Uop -> BST.UnOp
 translateUop = \case
-  Neg -> BST.Neg
-  Not -> BST.Not
-translateTy :: Type -> BST.Type
-translateTy (BaseTy "int") = BST.IntType
-translateTy (BaseTy "bool") = BST.BoolType
-translateTy (BaseTy _) = undefined "Error: bad type tag"
+  Imp.Neg -> BST.Neg
+  Imp.Not -> BST.Not
+  
+translateTy :: Imp.Type -> BST.Type
+translateTy (Imp.BaseTy "int") = BST.IntType
+translateTy (Imp.BaseTy "bool") = BST.BoolType
+translateTy (Imp.BaseTy _) = undefined "Error: bad type tag"
 -- huh. i think this code, and the index code, don't play well...
   -- the index code converts a[x][y] => a[x,y], while this converts
   -- int[][] to [int][int]int, which should be indexed like a[x][y]
-translateTy (ArrTy inner) = BST.MapType [] [BST.IntType] $ translateTy inner
+translateTy (Imp.ArrTy inner) = BST.MapType [] [BST.IntType] $ translateTy inner
   
-translateVDecl :: VDecl -> BST.BareDecl
-translateVDecl v = BST.VarDecl [translateITW v]
+translateVDecl :: Imp.VDecl -> [BST.BareDecl]
+-- array variables are themselves, plus variables for dimensions
+translateVDecl x@(v, ty@Imp.ArrTy{}) = (BST.VarDecl [translateITW x]) : map buildVar dims
+  where
+    dims = [0..depth ty]
+    depth (Imp.ArrTy i) = 1 + depth i
+    depth _ = -1
+
+    buildVar n = BST.VarDecl [translateITW (nme, Imp.BaseTy "int")]
+      where nme = v ++ "$dim" ++ show n
+-- simple variables are just themselves
+translateVDecl v = [BST.VarDecl [translateITW v]]
 
   
-transWithGen :: Expr -> BST.Expression
+transWithGen :: Imp.Expr -> BST.Expression
 transWithGen = Pos.gen . translateExpr
 
-translateExpr :: Expr -> BST.BareExpression
-translateExpr (VConst s) = BST.Var s
-translateExpr (IConst i) = BST.numeral $ toInteger i
-translateExpr (BConst b) = (BST.Literal . BST.BoolValue) b
-translateExpr (BinOp Lt l r) = BST.UnaryExpression BST.Not $ Pos.gen $ BST.BinaryExpression BST.Geq l' r'
+translateExpr :: Imp.Expr -> BST.BareExpression
+translateExpr (Imp.VConst s) = BST.Var s
+translateExpr (Imp.IConst i) = BST.numeral $ toInteger i
+translateExpr (Imp.BConst b) = (BST.Literal . BST.BoolValue) b
+translateExpr (Imp.BinOp Imp.Lt l r) = BST.UnaryExpression BST.Not $ Pos.gen $ BST.BinaryExpression BST.Geq l' r'
   where (l', r') = (transWithGen l, transWithGen r)
-translateExpr (BinOp o l r) = BST.BinaryExpression op l' r'
+translateExpr (Imp.BinOp o l r) = BST.BinaryExpression op l' r'
   where op = translateBop o
         (l', r') = (transWithGen l, transWithGen r)
-translateExpr (UnOp o i) =
+translateExpr (Imp.UnOp o i) =
   BST.UnaryExpression (translateUop o) (transWithGen i)
-translateExpr (Index ar i) =
+translateExpr (Imp.Index ar i) =
   BST.MapSelection (transWithGen ar) [transWithGen i]
-translateExpr (App (VConst f) r) = BST.Application f (map transWithGen r)
-translateExpr (AConst _) = undefined "Error: translation assumes array constants have been desugared"
+translateExpr (Imp.App (Imp.VConst f) r) = BST.Application f (map transWithGen r)
+translateExpr (Imp.AConst _) = undefined "Error: translation assumes array constants have been desugared"
 
-translateBlock :: (Block, [BST.IdTypeWhere])  -> (BST.Block, [BST.IdTypeWhere])
-translateBlock (Seq ss, vs) = foldl worker ([], vs) ss
+translateBlock :: (Imp.Block, [BST.IdTypeWhere])  -> (BST.Block, [BST.IdTypeWhere])
+translateBlock (Imp.Seq ss, vs) = foldl worker ([], vs) ss
   where 
-    worker :: (BST.Block, [BST.IdTypeWhere]) -> Statement -> (BST.Block, [BST.IdTypeWhere])
+    worker :: (BST.Block, [BST.IdTypeWhere]) -> Imp.Statement -> (BST.Block, [BST.IdTypeWhere])
     worker (olds, vs) s = (olds ++ news, vs')
       where 
         (bareS, vs') = translateStmt (s, vs)
@@ -91,9 +103,9 @@ translateBlock (Seq ss, vs) = foldl worker ([], vs) ss
 
 -- for loops, we need to insert multiple statements, so we return a list.
 -- also, we need to introduce variables, so we plumb a scope around.
-translateStmt :: (Statement, [BST.IdTypeWhere]) -> ([BST.BareStatement], [BST.IdTypeWhere])
+translateStmt :: (Imp.Statement, [BST.IdTypeWhere]) -> ([BST.BareStatement], [BST.IdTypeWhere])
 -- we can do this now TODO
-translateStmt (Decl _ _, vs) = error "Error: translation assumes decls are lifted"
+translateStmt (Imp.Decl _ _, vs) = error "Error: translation assumes decls are lifted"
 -- convert 
 --  for (vs) <- (arrs) {
 --    bod 
@@ -107,20 +119,25 @@ translateStmt (Decl _ _, vs) = error "Error: translation assumes decls are lifte
 --    {idx_i := idx_i + 1;}
 --  }
 -- assumes length is stored at arr[-1]
-translateStmt (For vs arrs bod, vars) = (idxInit ++ [BST.While (BST.Expr cond) spec (iterUpdate ++ bod' ++ arrUpdate ++ idxUpdate)], vars')
+translateStmt (Imp.For vs arrs bod, vars) = 
+    (idxInit ++ [BST.While (BST.Expr cond) spec (iterUpdate ++ bod' ++ arrUpdate ++ idxUpdate)], vars')
   where
     decls = vs `zip` arrs
-
+    
     --loopVars :: [BST.IdTypeWhere]
     (newVars, ivars, lvars) = foldl buildLVars (vars, [], []) decls
     -- allocate new variables for the indices, as well as the actual loop vars. keep track of the names for later.
-    -- TODO: handle ty
-    buildLVars :: ([BST.IdTypeWhere], [String], [String]) -> (VDecl, Expr) -> ([BST.IdTypeWhere], [String], [String])
-    buildLVars (vs, idxs, lvars) ((name, _), _) = (vs'', idxs ++ [idx], lvars ++ [lvar])
+    buildLVars :: ([BST.IdTypeWhere], [String], [String]) -> (Imp.VDecl, Imp.Expr) -> ([BST.IdTypeWhere], [String], [String])
+    buildLVars (vs, idxs, lvars) ((name, ty), _) = (vs'', idxs ++ [idx], lvars ++ [lvar])
       where 
-        (idx, vs')    = allocFreshLocal "__loop_idx" vs
-        (lvar, vs'' ) = allocFreshLocal name vs'
-        
+        (idx, vs')    = allocFreshLocal "__loop_idx" BST.IntType vs
+        (lvar, vs'' ) = allocFreshLocal name (translateTy ty) vs'
+      
+    -- TODO: for arrays, need to allocate new length variables for each array, as well as assign the upper n-1 dims of RHS
+    -- to the LHS
+    -- e.g. if RHS is [[1,2],[3,4]], and LHS is foo, foo$dim0 := 2.
+
+    dimInfo = zip3 lvars (map snd vs) arrs
 
     spec = []
 
@@ -128,6 +145,7 @@ translateStmt (For vs arrs bod, vars) = (idxInit ++ [BST.While (BST.Expr cond) s
     liftLS s = Pos.gen ([], Pos.gen s)
 
     idxInit = map buildInit ivars
+    dimInit = dimInfo >>= buildDims
     idxUpdate = map (liftLS . buildIdxUp) ivars
     iterUpdate = map (liftLS . buildIterUp) (decls `zip` ivars)
     arrUpdate = map (liftLS . buildArrUp) (decls `zip` ivars)
@@ -137,45 +155,50 @@ translateStmt (For vs arrs bod, vars) = (idxInit ++ [BST.While (BST.Expr cond) s
     buildInit name = BST.Assign [(name, [])] [Pos.gen $ BST.numeral 0]
     buildIdxUp :: String -> BST.BareStatement
     buildIdxUp name = BST.Assign [(name, [])] [Pos.gen $ BST.BinaryExpression BST.Plus (Pos.gen $ BST.Var name) (Pos.gen $ BST.numeral 1)]
-    buildIterUp :: ((VDecl, Expr), String) -> BST.BareStatement
+    buildIterUp :: ((Imp.VDecl, Imp.Expr), String) -> BST.BareStatement
     buildIterUp (((l, _), r), i) = BST.Assign [(l, [])] [Pos.gen $ BST.MapSelection (transWithGen r) [Pos.gen $ BST.Var i]]
-    buildArrUp :: ((VDecl, Expr), String) -> BST.BareStatement
-    buildArrUp (((r, _), VConst l), i) = BST.Assign [(l, [[Pos.gen $ BST.Var i]])] [Pos.gen $ BST.Var r]
+    buildArrUp :: ((Imp.VDecl, Imp.Expr), String) -> BST.BareStatement
+    buildArrUp (((r, _), Imp.VConst l), i) = BST.Assign [(l, [[Pos.gen $ BST.Var i]])] [Pos.gen $ BST.Var r]
+
+    buildDims :: (String, Imp.Type, Imp.Expr) -> [BST.BareStatement]
+    buildDims (nme, ty, Imp.VConst arr) = [] -- TODO
 
 
     (bod', vars') = translateBlock (bod, newVars)
 
     cond = foldl buildCond (Pos.gen BST.tt) (ivars `zip` arrs)
 
-    buildCond :: BST.Expression -> (String, Expr) -> BST.Expression
-    buildCond e (idx, VConst arr) = Pos.gen $ BST.BinaryExpression BST.And e (Pos.gen $ idx `lt` arr)
+    buildCond :: BST.Expression -> (String, Imp.Expr) -> BST.Expression
+    buildCond e (idx, Imp.VConst arr) = Pos.gen $ BST.BinaryExpression BST.And e (Pos.gen $ idx `lt` arr)
       where
-        lt l r = BST.UnaryExpression BST.Not $ Pos.gen $ BST.BinaryExpression BST.Geq (Pos.gen $ BST.Var l) $ Pos.gen $ BST.MapSelection (Pos.gen $ BST.Var r) [Pos.gen $ BST.numeral (-1)]
-translateStmt (Assgn (VConst lid) rhs, vars) = ([BST.Assign [(lid, [])] [transWithGen rhs]], vars)
-translateStmt (Assgn lhs rhs, vars) = ([BST.Assign [(lid, largs)] [transWithGen rhs]], vars)
+        lt l r = BST.UnaryExpression BST.Not $ Pos.gen $ BST.BinaryExpression BST.Geq (Pos.gen $ BST.Var l) $ Pos.gen $ len arr
+    len :: String -> BST.BareExpression
+    len arrName = BST.Var $ arrName ++ "$dim0"
+
+translateStmt (Imp.Assgn (Imp.VConst lid) rhs, vars) = ([BST.Assign [(lid, [])] [transWithGen rhs]], vars)
+translateStmt (Imp.Assgn lhs rhs, vars) = ([BST.Assign [(lid, largs)] [transWithGen rhs]], vars)
   where
     (lid, lacc) = simplArrAccess lhs
     largs = [map transWithGen lacc]
-translateStmt (While c bod, vars) = ([BST.While (BST.Expr c') spec bod'], vars')
+translateStmt (Imp.While c bod, vars) = ([BST.While (BST.Expr c') [] bod'], vars')
   where
-    spec = []
     c' = transWithGen c
     (bod', vars') = translateBlock (bod, vars)
-translateStmt (Cond c tr fl, vars) = ([BST.If cond ts fls], vars'')
+translateStmt (Imp.Cond c tr fl, vars) = ([BST.If cond ts fls], vars'')
   where
     cond = BST.Expr (transWithGen c)
     (ts, vars') = translateBlock (tr, vars)
     
     (fls, vars'') = case fl of 
-      (Seq []) -> (Nothing, vars')
-      (Seq _) -> let (fs, vs) = translateBlock (fl, vars') in (Just fs, vs)
+      (Imp.Seq []) -> (Nothing, vars')
+      (Imp.Seq _) -> let (fs, vs) = translateBlock (fl, vars') in (Just fs, vs)
 
 translateProc :: MainDecl -> BST.BareDecl
 translateProc (ProcDecl nme formals rt body) = BST.ProcedureDecl nme [] formals' [] inv $ Just (decs', body')
   where
     formals' = map translateITW formals
     (vs, bod) = generateBoogieBlock body
-    (body', decs) = translateBlock (Seq bod, map translateITW vs)
+    (body', decs) = translateBlock (Imp.Seq bod, map translateITW vs)
     decs' = map (\x -> [x]) decs
     inv = []
 
@@ -185,7 +208,7 @@ translateRels (DerivComp nme decs, x) = map (buildRel $ mangleFunc nme x) $ filt
     takeRD RelDecl{} = True
     takeRD _ = False
 
-translateITW :: VDecl -> BST.IdTypeWhere
+translateITW :: Imp.VDecl -> BST.IdTypeWhere
 translateITW (v, t) = BST.IdTypeWhere v (translateTy t) (Pos.gen BST.tt)
 
 -- returns the program, as well as the:
@@ -198,7 +221,7 @@ translateProg prog@(comps, MainComp decls) = (debugProg "compile-debug.bpl" outP
     globalVars = mangleVars "Main" $ gatherDDecls decls
     varMap = Map.fromList $ zipWith stripTy2 (gatherDDecls decls) globalVars
     stripTy2 (l, _) (r, _) = (l, r)
-    vDecls = map translateVDecl globalVars
+    vDecls = globalVars >>= translateVDecl
 
     comps' = map (processUsing varMap comps) (filter takeUsing decls) 
     relDecls = (comps' `zip` [0..]) >>= translateRels
@@ -211,7 +234,7 @@ translateProg prog@(comps, MainComp decls) = (debugProg "compile-debug.bpl" outP
 
     procDecls = map translateProc procs
 
-    withModifies = map (addModifies $ map stripTy globalVars) procDecls
+    withModifies = map (addModifies $ map fst globalVars) procDecls
     withRequires = map (addRequires invs) withModifies
     withContracts = map (addEnsures invs) withRequires
 
@@ -229,13 +252,13 @@ buildInvs (DerivComp nme decs, x) = map (buildExpr $ mangleFunc nme x) alwaysDec
   where
     takeAlways InvClaus{} = True
     takeAlways _ = False
-    buildExpr pref (InvClaus (BE e)) = prefixApps pref e
+    buildExpr pref (InvClaus e) = specToBoogie $ prefixApps pref e
     alwaysDecs = filter takeAlways decs
     
 mangleFunc :: String -> Int -> String
 mangleFunc prefix count = prefix ++ "__" ++ show count ++ "_"
 
-mangleVars :: String -> [VDecl] -> [VDecl]
+mangleVars :: String -> [Imp.VDecl] -> [Imp.VDecl]
 mangleVars prefix = map worker 
   where worker (nme, ty) = (prefix++"$"++nme, ty)
 
@@ -244,13 +267,11 @@ buildRel prefix (RelDecl nme formals bod) = BST.FunctionDecl [] (prefix ++ nme) 
   where
     formals' = map translateFormal formals
     retTy = (Nothing, BST.BoolType )
-    body = Just $ buildExpr bod
-    buildExpr (BE i) = i
-    buildExpr _ = undefined "TODO"
+    body = Just $ specToBoogie bod
 buildRel _ _ = undefined "TODO"
 
 
-translateFormal :: VDecl -> BST.FArg
+translateFormal :: Imp.VDecl -> BST.FArg
 translateFormal (v, t) = (Just v, translateTy t)
 
 
@@ -288,11 +309,10 @@ processUsing vs comps (MainUD (nme, args)) = case usedComp of
     renamedComp c  = case instantiate args' c of (DerivComp nme decs) -> DerivComp nme decs
 
 -- convert an array lvalue to an identifier and list of arguments
--- todo: fix this hack
-simplArrAccess :: Expr -> (String, [Expr])
+simplArrAccess :: Imp.Expr -> (String, [Imp.Expr])
 simplArrAccess e = worker (e, [])
-  where worker (VConst s, args) = (s, args)
-        worker (Index l r, args) = worker (l, r:args)
+  where worker (Imp.VConst s, args) = (s, args)
+        worker (Imp.Index l r, args) = worker (l, r:args)
         worker (x, _) = undefined $ "tried to convert to array access: " ++ show x
 
         
@@ -311,7 +331,7 @@ asInt :: BST.Value -> Int
 asInt (BST.IntValue v) = fromIntegral v
 asInt _ = error "inconceivable"
 
-gatherDDecls :: [MainDecl] -> [VDecl]
+gatherDDecls :: [MainDecl] -> [Imp.VDecl]
 gatherDDecls decs = map unwrap $ filter takeDD decs
   where
     takeDD MainDDecl{} = True

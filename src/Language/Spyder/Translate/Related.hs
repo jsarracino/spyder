@@ -5,8 +5,6 @@ module Language.Spyder.Translate.Related (
 ) where
 
 import Language.Spyder.AST
-import Language.Spyder.AST.Imp
-import Language.Spyder.AST.Spec
 import Language.Spyder.AST.Component
 
 import qualified Data.Set as Set

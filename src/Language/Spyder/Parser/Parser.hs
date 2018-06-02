@@ -18,8 +18,8 @@ import Text.Parsec.Expr
 import qualified Text.Parsec.Token as Tok
 import Language.Spyder.Parser.Lexer         (spyderLexer, Parser)
 import Language.Spyder.AST.Component
-import Language.Spyder.AST.Imp
-import Language.Spyder.AST.Spec
+import qualified Language.Spyder.AST.Imp  as Imp
+import qualified Language.Spyder.AST.Spec as Spec
 import Language.Spyder.AST                  (Program)
 
 import Control.Monad                        (liftM, liftM2)
@@ -46,67 +46,102 @@ spaced :: Parser a -> Parser [a]
 spaced p = p `sepBy` Tok.whiteSpace lexer
 semis p = p `sepBy` semi
 
-ints = liftM (IConst . fromIntegral) $ Tok.integer lexer
-vars = liftM VConst ident
+ints = liftM fromIntegral $ Tok.integer lexer 
 bools = tru <|> fls
   where
-    tru = do {res "true"; return $ BConst True }
-    fls = do {res "false"; return $ BConst False }
+    tru = do {res "true"; return True }
+    fls = do {res "false"; return False }
 
 arrAccess = do {
-  pref <- vars;
+  pref <- liftM Imp.VConst ident;
   rhs <- many1 $ brackets expr;
-  return $ foldl Index pref rhs
+  return $ foldl Imp.Index pref rhs
 }
-arrPrim = liftM AConst (brackets $ commas expr)
+arrPrim = liftM Imp.AConst (brackets $ commas expr)
 
- -- TODO:
- -- | UnOP Uop Expr
-term :: Parser Expr
-term    =  parens expr
-  <|> try ints
-  <|> try bools
+exprTerm :: Parser Imp.Expr
+exprTerm    =  parens expr
+  <|> try (liftM Imp.IConst ints)
+  <|> try (liftM Imp.BConst bools)
   <|> try arrPrim
   <|> try arrAccess
-  <|> vars
+  <|> try (liftM Imp.VConst ident)
   <?> "simple expr"
 
--- for now, just identifiers
--- TODO: these are both hacks and should be fixed!!!
 
-expr :: Parser Expr
-expr    = buildExpressionParser exprTable term
-         <?> "expression"
+relApp :: Parser Spec.RelExpr
+relApp = do {
+  nme <- ident;
+  args <- parens $ commas relexpr;
+  return $ Spec.RelApp nme args
+}
+relForeach :: Parser Spec.RelExpr
+relForeach = do {
+  res "foreach";
+  vs <- parens $ commas ident;
+  res "in";
+  arrs <- parens $ commas ident;
+  body <- braces relexpr;
+  return $ Spec.Foreach vs arrs body
+}
+specTerm :: Parser Spec.RelExpr
+specTerm  =  parens relexpr
+  <|> try (liftM Spec.RelInt ints)
+  <|> try (liftM Spec.RelBool bools)
+  <|> try relApp
+  <|> try relForeach
+  <|> try (liftM Spec.RelVar ident)
+  <?> "spec expr"
 
-exprTable   = [
-    [binary "*" (BinOp Mul) AssocLeft, binary "/" (BinOp Div) AssocLeft ]
- ,  [binary "+" (BinOp Plus) AssocLeft, binary "-" (BinOp Minus) AssocLeft ]
- ,  [
-      binary "<" (BinOp Lt) AssocLeft, binary "<=" (BinOp Le) AssocLeft
-    , binary ">" (BinOp Gt) AssocLeft, binary ">=" (BinOp Ge) AssocLeft
-  ]
- ,  [binary "==" (BinOp Eq) AssocLeft, binary "!=" (BinOp Neq) AssocLeft]
- ,  [binary "&&" (BinOp And) AssocLeft, binary "||" (BinOp Or) AssocLeft]
+expr :: Parser Imp.Expr
+expr = buildExpressionParser exprTable exprTerm <?> "expression"
+  
+relexpr :: Parser Spec.RelExpr
+relexpr = buildExpressionParser relTable specTerm <?> "relation expression"
+
+exprTable   = [ 
+      [unary "!" (Imp.UnOp Imp.Not), unary "-" (Imp.UnOp Imp.Neg)]
+  ,   [binary "*" (Imp.BinOp Imp.Mul) AssocLeft, binary "/" (Imp.BinOp Imp.Div) AssocLeft ]
+  ,   [binary "+" (Imp.BinOp Imp.Plus) AssocLeft, binary "-" (Imp.BinOp Imp.Minus) AssocLeft ]
+  ,   [
+        binary "<" (Imp.BinOp Imp.Lt) AssocLeft, binary "<=" (Imp.BinOp Imp.Le) AssocLeft
+      , binary ">" (Imp.BinOp Imp.Gt) AssocLeft, binary ">=" (Imp.BinOp Imp.Ge) AssocLeft
+    ]
+  ,   [binary "==" (Imp.BinOp Imp.Eq) AssocLeft, binary "!=" (Imp.BinOp Imp.Neq) AssocLeft]
+  ,   [binary "&&" (Imp.BinOp Imp.And) AssocLeft, binary "||" (Imp.BinOp Imp.Or) AssocLeft]
  ]
 
-binary name fun =
-  Infix (do{ Tok.reservedOp lexer name; return fun })
+relTable   = [
+      [unary "!" (Spec.RelUnop Spec.Not), unary "-" (Spec.RelUnop Spec.Neg)]
+  ,   [binary "*" (Spec.RelBinop Spec.Mul) AssocLeft, binary "/" (Spec.RelBinop Spec.Div) AssocLeft ]
+  ,   [binary "+" (Spec.RelBinop Spec.Plus) AssocLeft, binary "-" (Spec.RelBinop Spec.Minus) AssocLeft ]
+  ,   [
+        binary "<" (Spec.RelBinop Spec.Lt) AssocLeft, binary "<=" (Spec.RelBinop Spec.Le) AssocLeft
+      , binary ">" (Spec.RelBinop Spec.Gt) AssocLeft, binary ">=" (Spec.RelBinop Spec.Ge) AssocLeft
+    ]
+  ,   [binary "=" (Spec.RelBinop Spec.Eq) AssocLeft, binary "!=" (Spec.RelBinop Spec.Neq) AssocLeft]
+  ,   [binary "&&" (Spec.RelBinop Spec.And) AssocLeft, binary "||" (Spec.RelBinop Spec.Or) AssocLeft]
+  ,   [binary "==>" (Spec.RelBinop Spec.Imp) AssocLeft, binary "<==>" (Spec.RelBinop Spec.Iff) AssocLeft]
+  ]
+
+binary name fun = Infix (do{ Tok.reservedOp lexer name; return fun })
+unary name fun  = Prefix (do{ Tok.reservedOp lexer name; return fun })
 
 
-typ :: Parser Type
+typ :: Parser Imp.Type
 typ =
       try arrTy
-  <|> liftM BaseTy ident
+  <|> liftM Imp.BaseTy ident
   <?> "Type"
 
-arrTy :: Parser Type
+arrTy :: Parser Imp.Type
 arrTy = do {
-  h <- liftM BaseTy ident;
+  h <- liftM Imp.BaseTy ident;
   arrs <- many1 (symb "[]");
-  return $ foldl (\x s -> ArrTy x) h arrs
+  return $ foldl (\x s -> Imp.ArrTy x) h arrs
 }
 
-vdecl :: Parser VDecl
+vdecl :: Parser Imp.VDecl
 vdecl = do {
   vname <- ident;
   symb ":";
@@ -115,54 +150,54 @@ vdecl = do {
 }
 
 
-loopP :: Parser Statement
+loopP :: Parser Imp.Statement
 loopP = do {
   res "for";
   vs <- parens $ commas vdecl;
   res "in";
   arrs <- parens $ commas expr;
   body <- braces block;
-  return $ For vs arrs body
+  return $ Imp.For vs arrs body
 }
 
-whileP :: Parser Statement
+whileP :: Parser Imp.Statement
 whileP = do {
   res "while";
   cond <- parens expr;
   body <- braces block;
-  return $ While cond body
+  return $ Imp.While cond body
 }
 
-declP :: Parser Statement
+declP :: Parser Imp.Statement
 declP = do {
   res "let";
   vname <- vdecl;
   rhs <- optionMaybe $ try $ symb "=" >> expr;
   semi;
-  return $ Decl vname rhs
+  return $ Imp.Decl vname rhs
 }
 
-condP :: Parser Statement
+condP :: Parser Imp.Statement
 condP = do {
   res "if";
   cond <- parens expr;
   tru <- braces block;
-  fls <- option (Seq []) tail;
-  return $ Cond cond tru fls;
+  fls <- option (Imp.Seq []) tail;
+  return $ Imp.Cond cond tru fls;
 } where
     tail = try (res "else" >> braces block)
 
-block :: Parser Block
-block = liftM Seq (spaced stmt)
+block :: Parser Imp.Block
+block = liftM Imp.Seq (spaced stmt)
   <?> "Block"
 
-stmt :: Parser Statement
+stmt :: Parser Imp.Statement
 stmt =
       try declP
   <|> try loopP
   <|> try whileP
   <|> try condP
-  <|> try (liftM2 Assgn expr ((symb "=" >> expr) `followedBy` semi))
+  <|> try (liftM2 Imp.Assgn expr ((symb "=" >> expr) `followedBy` semi))
   <?> "Statement"
 
 derivCompP :: Parser DerivDecl
@@ -174,7 +209,7 @@ derivCompP =
 
 
 alwaysP :: Parser DerivDecl
-alwaysP = res "always" >> liftM (InvClaus . BE) BP.expression `followedBy` semi
+alwaysP = res "always" >> liftM InvClaus relP `followedBy` semi
 
 usingP :: Parser UseClause
 usingP = do {
@@ -185,12 +220,12 @@ usingP = do {
   return (cname, args )
 }
 
-dataDeclP :: Parser VDecl
+dataDeclP :: Parser Imp.VDecl
 dataDeclP = res "data" >> vdecl `followedBy` semi
   
 
-relP :: Parser BaseRel 
-relP = liftM injectForeach2  BP.expression
+relP :: Parser Spec.RelExpr 
+relP = relexpr
 
 mainCompP :: Parser MainDecl
 mainCompP = 
@@ -215,7 +250,7 @@ procP = do {
   name <- ident;
   args <- parens $ commas vdecl;
   bod <- braces block;
-  return $ ProcDecl name args Void bod
+  return $ ProcDecl name args Imp.Void bod
 }
 
 comp :: Parser Component

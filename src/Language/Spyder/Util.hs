@@ -2,10 +2,9 @@ module Language.Spyder.Util (
     strip
   , prefix
   , incSpan
-  , flat
   , breadthFirst
   , allocFreshLocal
-  , stripPos
+  , preservePos
 ) where
 
 -- import Data.List
@@ -35,10 +34,6 @@ incSpan f inp = (pre ++ l, post)
           (x:xs) -> ([x], xs)
           [] -> ([], [])
 
--- take a list and flatten it. heck.
-flat :: [[a]] -> [a]
-flat = join
-
 
 -- take a list of lists and collect the elements in breadth-first order
 -- e.g. [[1,2,3], [5,6]] => [[1,5], [2,5], [3,5], [1,6], [2,6], [3,6]]
@@ -47,19 +42,19 @@ breadthFirst = foldl worker [[]]
   where worker acc xs = do {x <- xs; a <- acc; return $ a ++ [x]}
 -- let foo xs ys = do {x <- xs; y <- ys; return $ x:y}
 
-stripPos :: Pos.Pos a -> a
-stripPos = Pos.node
+preservePos :: (a -> a) -> Pos.Pos a -> Pos.Pos a
+preservePos f x = Pos.attachPos (Pos.position x) (f $ Pos.node x)
 
 
 -- given a overall scope, a prefix, and a list of variables, allocate a new variable (of int type)
 -- return the name of the variable and the new list of variables
-allocFreshLocal :: String -> [IdTypeWhere] -> (String, [IdTypeWhere])
-allocFreshLocal prefix itws  = (mk prefix suffix, vdec:itws)
+allocFreshLocal :: String -> Type -> [IdTypeWhere] -> (String, [IdTypeWhere])
+allocFreshLocal prefix ty itws  = (mk prefix suffix, vdec:itws)
   where
     mk pref suf = if suf == 0 then pref else pref ++ show suf -- TODO: hack for loops
     suffix = worker 0 $ Set.fromList locNames
     locNames = map itwId itws
-    vdec = IdTypeWhere (mk prefix suffix) IntType tru 
+    vdec = IdTypeWhere (mk prefix suffix) ty tru 
     tru = Pos.gen tt
 
     -- check name clashes with other variables and constants

@@ -15,7 +15,6 @@ import qualified Language.Boogie.Position as Pos
 import Language.Spyder.Translate.Desugar
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
-import Language.Spyder.Translate.Derived          (instantiate, prefixApps)
 import Data.List                                  (find, partition)
 import Language.Spyder.Translate.Rename
 import Language.Spyder.Synth.Verify               (checkProgFile)

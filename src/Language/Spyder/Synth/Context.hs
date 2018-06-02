@@ -4,12 +4,12 @@ module Language.Spyder.Synth.Context (
 ) where
 
 import Language.Spyder.AST                    (Program(..))
-import Language.Spyder.AST.Spec               (BaseRel(..))
+import Language.Spyder.AST.Spec               
 import Language.Spyder.AST.Imp                (Expr(..), Statement(..), Block(..))
 import Language.Spyder.AST.Component          (Component(..), DerivDecl(..), MainDecl(..))
 import qualified Language.Boogie.AST as BST
+import qualified Language.Boogie.Position as Pos
 import qualified Data.Map.Strict as Map
-import Language.Spyder.Util                   (stripPos)
 import Data.List (nub)
 import Data.Maybe
 data Context = SynthCtx {
@@ -32,8 +32,8 @@ gatherNumsComp (MainComp mdecs) = mdecs >>= gatherNumsMDec
 
 gatherNumsDDec :: DerivDecl -> [Int]
 gatherNumsDDec (DeriveDDecl _) = []
-gatherNumsDDec (RelDecl _ _ (BE bod)) = gatherNumsBE bod
-gatherNumsDDec (InvClaus (BE bod)) = gatherNumsBE bod
+gatherNumsDDec (RelDecl _ _ bod) = undefined "TODO" --gatherNumsBE bod
+gatherNumsDDec (InvClaus bod) = undefined "TODO" --gatherNumsBE bod
 -- TODO: arrays
 gatherNumsMDec :: MainDecl -> [Int]
 gatherNumsMDec (MainDDecl _) = []
@@ -51,7 +51,7 @@ gatherNumsExpr :: Expr -> [Int]
 gatherNumsExpr = undefined "TODO"
 
 gatherNumsBE :: BST.Expression -> [Int]
-gatherNumsBE = worker . stripPos
+gatherNumsBE = worker . Pos.node
   where
     worker (BST.Literal (BST.IntValue v)) = [fromIntegral v]
     worker (BST.Application _ args) = args >>= gatherNumsBE

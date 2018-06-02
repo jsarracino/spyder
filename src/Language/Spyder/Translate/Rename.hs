@@ -3,7 +3,6 @@ module Language.Spyder.Translate.Rename (
   , renameDDecl
   , alphaDDecl
   , alphaRel
-  , preservePos
   , alphaExpr
   , alphaProc
 ) where
@@ -11,7 +10,7 @@ module Language.Spyder.Translate.Rename (
 import Language.Spyder.AST.Component
 import Language.Spyder.AST.Imp            (Expr(..), VDecl, stripTy, Statement(..), Block(..))
 import Language.Boogie.AST                (BareExpression(..), Expression)
-import Language.Spyder.AST.Spec           (BaseRel(..))
+import Language.Spyder.AST.Spec           (RelExpr(..))
 import Language.Boogie.Position           (Pos(..), attachPos)
 
 import qualified Data.Map.Strict as Map
@@ -64,41 +63,31 @@ renameDDecl mp (DeriveDDecl (v, t)) = DeriveDDecl (v', t)
 
 alphaDDecl :: Map.Map String String -> DerivDecl -> DerivDecl
 alphaDDecl env (DeriveDDecl (v, t)) = DeriveDDecl (fwd v env, t)
-alphaDDecl env (InvClaus i) = InvClaus $ BE (alphaRel env i)
+alphaDDecl env (InvClaus i) = InvClaus (alphaRel env i)
 alphaDDecl env (RelDecl nme formals body) = RelDecl nme formals body'
   where
     env' = deleteAll env $ map stripTy formals
     deleteAll = foldl (flip Map.delete)
-    body' = BE $ alphaRel env' body
+    body' = alphaRel env' body
 
 
-    -- data BareExpression = 
-    --   Literal Value |
-    --   Var Id |                                        -- ^ 'Var' @name@
-    --   Logical Type Ref |                              -- ^ Logical variable
-    --   Application Id [Expression] |                   -- ^ 'Application' @f args@
-    --   MapSelection Expression [Expression] |          -- ^ 'MapSelection' @map indexes@
-    --   MapUpdate Expression [Expression] Expression |  -- ^ 'MapUpdate' @map indexes rhs@
-    --   Old Expression |
-    --   IfExpr Expression Expression Expression |       -- ^ 'IfExpr' @cond eThen eElse@
-    --   Coercion Expression Type |
-    --   UnaryExpression UnOp Expression |
-    --   BinaryExpression BinOp Expression Expression |
-    --   Quantified QOp [Id] [IdType] Expression         -- ^ 'Quantified' @qop type_vars bound_vars expr@
-alphaRel :: Map.Map String String -> BaseRel -> Expression
-alphaRel env (BE e) = recurE env e
+    -- RelVar String       -- Variables
+    -- | RelInt Int      -- Integers
+    -- | RelBool Bool         -- Booleans
+    -- | RelBinop RelBop RelExpr RelExpr -- Binary operations
+    -- | RelUnop RelUop RelExpr       -- Unary operations
+    -- | RelApp RelExpr [RelExpr]       -- function calls (not procedure calls)
+    -- | Foreach [String] [String] RelExpr  -- foreach (x,y,z) in (p, q,s) {<expr>}
+alphaRel :: Map.Map String String -> RelExpr -> RelExpr
+alphaRel mp = recur 
   where 
-    recurBE :: Map.Map String String -> BareExpression -> BareExpression
-    recurE :: Map.Map String String -> Expression -> Expression
-    recurBE _ v@Literal{} = v
-    recurBE mp (Var n) = Var $ fwd n mp
-    recurBE mp (UnaryExpression op i) = UnaryExpression op $ recurE mp i
-    recurBE mp (BinaryExpression op l r) = BinaryExpression op (recurE mp l) (recurE mp r)
-    -- recurBE mp (Logical t r) = ??
-    recurBE mp (Application n args) = Application (fwd n mp) $ map (recurE mp) args
-    -- recurBE mp (MapSelection l args) = recur
-    recurE mp = preservePos (recurBE mp)
+    recur :: RelExpr -> RelExpr
+    recur v@RelInt{} = v
+    recur v@RelBool{} = v
+    recur (RelVar v) = RelVar $ fwd v mp
+    recur (RelUnop op i) = RelUnop op $ recur i
+    recur (RelBinop op l r) = RelBinop op (recur l) (recur r)
+    recur (RelApp v args) = RelApp (fwd v mp) $ map recur args
+    recur (Foreach vs arrs bod) = Foreach (map f vs) (map f arrs) $ recur bod
+      where f = flip fwd mp
 
-
-preservePos :: (a -> a) -> Pos a -> Pos a
-preservePos f x = attachPos (position x) (f $ node x)

@@ -10,15 +10,12 @@ module Language.Spyder.AST.Imp (
   , typecheck
 ) where
 
-
-
-
+  
 data Bop =
     Plus | Minus | Mul | Div
   | Lt | Gt | Le | Ge  | And | Or | Eq | Neq
   deriving (Eq, Show, Ord)
 
--- TODO: extend uops
 -- Numeric negation and boolean negation
 data Uop =
   Neg | Not
@@ -27,7 +24,6 @@ data Uop =
 data Expr =
     VConst String       -- Variables
   | IConst Int      -- Integers
-  -- | SConst String       -- Strings
   | BConst Bool         -- Booleans
   | AConst [Expr]       -- Arrays
   | BinOp Bop Expr Expr -- Binary operations

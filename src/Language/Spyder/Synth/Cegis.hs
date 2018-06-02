@@ -34,7 +34,7 @@ import Control.Monad
 import Control.Monad.Logic
 import Control.Monad.Stream
 import Control.Lens hiding (Context, at)
-import Language.Spyder.Util                       (stripPos, allocFreshLocal)
+import Language.Spyder.Util                       ( allocFreshLocal)
 import Data.Ord                                   (comparing)
 
 import Language.Spyder.Config                     (concretSize)
@@ -51,7 +51,7 @@ allocFreshConst :: Program -> (String, Program)
 allocFreshConst (Program decs) = (name ++ show suffix, Program $ vdec:decs)
   where
     name = "__cegis__const"
-    suffix = worker 0 $ Set.fromList $ (map stripPos decs) >>= getNames
+    suffix = worker 0 $ Set.fromList $ map Pos.node decs >>= getNames
     vdec = Pos.gen $ ConstantDecl False [name ++ show suffix] IntType (Just []) True
 
     getNames :: BareDecl -> [String]
@@ -66,7 +66,7 @@ allocFreshConst (Program decs) = (name ++ show suffix, Program $ vdec:decs)
 allocCegisLocal :: Program -> Body -> (String, Body, Program)
 allocCegisLocal prog (itws, blk)  = (var, ([itws'], blk), prog)
   where
-    (var, itws') = allocFreshLocal "__cegis__local" (join itws)
+    (var, itws') = allocFreshLocal "__cegis__local" IntType (join itws)
 
 
 -- given a list of rhs expressions and a lhs assignment, generate a switch for lhs := rhs_0 | rhs_1 | ... | rhs_n. return the name of the control variable

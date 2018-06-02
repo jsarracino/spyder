@@ -6,15 +6,15 @@ module Language.Spyder.AST.Component (
 ) where
 
 import Language.Spyder.AST.Imp (Type, VDecl, Block)
-import Language.Spyder.AST.Spec (BaseRel)
+import Language.Spyder.AST.Spec (RelExpr)
 
 type UseClause = (String, [String])
 
     -- decls, always clauses, uses clauses
 data DerivDecl = 
     DeriveDDecl VDecl -- name and type
-  | RelDecl String [VDecl] BaseRel        -- relation decl
-  | InvClaus BaseRel     -- always clause
+  | RelDecl String [VDecl] RelExpr        -- relation decl
+  | InvClaus RelExpr     -- always clause
     deriving (Eq, Show, Ord)
 
 

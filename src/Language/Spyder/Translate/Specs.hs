@@ -3,11 +3,13 @@
 module Language.Spyder.Translate.Specs (
     prefixApps
   , specToBoogie
+  , dimVars
 ) where
 
 import qualified Language.Boogie.AST as BST
 import qualified Language.Boogie.Position as Pos
 import Language.Spyder.AST.Spec
+import qualified Data.Map.Strict as Map
 
 prefixApps :: String -> RelExpr -> RelExpr
 prefixApps pref = recur
@@ -44,16 +46,68 @@ specUnop = \case
   Neg -> BST.Neg
   Not -> BST.Not
 
-specToBoogie :: RelExpr -> BST.Expression
+
+-- generate a list of variables for array dimensions. very hackish, TODO
+dimVars :: RelExpr -> [String]
+dimVars e = map (\i -> "dim" ++ show i) [0..quantDepth e -1]
+
+
+quantDepth :: RelExpr -> Int
+quantDepth (RelUnop _ i) = quantDepth i
+quantDepth (RelBinop _ l _ ) = quantDepth l -- TODO: only works if both are the same dimension. also, we don't currently have binops over arrays.
+quantDepth (Foreach _ _ bod) = 1 + quantDepth bod
+quantDepth _ = 0 -- App, Var, Int, Bool
+
+
+
+
+specToBoogie :: [String] -> RelExpr -> BST.Expression
 specToBoogie = recur
   where
-    recur :: RelExpr -> BST.Expression
-    recur (RelApp f args) = Pos.gen $ BST.Application f $ map recur args
-    recur (RelBinop Lt l r) = recur (RelUnop Not $ RelBinop Ge l r)
-    recur (RelBinop o l r) = Pos.gen $ BST.BinaryExpression (specBop o) (recur l) (recur r)
-    recur (RelUnop o i) = Pos.gen $ BST.UnaryExpression (specUnop o) (recur i)
-    recur (Foreach vs arrs bod) = error "TODO" 
-    recur (RelVar x) = Pos.gen $ BST.Var x
-    recur (RelInt x) = Pos.gen $ BST.Literal $ BST.IntValue $ fromIntegral x
-    recur (RelBool x) = Pos.gen $ BST.Literal $ BST.BoolValue x
-    recur _ = error "TODO"
+    recur :: [String] -> RelExpr -> BST.Expression
+    recur dims (RelApp f args) = Pos.gen $ BST.Application f $ map (recur dims) args
+    recur dims (RelBinop Lt l r) = recur dims (RelUnop Not $ RelBinop Ge l r)
+    recur dims (RelBinop o l r) = Pos.gen $ BST.BinaryExpression (specBop o) (recur dims l) (recur dims r)
+    recur dims (RelUnop o i) = Pos.gen $ BST.UnaryExpression (specUnop o) (recur dims i)
+    recur (d:dims) (Foreach vs arrs bod) = Pos.gen $ BST.Quantified BST.Forall [] [(qv,BST.IntType)] inner'
+      where 
+        inner = recur dims bod 
+        qv = "foreach$" ++ (show $ quantDepth bod)
+        inner' = Pos.gen $ BST.BinaryExpression BST.Implies idx (alphaIdx (vs `zip` arrs) qv inner)
+        idx = Pos.gen $ BST.BinaryExpression BST.And lo hi
+        lo = Pos.gen $ BST.BinaryExpression BST.Geq (Pos.gen $ BST.Var qv) (Pos.gen $ BST.numeral 0)
+        hi = Pos.gen $ BST.BinaryExpression BST.Gt (Pos.gen $ BST.Var d) (Pos.gen $ BST.Var qv)
+    recur _ (RelVar x) = Pos.gen $ BST.Var x
+    recur _ (RelInt x) = Pos.gen $ BST.Literal $ BST.IntValue $ fromIntegral x
+    recur _ (RelBool x) = Pos.gen $ BST.Literal $ BST.BoolValue x
+    recur _ _ = error "TODO"
+
+    -- data BareExpression = 
+    --   Literal Value |
+    --   Var Id |                                        -- ^ 'Var' @name@
+    --   Logical Type Ref |                              -- ^ Logical variable
+    --   Application Id [Expression] |                   -- ^ 'Application' @f args@
+    --   MapSelection Expression [Expression] |          -- ^ 'MapSelection' @map indexes@
+    --   MapUpdate Expression [Expression] Expression |  -- ^ 'MapUpdate' @map indexes rhs@
+    --   Old Expression |
+    --   IfExpr Expression Expression Expression |       -- ^ 'IfExpr' @cond eThen eElse@
+    --   Coercion Expression Type |
+    --   UnaryExpression UnOp Expression |
+    --   BinaryExpression BinOp Expression Expression |
+    --   Quantified QOp [Id] [IdType] Expression         -- ^ 'Quantified' @qop type_vars bound_vars expr@
+
+-- alpha-rename each instance of x in expr using the binding (x,arr) to arr[i]
+alphaIdx :: [(String, String)] -> String -> BST.Expression -> BST.Expression
+alphaIdx renames idx e = Pos.gen $ recur $ Pos.node e
+  where 
+    mp = Map.fromList renames
+    recur :: BST.BareExpression -> BST.BareExpression
+    recur v@BST.Literal{} = v
+    recur x@(BST.Var v) = case Map.lookup v mp of 
+      Just r  -> BST.MapSelection (Pos.gen $ BST.Var r) [Pos.gen $ BST.Var idx]
+      Nothing -> x
+    recur (BST.Application n args) = BST.Application n (map (Pos.gen . recur . Pos.node) args) 
+    recur (BST.UnaryExpression o i) = BST.UnaryExpression o $ Pos.gen $ recur $ Pos.node i
+    recur (BST.BinaryExpression o l r) = BST.BinaryExpression o (Pos.gen $ recur $ Pos.node l) (Pos.gen $ recur $ Pos.node r)
+    recur (BST.Quantified o tys bs i) = BST.Quantified o tys bs $ Pos.gen $ recur $ Pos.node i
+    recur x = x -- Logical, MapSelect, MapUpdate, old, if, coercion

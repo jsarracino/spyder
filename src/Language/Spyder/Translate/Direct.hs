@@ -49,7 +49,7 @@ translateUop :: Imp.Uop -> BST.UnOp
 translateUop = \case
   Imp.Neg -> BST.Neg
   Imp.Not -> BST.Not
-  
+
 translateTy :: Imp.Type -> BST.Type
 translateTy (Imp.BaseTy "int") = BST.IntType
 translateTy (Imp.BaseTy "bool") = BST.BoolType
@@ -252,7 +252,7 @@ buildInvs (DerivComp nme decs, x) = map (buildExpr $ mangleFunc nme x) alwaysDec
   where
     takeAlways InvClaus{} = True
     takeAlways _ = False
-    buildExpr pref (InvClaus e) = specToBoogie $ prefixApps pref e
+    buildExpr pref (InvClaus e) = specToBoogie [] $ prefixApps pref e
     alwaysDecs = filter takeAlways decs
     
 mangleFunc :: String -> Int -> String
@@ -263,11 +263,13 @@ mangleVars prefix = map worker
   where worker (nme, ty) = (prefix++"$"++nme, ty)
 
 buildRel :: String -> DerivDecl -> BST.BareDecl
-buildRel prefix (RelDecl nme formals bod) = BST.FunctionDecl [] (prefix ++ nme) [] formals' retTy body
+buildRel prefix (RelDecl nme formals bod) = BST.FunctionDecl [] (prefix ++ nme) [] (formals' ++ dims) retTy body
   where
     formals' = map translateFormal formals
+    dimVs = dimVars bod
+    dims = map (\v -> (Just v, BST.IntType)) dimVs
     retTy = (Nothing, BST.BoolType )
-    body = Just $ specToBoogie bod
+    body = Just $ specToBoogie dimVs bod
 buildRel _ _ = undefined "TODO"
 
 

@@ -16,4 +16,4 @@ To run Spyder, run
 Some examples are in `test/bench/spy/examples/`, e.g. `test/bench/spy/examples/num-basic.spy`.
 
 ## Debugging
-Intermediate programs are placed at `debug.bpl` :).
+Intermediate programs are placed in `compile-debug.bpl` and `cegis-debug.bpl` :).

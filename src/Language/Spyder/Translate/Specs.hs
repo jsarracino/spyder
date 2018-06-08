@@ -2,6 +2,7 @@
 
 module Language.Spyder.Translate.Specs (
     prefixApps
+  , saturateApps
   , specToBoogie
   , dimVars
 ) where
@@ -10,6 +11,13 @@ import qualified Language.Boogie.AST as BST
 import qualified Language.Boogie.Position as Pos
 import Language.Spyder.AST.Spec
 import qualified Data.Map.Strict as Map
+
+saturateApps :: RelExpr -> RelExpr
+saturateApps = id --recur
+  where
+    recur :: RelExpr -> RelExpr
+    recur (RelApp f (v@(RelVar x):vs)) = RelApp f $ v:vs ++ [RelVar $ x ++ "$dim0"]
+    recur _ = error "TODO"
 
 prefixApps :: String -> RelExpr -> RelExpr
 prefixApps pref = recur

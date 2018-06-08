@@ -5,6 +5,8 @@ module Language.Spyder.Synth (
     fixProc
   , fixBlock
   , fixStmt
+  , parseLoop
+  , parseLoopInfo
 ) where
 
 import Language.Spyder.Synth.Verify
@@ -59,6 +61,20 @@ fixStmt invs relVars globals rhsVars (prefix, prog, scope) = worker
         (fls', prog'', bod'') = case fls of 
           Just i  -> let (r, p, b) = recur prog' bod' i in (Just r, p, b)
           Nothing -> (Nothing, prog', bod')
+    worker (While c spec bod) = (While c spec' bod', prog', scope')
+      where
+        (idx, vs, arrs) = parseLoopInfo $ head bod
+        (pref, mid, suf) = parseLoop bod
+
+        spec' = spec
+        prog' = prog
+        scope' = scope
+        bod' = bod
+      --   spec' = (map (SpecClause LoopInvariant False) invs) ++ spec
+      --   (tru', prog', bod') = recur prog scope tru
+      --   (fls', prog'', bod'') = case fls of 
+      --     Just i  -> let (r, p, b) = recur prog' bod' i in (Just r, p, b)
+      --     Nothing -> (Nothing, prog', bod')
     worker s = (s, prog, scope)
     recur p b s = fixBlock invs relVars p globals rhsVars b prefix s
 
@@ -107,3 +123,21 @@ gatherVars es = nub $ es >>= recurE
     recur x@Literal{} = []
     -- MapSel, Quantified, MapUp TODO
             
+
+-- parses {:forInfo idx vs arrs} into (idx, vs, arrs)
+parseLoopInfo :: LStatement -> (String, [String], [String])
+parseLoopInfo (Pos _ (_, Pos _ (Predicate [Attribute "forInfo" (SAttr x:args)] _))) = (x, vs, arrs)
+  where
+    takeSAttr (SAttr s) = s
+    args' = map takeSAttr args
+    (vs, arrs) = splitAt (length args' `div` 2) args' 
+
+-- parses with {:forBegin} and {:forEnd} separators into three blocks, one for the prefix, one for suffix, and one for body
+parseLoop :: Block -> (Block, Block, Block)
+parseLoop ls = (pref, bod, suf)
+  where
+    (pref, rst) = break (takePred "forBegin") ls
+    (bod, suf) = break (takePred "forEnd") rst
+    takePred :: String -> LStatement -> Bool
+    takePred s (Pos _ (_, Pos _ (Predicate [Attribute s' _] _ ))) = s == s'
+    takePred _ _ = False

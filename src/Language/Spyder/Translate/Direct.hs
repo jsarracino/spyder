@@ -111,27 +111,30 @@ translateStmt (Imp.Decl _ _, vs) = error "Error: translation assumes decls are l
 --    bod 
 --  } 
 
---  {idx_i := 0};
---  while (BIG_AND {idx_i < len_i}) {
---    {v_i := arr_i[idx_i];}
+--  idx := 0;
+--  while (BIG_AND {idx < len_i}) {
+--    assert {:for-info idx vs arrs } true;
+--    {v_i := arr_i[idx];}
+--    assert {:for-begin} true;
 --    bod;
---    {arr[idx_i] := v_i;}
---    {idx_i := idx_i + 1;}
+--    assert {:for-end} true;
+--    {arr[idx] := v_i;}
+--    idx := idx + 1;
 --  }
 -- assumes length is stored at arr[-1]
 translateStmt (Imp.For vs arrs bod, vars) = 
-    (idxInit ++ [BST.While (BST.Expr cond) spec (iterUpdate ++ bod' ++ arrUpdate ++ idxUpdate)], vars')
+    (idxInit : [BST.While (BST.Expr cond) spec (loopInfo ++ iterUpdate ++ loopStart ++ bod' ++ loopEnd ++ arrUpdate ++ [idxUpdate])], vars')
   where
     decls = vs `zip` arrs
     
     --loopVars :: [BST.IdTypeWhere]
-    (newVars, ivars, lvars) = foldl buildLVars (vars, [], []) decls
-    -- allocate new variables for the indices, as well as the actual loop vars. keep track of the names for later.
-    buildLVars :: ([BST.IdTypeWhere], [String], [String]) -> (Imp.VDecl, Imp.Expr) -> ([BST.IdTypeWhere], [String], [String])
-    buildLVars (vs, idxs, lvars) ((name, ty), _) = (vs'', idxs ++ [idx], lvars ++ [lvar])
+    (idx, withIdx) = allocFreshLocal "__loop_idx" BST.IntType vars
+    (newVars, lvars) = foldl buildLVars (withIdx, []) decls
+    -- allocate new variables for the loop vars. keep track of the names for later.
+    buildLVars :: ([BST.IdTypeWhere], [String]) -> (Imp.VDecl, Imp.Expr) -> ([BST.IdTypeWhere], [String])
+    buildLVars (vs, lvars) ((name, ty), _) = (vs', lvars ++ [lvar])
       where 
-        (idx, vs')    = allocFreshLocal "__loop_idx" BST.IntType vs
-        (lvar, vs'' ) = allocFreshLocal name (translateTy ty) vs'
+        (lvar, vs') = allocFreshLocal name (translateTy ty) vs
       
     -- TODO: for arrays, need to allocate new length variables for each array, as well as assign the upper n-1 dims of RHS
     -- to the LHS
@@ -144,21 +147,21 @@ translateStmt (Imp.For vs arrs bod, vars) =
     liftLS :: BST.BareStatement -> BST.LStatement
     liftLS s = Pos.gen ([], Pos.gen s)
 
-    idxInit = map buildInit ivars
+    idxInit = buildInit idx
     dimInit = dimInfo >>= buildDims
-    idxUpdate = map (liftLS . buildIdxUp) ivars
-    iterUpdate = map (liftLS . buildIterUp) (decls `zip` ivars)
-    arrUpdate = map (liftLS . buildArrUp) (decls `zip` ivars)
+    idxUpdate = (liftLS . buildIdxUp) idx
+    iterUpdate = map (liftLS . buildIterUp) decls
+    arrUpdate = map (liftLS . buildArrUp) decls
 
 
     buildInit :: String -> BST.BareStatement
     buildInit name = BST.Assign [(name, [])] [Pos.gen $ BST.numeral 0]
     buildIdxUp :: String -> BST.BareStatement
     buildIdxUp name = BST.Assign [(name, [])] [Pos.gen $ BST.BinaryExpression BST.Plus (Pos.gen $ BST.Var name) (Pos.gen $ BST.numeral 1)]
-    buildIterUp :: ((Imp.VDecl, Imp.Expr), String) -> BST.BareStatement
-    buildIterUp (((l, _), r), i) = BST.Assign [(l, [])] [Pos.gen $ BST.MapSelection (transWithGen r) [Pos.gen $ BST.Var i]]
-    buildArrUp :: ((Imp.VDecl, Imp.Expr), String) -> BST.BareStatement
-    buildArrUp (((r, _), Imp.VConst l), i) = BST.Assign [(l, [[Pos.gen $ BST.Var i]])] [Pos.gen $ BST.Var r]
+    buildIterUp :: (Imp.VDecl, Imp.Expr) -> BST.BareStatement
+    buildIterUp ((l, _), r) = BST.Assign [(l, [])] [Pos.gen $ BST.MapSelection (transWithGen r) [Pos.gen $ BST.Var idx]]
+    buildArrUp :: (Imp.VDecl, Imp.Expr) -> BST.BareStatement
+    buildArrUp ((r, _), Imp.VConst l) = BST.Assign [(l, [[Pos.gen $ BST.Var idx]])] [Pos.gen $ BST.Var r]
 
     buildDims :: (String, Imp.Type, Imp.Expr) -> [BST.BareStatement]
     buildDims (nme, ty, Imp.VConst arr) = [] -- TODO
@@ -166,14 +169,32 @@ translateStmt (Imp.For vs arrs bod, vars) =
 
     (bod', vars') = translateBlock (bod, newVars)
 
-    cond = foldl buildCond (Pos.gen BST.tt) (ivars `zip` arrs)
+    cond = foldl buildCond (Pos.gen BST.tt) arrs
 
-    buildCond :: BST.Expression -> (String, Imp.Expr) -> BST.Expression
-    buildCond e (idx, Imp.VConst arr) = Pos.gen $ BST.BinaryExpression BST.And e (Pos.gen $ idx `lt` arr)
+    buildCond :: BST.Expression -> Imp.Expr -> BST.Expression
+    buildCond e (Imp.VConst arr) = Pos.gen $ BST.BinaryExpression BST.And e (Pos.gen $ idx `lt` arr)
       where
         lt l r = BST.UnaryExpression BST.Not $ Pos.gen $ BST.BinaryExpression BST.Geq (Pos.gen $ BST.Var l) $ Pos.gen $ len arr
     len :: String -> BST.BareExpression
     len arrName = BST.Var $ arrName ++ "$dim0"
+
+    -- we insert several attributes to decorate the boogie code with metadata about the loop.
+    -- specifically:
+    --  * an attribute detailing the index, the loop variables, and the array variables
+    --  * an attribute demarking the start of the original code
+    --  * an attribute demarking the end of the original code
+
+    -- this is for synthesis later
+
+    arrNames = map extrName arrs
+    extrName (Imp.VConst v) = v
+
+    loopInfo = buildPred "forInfo" $ idx : (lvars ++ arrNames)
+    loopStart = buildPred "forBegin" []
+    loopEnd = buildPred "forEnd" []
+
+    buildPred lab sargs = [liftLS $ BST.Predicate [BST.Attribute lab $ map BST.SAttr sargs] assertTT]
+    assertTT = BST.SpecClause BST.Inline False $ Pos.gen BST.tt
 
 translateStmt (Imp.Assgn (Imp.VConst lid) rhs, vars) = ([BST.Assign [(lid, [])] [transWithGen rhs]], vars)
 translateStmt (Imp.Assgn lhs rhs, vars) = ([BST.Assign [(lid, largs)] [transWithGen rhs]], vars)
@@ -252,7 +273,7 @@ buildInvs (DerivComp nme decs, x) = map (buildExpr $ mangleFunc nme x) alwaysDec
   where
     takeAlways InvClaus{} = True
     takeAlways _ = False
-    buildExpr pref (InvClaus e) = specToBoogie [] $ prefixApps pref e
+    buildExpr pref (InvClaus e) = specToBoogie [] $ (saturateApps . prefixApps pref) e
     alwaysDecs = filter takeAlways decs
     
 mangleFunc :: String -> Int -> String

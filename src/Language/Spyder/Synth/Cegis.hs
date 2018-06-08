@@ -275,10 +275,12 @@ buildMainSearch globals functions (Program decs) = Program $ decs ++ [Pos.gen $ 
 
 -- build main function for test/verify phases
 buildMain :: [Expression] -> [String] -> Body -> Decl
-buildMain invs globals bod = Pos.gen $ ProcedureDecl "Main" [] [] [] (reqs ++ ensures ++ modifies) (Just bod)
+buildMain invs globals (vs, bod) = Pos.gen $ ProcedureDecl "Main" [] [] [] modifies $ Just (vs, reqs ++ bod ++ ensures)
   where 
-    reqs = map (Requires False) invs
-    ensures = map (Ensures False) invs
+    buildClause :: Bool -> Expression -> LStatement
+    buildClause b e = Pos.gen ([], Pos.gen $ Predicate [] $ SpecClause Inline b e)
+    reqs = map (buildClause True) invs
+    ensures = map (buildClause False) invs
     modifies = [Modifies False globals]
 
 -- given a list of expressions, a control variable, and a lhs for assignment, add (at the end)

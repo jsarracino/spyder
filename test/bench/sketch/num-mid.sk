@@ -1,1 +1,29 @@
-// TODO
+void incr_mid ( ref int out ) {
+	out = out + 1;
+}
+
+generator int exprx(int x) {
+	return (?? + x / ?? * ??);
+}
+
+generator int expry(int y) {
+	return (?? + y / ?? * ??);
+}
+
+void midPoint(int x, int y, int mid) {
+	assert x + y == 2 * mid;
+}
+
+void update(int ox, int nx, int oy, int ny) {
+	assert ox != nx;
+	assert oy != ny;
+}
+
+harness void sketch (int x, int y, int mid) {
+	assume x + y == 2 * mid;
+	incr_mid (mid);
+	int x1 = exprx(x);
+	int y1 = expry(y);
+	update(x, x1, y, y1);
+	midPoint(x1, y1, mid);
+}

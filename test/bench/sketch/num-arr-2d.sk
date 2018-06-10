@@ -1,1 +1,33 @@
-// TODO
+void equal_arrays(int m, int n, int[m][n] p, int[m][n] q){
+	for(int i=0; i<m; ++i){
+		for(int j=0; j<n; j++) {
+			assert p[i][j] == q[i][j];
+		}
+	}
+}
+
+int[m][n] incr_x(int m, int n, ref int[m][n] x, ref int[m][n] y) {
+	for(int i=0; i<m; ++i){
+		for(int j=0; j<n; j++) {
+			x[i][j] = 2 * y[i][j];
+		}
+	}
+	return x;
+}
+
+generator int[m][n] expr(int m, int n, int[m][n] y) {
+	for(int i=0; i<m; ++i){
+		for(int j=0; j<n; j++) {
+			y[i][j] = ?? + y[i][j] / ?? * ??;
+		}
+	}
+	return y;
+}
+
+harness void sketch (int a, int b, int c, int d) {
+	int[2][2] x = {{a,b},{c,d}};
+	int[2][2] y = {{a,b},{c,d}};
+	int[2][2] x1 = incr_x(2,2,x,y);
+	int[2][2] y1 = expr(2, 2, y);
+	equal_arrays(2, 2, x1, y1);
+}

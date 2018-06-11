@@ -11,17 +11,26 @@ int[n] incr_x(int n, ref int[n] x, ref int[n] y) {
 	return x;
 }
 
-generator int[n] expr(int n, int[n] y) {
-	for(int i=0; i<n; ++i){
-		y[i] = ?? + y[i] / ?? * ??;
+generator int[n] incr_y(int n, ref int[n] y, int bnd) {
+	for(int i=0; i<n; i++){
+		y[i] = expr(y[i], bnd);
 	}
 	return y;
+}
+
+generator int expr(int y, int bnd) {
+	assert bnd > 0;
+	generator int mult(){
+		return {| y |} * {| y | ?? |};
+	}
+	if(??) { return mult(); }
+	else { return mult() + expr(y, bnd-1); }
 }
 
 harness void sketch (int a, int b, int c) {
 	int[3] x = {a,b,c};
 	int[3] y = {a,b,c};
 	int[3] x1 = incr_x(3,x,y);
-	int[3] y1 = expr(3, y);
+	int[3] y1 = incr_y(3,y,1);
 	equal_arrays(3, x1, y1);
 }

@@ -11,6 +11,7 @@ module Language.Spyder.Synth.Cegis (
   , allocFreshConst
   , generateSwitch
   , buildBounds
+  , buildIO
 ) where
 
 import Language.Boogie.AST            
@@ -20,6 +21,8 @@ import Language.Boogie.Solver
 import Language.Boogie.Environment
 import qualified Language.Boogie.Z3.Solver as Z3
 import Language.Boogie.Generator
+
+import Language.Spyder.Translate.Expr
 
 import qualified Language.Boogie.Position as Pos
 import Language.Spyder.AST.Imp        (VDecl(..), stripTy)
@@ -34,7 +37,7 @@ import Control.Monad
 import Control.Monad.Logic
 import Control.Monad.Stream
 import Control.Lens hiding (Context, at)
-import Language.Spyder.Util                       ( allocFreshLocal)
+import Language.Spyder.Util                       (allocFreshLocal)
 import Data.Ord                                   (comparing)
 
 import Language.Spyder.Config                     (concretSize)
@@ -168,7 +171,7 @@ repairBlock invs prog globals lhsVars rhsVars scope blk =  (fixedBlock, optimize
     initConfig = Map.fromList []
 
     firstEx = case checkConfig invs prog globals initConfig scope blk of 
-      Left _ -> undefined "inconceivable"
+      Left _ -> error "inconceivable"
       Right io -> io
     initIO = [firstEx]
     initCandDepths = [Map.fromList $ lhsVars `zip` (repeat 0)]
@@ -211,7 +214,7 @@ searchAllConfigs invs prog globals scope blk lhses rhses (cand:cands) conf examp
     maxVal mp = maximum $ Map.elems mp 
     
   
-    checkMe = debugProg "cegis-debug.bpl" $ optimize $ buildMainSearch globals procNames $ case searchProg of Program x -> Program $ x ++ procs
+    checkMe = debugProg "cegis-search-debug.bpl" $ optimize $ buildMainSearch globals procNames $ case searchProg of Program x -> Program $ x ++ procs
 
     buildAns :: Config -> (Program, Body, Block)
     buildAns cs = (finalProg, searchBody, searchBlock )
@@ -243,7 +246,10 @@ checkConfig :: [Expression] -> Program -> [String] -> Config -> Body -> Block ->
 checkConfig invs (Program header) globals config (vs, _) blk = result
   where
     prog =  optimize $ Program $ header ++ [main] ++ buildConfVal config
-    bod = (vs, blk)
+    bod = (vs, saveLocals:blk)
+    saveLocals = Pos.gen ([], Pos.gen $ Predicate [Attribute "save" (vs >>= buildAV)] clause)
+    buildAV itws = [EAttr $ Pos.gen $ Var $ itwId itw | itw <- itws]
+    clause = SpecClause Inline False $ Pos.gen tt
     main = buildMain invs globals bod 
     result = case boogTest prog "Main" of 
       []    -> Left config
@@ -251,9 +257,10 @@ checkConfig invs (Program header) globals config (vs, _) blk = result
 
 -- given invs and a set of io, add assumes to the begin/end of the block to specialize to the IO.
 addAssumes :: [Expression] -> Map.Map String Value -> Block -> Block
-addAssumes invs io block = map buildIO (Map.toList io) ++ block ++ map buildInv invs
+addAssumes invs io block = map buildIO (Map.toList io) ++ invStmts ++ block ++ invStmts
   where
     --Predicate attrs (SpecClause _ isAssume e)
+    invStmts = map buildInv invs
     buildInv :: Expression -> LStatement
     buildInv e = stmt $ Predicate [] (SpecClause Inline True e)
     buildIO :: (String, Value) -> LStatement
@@ -300,7 +307,7 @@ stmt s = Pos.gen ([], Pos.gen s)
 -- run in exec mode, searching for a valid configuration.
 boogExec :: Program -> String -> [TestCase]
 boogExec p pname = case typeCheckProgram p of
-              Left typeErrs -> undefined "inconceivable"
+              Left typeErrs -> error "inconceivable"
               Right context -> runInt context
   where 
     runInt ctx = take 1 $ filter keep . maybeTake exec_max $ int p ctx pname
@@ -321,7 +328,7 @@ boogExec p pname = case typeCheckProgram p of
 -- run in test mode, searching for an invalid configuration.
 boogTest :: Program -> String -> [TestCase]
 boogTest p pname = case typeCheckProgram p of
-              Left typeErrs -> undefined "inconceivable"
+              Left typeErrs -> error "inconceivable"
               Right context -> runInt context
   where 
     runInt ctx = take 1 $ filter keep . maybeTake exec_max $ int p ctx pname
@@ -348,11 +355,21 @@ takeConsts tc@(TestCase _ mem conMem _) = buildMap $ mem'^.memConstants
     buildMap = Map.map (\case (Pos.Pos _ e) -> eval' e)
 
 
+-- TODO: mem doesn't actually have local values because...assert violated, i think.
+-- the actual values are in logical variables, which we have to dig out.
+-- see line 249 of interpreter.hs for clues.
 buildIO :: TestCase -> Map.Map String Value
-buildIO tc@(TestCase _ mem conMem _) = buildMap $ mem'^.memOld -- we use memOld instead of memGlobals because memGlobals has the *failure state* -- we actually want the initial inputs
+buildIO tc@(TestCase _ mem conMem (Just rtf)) = buildMap ((mem'^.memOld) `Map.union` initLocalVals) -- we use memOld instead of memGlobals because memGlobals has the *failure state* -- we actually want the initial inputs
   where
     mem' :: Memory
     mem' = userMemory conMem mem
+    initLocalVals :: Map.Map String Expression
+    initLocalVals = Map.mapWithKey (evalLogicals (mem^.memLogical) (rtfMemory rtf ^. memLocals)) (rtfMemory rtf ^.memLocalOld)
+    evalLogicals :: Solution -> Store -> Id -> Thunk -> Thunk
+    evalLogicals logic local var (Pos.Pos x (Logical _ v)) 
+      | Map.member v logic    = Pos.Pos x $ Literal $ (Map.!) logic v 
+      | Map.member var local  = (Map.!) local var
+      | otherwise             = error "inconceivable"
     buildMap :: Map.Map String Expression -> Map.Map String Value
     buildMap = Map.map (\case (Pos.Pos _ e) -> eval' e)
 

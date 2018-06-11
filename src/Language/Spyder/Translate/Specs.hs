@@ -5,11 +5,13 @@ module Language.Spyder.Translate.Specs (
   , saturateApps
   , specToBoogie
   , dimVars
+  , inlineApps
 ) where
 
 import qualified Language.Boogie.AST as BST
 import qualified Language.Boogie.Position as Pos
 import Language.Spyder.AST.Spec
+import Language.Spyder.Translate.Rename             (alphaRel)
 import qualified Data.Map.Strict as Map
 
 saturateApps :: RelExpr -> RelExpr
@@ -18,6 +20,24 @@ saturateApps = id --recur
     recur :: RelExpr -> RelExpr
     recur (RelApp f (v@(RelVar x):vs)) = RelApp f $ v:vs ++ [RelVar $ x ++ "$dim0"]
     recur _ = error "TODO"
+
+
+
+inlineApps :: Map.Map String ([String], RelExpr) -> RelExpr -> RelExpr
+inlineApps decs = recur
+  where
+    recur e@(RelApp f args) = 
+      let (formals, bod) = (Map.!) decs f
+          binds          = Map.fromList $ formals `zip` args
+      in recur $ alphaRel binds bod
+    recur (RelBinop o l r) = RelBinop o (recur l) (recur r)
+    recur (RelUnop o i) = RelUnop o (recur i)
+    recur (Foreach vs arrs bod) = Foreach vs arrs $ recur bod
+    recur x@RelVar{} = x
+    recur x@RelInt{} = x
+    recur x@RelBool{} = x
+    recur _ = error "TODO"
+      
 
 prefixApps :: String -> RelExpr -> RelExpr
 prefixApps pref = recur
@@ -77,6 +97,7 @@ specToBoogie = recur
     recur dims (RelBinop Lt l r) = recur dims (RelUnop Not $ RelBinop Ge l r)
     recur dims (RelBinop o l r) = Pos.gen $ BST.BinaryExpression (specBop o) (recur dims l) (recur dims r)
     recur dims (RelUnop o i) = Pos.gen $ BST.UnaryExpression (specUnop o) (recur dims i)
+    recur [] x@Foreach{} = recur ["Main$x$dim0"] x
     recur (d:dims) (Foreach vs arrs bod) = Pos.gen $ BST.Quantified BST.Forall [] [(qv,BST.IntType)] inner'
       where 
         inner = recur dims bod 

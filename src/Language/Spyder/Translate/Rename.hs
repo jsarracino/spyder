@@ -63,10 +63,10 @@ renameDDecl mp (DeriveDDecl (v, t)) = DeriveDDecl (v', t)
 
 alphaDDecl :: Map.Map String String -> DerivDecl -> DerivDecl
 alphaDDecl env (DeriveDDecl (v, t)) = DeriveDDecl (fwd v env, t)
-alphaDDecl env (InvClaus i) = InvClaus (alphaRel env i)
+alphaDDecl env (InvClaus i) = InvClaus (alphaRel (Map.map RelVar env) i)
 alphaDDecl env (RelDecl nme formals body) = RelDecl nme formals body'
   where
-    env' = deleteAll env $ map stripTy formals
+    env' = Map.map RelVar $ deleteAll env $ map stripTy formals
     deleteAll = foldl (flip Map.delete)
     body' = alphaRel env' body
 
@@ -78,16 +78,20 @@ alphaDDecl env (RelDecl nme formals body) = RelDecl nme formals body'
     -- | RelUnop RelUop RelExpr       -- Unary operations
     -- | RelApp RelExpr [RelExpr]       -- function calls (not procedure calls)
     -- | Foreach [String] [String] RelExpr  -- foreach (x,y,z) in (p, q,s) {<expr>}
-alphaRel :: Map.Map String String -> RelExpr -> RelExpr
+alphaRel :: Map.Map String RelExpr -> RelExpr -> RelExpr
 alphaRel mp = recur 
   where 
     recur :: RelExpr -> RelExpr
     recur v@RelInt{} = v
     recur v@RelBool{} = v
-    recur (RelVar v) = RelVar $ fwd v mp
+    recur x@(RelVar v) = Map.findWithDefault x v mp
     recur (RelUnop op i) = RelUnop op $ recur i
     recur (RelBinop op l r) = RelBinop op (recur l) (recur r)
-    recur (RelApp v args) = RelApp (fwd v mp) $ map recur args
-    recur (Foreach vs arrs bod) = Foreach (map f vs) (map f arrs) $ recur bod
-      where f = flip fwd mp
+    recur (RelApp v args) = RelApp (subVar v) $ map recur args
+    recur (Foreach vs arrs bod) = Foreach (map subVar vs) (map subVar arrs) $ recur bod
+
+    subVar s = case Map.lookup s mp of 
+      Just (RelVar v) -> v
+      Just _ -> error "variable substitution into non-variable position"
+      Nothing -> s
 

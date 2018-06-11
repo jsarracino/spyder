@@ -1,4 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
 
 module Language.Spyder.Translate.Direct (
     translateExpr
@@ -8,6 +7,7 @@ module Language.Spyder.Translate.Direct (
   , unvalue
   , asInt
   , translateProg
+  , mangleFunc
 ) where
 
 
@@ -19,78 +19,67 @@ import Language.Spyder.Translate.Specs
 
 import Language.Spyder.Translate.Desugar
 import Language.Spyder.Translate.Rename
+import Language.Spyder.Translate.Related
 
 import Language.Spyder.Synth.Verify
+import Language.Spyder.Translate.Expr
 
 import Language.Spyder.Translate.Derived          (instantiate)
-import Data.List                                  (find)
+import Data.List                                  (find, (\\))
 
 import qualified Language.Boogie.AST as BST
 import qualified Language.Boogie.Position as Pos
 import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
 import Language.Spyder.Util
 
-translateBop :: Imp.Bop -> BST.BinOp
-translateBop = \case
-  Imp.Plus -> BST.Plus
-  Imp.Minus -> BST.Minus
-  Imp.Mul -> BST.Times
-  Imp.Div -> BST.Div
-  Imp.Lt -> undefined "Error: translation assumes LT has been desugared"
-  Imp.Le -> BST.Leq
-  Imp.Gt -> BST.Gt
-  Imp.Ge -> BST.Geq
-  Imp.And -> BST.And
-  Imp.Or -> BST.Or
-  Imp.Eq -> BST.Eq
-  Imp.Neq -> BST.Neq
+-- saturateLoops :: [String] -> [Set.Set String] -> MainDecl -> MainDecl
+-- saturateLoops vnames rels (ProcDecl nme formals rt (Imp.Seq ss)) = ProcDecl nme formals rt $ Imp.Seq ss'
+--   where
+--     (_, ss') = foldl worker (vnames, []) ss
+--     worker :: ([String], [Imp.Statement]) -> Imp.Statement -> ([String], [Imp.Statement])
+--     worker (names, acc) (Imp.For vs arrs (Imp.Seq bod)) = (names', acc') 
+--       where
+--         acc' = Imp.For vs' arrs' $ Imp.Seq bod'
+--         names' = map fst vs'
+--         arrNames = map takeName arrs
+--         neededArrs = (computeRels arrNames rels) \\ arrNames
+--         vs' = vs ++ allocVars names (length neededArrs) `zip` tys
+--         tys = derefArrTys 
+--         arrs' = arrs ++ map Imp.VConst neededArrs
+--         bod' = map worker bod
+--     takeName (Imp.VConst v) = v
 
-translateUop :: Imp.Uop -> BST.UnOp
-translateUop = \case
-  Imp.Neg -> BST.Neg
-  Imp.Not -> BST.Not
+--     allocVars :: [String] -> Int -> [String]
+--     allocVars names 0 = names
+--     allocVars names n = allocVars names' (n-1)
+--       where
+--         names' = names ++ ["loopvar" ++ show name]
+--         name = until (\a -> "loopvar" ++ show a `notElem` names) (+ 1) 0
 
-translateTy :: Imp.Type -> BST.Type
-translateTy (Imp.BaseTy "int") = BST.IntType
-translateTy (Imp.BaseTy "bool") = BST.BoolType
-translateTy (Imp.BaseTy _) = undefined "Error: bad type tag"
--- huh. i think this code, and the index code, don't play well...
-  -- the index code converts a[x][y] => a[x,y], while this converts
-  -- int[][] to [int][int]int, which should be indexed like a[x][y]
-translateTy (Imp.ArrTy inner) = BST.MapType [] [BST.IntType] $ translateTy inner
-  
-translateVDecl :: Imp.VDecl -> [BST.BareDecl]
--- array variables are themselves, plus variables for dimensions
-translateVDecl x@(v, ty@Imp.ArrTy{}) = (BST.VarDecl [translateITW x]) : map buildVar dims
+-- saturateLoops _ _ x = x
+
+saturateLoops :: [Set.Set String] -> MainDecl -> MainDecl
+saturateLoops rels (ProcDecl nme formals rt (Imp.Seq ss)) = ProcDecl nme formals rt $ Imp.Seq ss'
   where
-    dims = [0..depth ty]
-    depth (Imp.ArrTy i) = 1 + depth i
-    depth _ = -1
+    ss' = map worker ss
+    worker :: Imp.Statement -> Imp.Statement
+    worker (Imp.For vs arrs (Imp.Seq bod)) = Imp.For vs' arrs' $ Imp.Seq bod'
+      where
+        names' = map fst vs'
+        arrNames = map takeName arrs
+        neededArrs = (computeRels arrNames rels) \\ arrNames
+        vs' = vs ++ replicate (length neededArrs) "loop_var" `zip` tys
+        tys = repeat $ Imp.BaseTy "int"  -- TODO: real type checking
+        arrs' = arrs ++ map Imp.VConst neededArrs
+        bod' = map worker bod
+    worker (Imp.Cond c (Imp.Seq l) (Imp.Seq r)) = Imp.Cond c (Imp.Seq $ map worker l) (Imp.Seq $ map worker r)
+    worker (Imp.While c (Imp.Seq ss)) = Imp.While c $ Imp.Seq (map worker ss)
+    worker x = x
 
-    buildVar n = BST.VarDecl [translateITW (nme, Imp.BaseTy "int")]
-      where nme = v ++ "$dim" ++ show n
--- simple variables are just themselves
-translateVDecl v = [BST.VarDecl [translateITW v]]
+    takeName (Imp.VConst v) = v
 
-  
-transWithGen :: Imp.Expr -> BST.Expression
-transWithGen = Pos.gen . translateExpr
-
-translateExpr :: Imp.Expr -> BST.BareExpression
-translateExpr (Imp.VConst s) = BST.Var s
-translateExpr (Imp.IConst i) = BST.numeral $ toInteger i
-translateExpr (Imp.BConst b) = (BST.Literal . BST.BoolValue) b
-translateExpr (Imp.BinOp Imp.Lt l r) = BST.UnaryExpression BST.Not $ Pos.gen $ BST.BinaryExpression BST.Geq l' r'
-  where (l', r') = (transWithGen l, transWithGen r)
-translateExpr (Imp.BinOp o l r) = BST.BinaryExpression op l' r'
-  where op = translateBop o
-        (l', r') = (transWithGen l, transWithGen r)
-translateExpr (Imp.UnOp o i) =
-  BST.UnaryExpression (translateUop o) (transWithGen i)
-translateExpr (Imp.Index ar i) =
-  BST.MapSelection (transWithGen ar) [transWithGen i]
-translateExpr (Imp.App (Imp.VConst f) r) = BST.Application f (map transWithGen r)
-translateExpr (Imp.AConst _) = undefined "Error: translation assumes array constants have been desugared"
+saturateLoops _ x = x
 
 translateBlock :: (Imp.Block, [BST.IdTypeWhere])  -> (BST.Block, [BST.IdTypeWhere])
 translateBlock (Imp.Seq ss, vs) = foldl worker ([], vs) ss
@@ -166,7 +155,6 @@ translateStmt (Imp.For vs arrs bod, vars) =
     buildDims :: (String, Imp.Type, Imp.Expr) -> [BST.BareStatement]
     buildDims (nme, ty, Imp.VConst arr) = [] -- TODO
 
-
     (bod', vars') = translateBlock (bod, newVars)
 
     cond = foldl buildCond (Pos.gen BST.tt) arrs
@@ -229,13 +217,22 @@ translateRels (DerivComp nme decs, x) = map (buildRel $ mangleFunc nme x) $ filt
     takeRD RelDecl{} = True
     takeRD _ = False
 
-translateITW :: Imp.VDecl -> BST.IdTypeWhere
-translateITW (v, t) = BST.IdTypeWhere v (translateTy t) (Pos.gen BST.tt)
+
+
+genSig :: (Component, Int) -> Map.Map String ([String], Spec.RelExpr)
+genSig (DerivComp nme decs, x) = Map.fromList $ map worker decs' 
+  where
+    worker (RelDecl rnme formals bod) = (mangleFunc nme x ++ rnme, (map fst formals, bod))
+    decs' = filter takeRD decs
+
+    takeRD RelDecl{} = True
+    takeRD _ = False
+
 
 -- returns the program, as well as the:
     -- compiled invariants
     -- a map from old variable names to new variable names
-type CompileState = ([BST.Expression], Map.Map String String)
+type CompileState = ([Spec.RelExpr], Map.Map String String)
 translateProg :: Program -> (BST.Program, CompileState)
 translateProg prog@(comps, MainComp decls) = (debugProg "compile-debug.bpl" outProg, outState)
   where 
@@ -247,15 +244,17 @@ translateProg prog@(comps, MainComp decls) = (debugProg "compile-debug.bpl" outP
     comps' = map (processUsing varMap comps) (filter takeUsing decls) 
     relDecls = (comps' `zip` [0..]) >>= translateRels
 
-    invs = (comps' `zip` [0..]) >>= buildInvs
+    relSigs = Map.unions $ map genSig (comps' `zip` [0..])
+
+    invs = (comps' `zip` [0..]) >>= buildInvs relSigs
 
     
 
     procs = map (alphaProc varMap) $ filter takeProcs decls
 
-    procDecls = map translateProc procs
+    procDecls = map (translateProc . saturateLoops (relatedVars prog)) procs
 
-    withModifies = map (addModifies $ map fst globalVars) procDecls
+    withModifies = map (addModifies (map fst globalVars)) procDecls
     withRequires = map (addRequires invs) withModifies
     withContracts = map (addEnsures invs) withRequires
 
@@ -268,14 +267,16 @@ translateProg prog@(comps, MainComp decls) = (debugProg "compile-debug.bpl" outP
     takeProcs ProcDecl{} = True
     takeProcs _ = False
 
-buildInvs :: (Component, Int) -> [BST.Expression]
-buildInvs (DerivComp nme decs, x) = map (buildExpr $ mangleFunc nme x) alwaysDecs
+buildInvs :: Map.Map String ([String], Spec.RelExpr) -> (Component, Int) -> [Spec.RelExpr]
+buildInvs funcs (DerivComp nme decs, x) = map (buildExpr $ mangleFunc nme x) alwaysDecs
   where
     takeAlways InvClaus{} = True
     takeAlways _ = False
-    buildExpr pref (InvClaus e) = specToBoogie [] $ (saturateApps . prefixApps pref) e
+    buildExpr pref t = case t of 
+      (InvClaus e) -> (inlineApps funcs . saturateApps . prefixApps pref) e
     alwaysDecs = filter takeAlways decs
-    
+
+
 mangleFunc :: String -> Int -> String
 mangleFunc prefix count = prefix ++ "__" ++ show count ++ "_"
 
@@ -305,18 +306,20 @@ addModifies vars (BST.ProcedureDecl nme tyargs formals rets contract bod) =
     buildModify s = BST.Modifies False [s]
 addModifies _ v@_ = v
 
-addRequires :: [BST.Expression] -> BST.BareDecl -> BST.BareDecl
+addRequires :: [Spec.RelExpr] -> BST.BareDecl -> BST.BareDecl
 addRequires invs (BST.ProcedureDecl nme tyargs formals rets contract bod) = 
-  BST.ProcedureDecl nme tyargs formals rets (contract ++ map buildReq invs) bod
+  BST.ProcedureDecl nme tyargs formals rets (contract ++ map buildReq invs') bod
   where
     buildReq = BST.Requires False
+    invs' = map (specToBoogie []) invs
 addRequires _ v@_ = v
 
-addEnsures :: [BST.Expression] -> BST.BareDecl -> BST.BareDecl
+addEnsures :: [Spec.RelExpr] -> BST.BareDecl -> BST.BareDecl
 addEnsures invs (BST.ProcedureDecl nme tyargs formals rets contract bod) = 
-  BST.ProcedureDecl nme tyargs formals rets (contract ++ map buildReq invs) bod
+  BST.ProcedureDecl nme tyargs formals rets (contract ++ map buildReq invs') bod
   where
     buildReq = BST.Ensures False
+    invs' = map (specToBoogie []) invs
 addEnsures _ v@_ = v
 
 -- renamed main vars (orig -> new), components, use, returns component instantiated with args

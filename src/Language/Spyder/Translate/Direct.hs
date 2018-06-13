@@ -26,6 +26,7 @@ import Language.Spyder.Translate.Expr
 
 import Language.Spyder.Translate.Derived          (instantiate)
 import Data.List                                  (find, (\\))
+import Data.Maybe
 
 import qualified Language.Boogie.AST as BST
 import qualified Language.Boogie.Position as Pos
@@ -112,7 +113,7 @@ translateStmt (Imp.Decl _ _, vs) = error "Error: translation assumes decls are l
 --  }
 -- assumes length is stored at arr[-1]
 translateStmt (Imp.For vs arrs bod, vars) = 
-    (idxInit : [BST.While (BST.Expr cond) spec (loopInfo ++ iterUpdate ++ loopStart ++ bod' ++ loopEnd ++ arrUpdate ++ [idxUpdate])], vars')
+    (idxInit : dimInit ++ [BST.While (BST.Expr cond) spec (loopInfo ++ iterUpdate ++ loopStart ++ bod' ++ loopEnd ++ arrUpdate ++ [idxUpdate])], vars')
   where
     decls = vs `zip` arrs
     
@@ -129,8 +130,26 @@ translateStmt (Imp.For vs arrs bod, vars) =
     -- to the LHS
     -- e.g. if RHS is [[1,2],[3,4]], and LHS is foo, foo$dim0 := 2.
 
+    depth (Imp.ArrTy i) = 1 + depth i
+    depth _ = -1
+
     dimInfo = zip3 lvars (map snd vs) arrs
 
+    -- allocate new variables for loop var dimensions.
+    allocDims :: ([BST.IdTypeWhere], [[String]]) -> (String, Imp.Type, Imp.Expr) -> ([BST.IdTypeWhere], [[String]])
+    allocDims (vs, dimvs) (lvar, lvTy, Imp.VConst arrv) = (vs', dimvs ++ [lDims])
+      where
+        dimNames = map (\i -> lvar ++ "$dim" ++ show i) [0..depth lvTy]
+        
+
+        (vs', lDims) = foldl worker (vs, []) dimNames
+
+        worker :: ([BST.IdTypeWhere], [String]) -> String -> ([BST.IdTypeWhere], [String])
+        worker (vs'', acc) nme = 
+          let (rname, rvs) = allocFreshLocal nme BST.IntType vs'' in
+            (rvs, acc ++ [rname])
+
+    (newVars', allDims) = foldl allocDims (newVars, []) dimInfo
     spec = []
 
     liftLS :: BST.BareStatement -> BST.LStatement
@@ -153,9 +172,10 @@ translateStmt (Imp.For vs arrs bod, vars) =
     buildArrUp ((r, _), Imp.VConst l) = BST.Assign [(l, [[Pos.gen $ BST.Var idx]])] [Pos.gen $ BST.Var r]
 
     buildDims :: (String, Imp.Type, Imp.Expr) -> [BST.BareStatement]
-    buildDims (nme, ty, Imp.VConst arr) = [] -- TODO
+    buildDims (nme, ty, Imp.VConst arr) = [BST.Assign [(nme ++ "$dim" ++ show suf, [])] [Pos.gen $ BST.Var $ arr ++ "$dim" ++ show (suf + 1)] | suf <- dims]
+      where dims = [0..depth ty]
 
-    (bod', vars') = translateBlock (bod, newVars)
+    (bod', vars') = translateBlock (bod, newVars')
 
     cond = foldl buildCond (Pos.gen BST.tt) arrs
 
@@ -258,7 +278,7 @@ translateProg prog@(comps, MainComp decls) = (debugProg "compile-debug.bpl" outP
     withRequires = map (addRequires invs) withModifies
     withContracts = map (addEnsures invs) withRequires
 
-    outState = (invs, varMap)
+    outState = (map fst invs, varMap)
     outProg = BST.Program $ map Pos.gen $ vDecls ++ relDecls ++ withContracts
 
 
@@ -267,15 +287,22 @@ translateProg prog@(comps, MainComp decls) = (debugProg "compile-debug.bpl" outP
     takeProcs ProcDecl{} = True
     takeProcs _ = False
 
-buildInvs :: Map.Map String ([String], Spec.RelExpr) -> (Component, Int) -> [Spec.RelExpr]
-buildInvs funcs (DerivComp nme decs, x) = map (buildExpr $ mangleFunc nme x) alwaysDecs
+buildInvs :: Map.Map String ([String], Spec.RelExpr) -> (Component, Int) -> [(Spec.RelExpr, [String])]
+buildInvs funcs (DerivComp nme decs, x) = exprs `zip` dims
   where
-    takeAlways InvClaus{} = True
-    takeAlways _ = False
-    buildExpr pref t = case t of 
-      (InvClaus e) -> (inlineApps funcs . saturateApps . prefixApps pref) e
-    alwaysDecs = filter takeAlways decs
+    preExprs = mapMaybe takeAlways decs 
+    exprs = map buildExpr preExprs
+    dims = map extractDims preExprs
 
+    takeAlways (InvClaus e) = Just $ prefixApps prefix e
+    takeAlways _ = Nothing
+
+    prefix = mangleFunc nme x
+
+    buildExpr = inlineApps funcs . saturateApps 
+    extractDims (Spec.RelApp f (Spec.RelVar a:_)) = map (\s -> a ++ "$" ++ s) $ dimVars bod
+      where 
+        bod = snd $ (Map.!) funcs f
 
 mangleFunc :: String -> Int -> String
 mangleFunc prefix count = prefix ++ "__" ++ show count ++ "_"
@@ -306,20 +333,20 @@ addModifies vars (BST.ProcedureDecl nme tyargs formals rets contract bod) =
     buildModify s = BST.Modifies False [s]
 addModifies _ v@_ = v
 
-addRequires :: [Spec.RelExpr] -> BST.BareDecl -> BST.BareDecl
-addRequires invs (BST.ProcedureDecl nme tyargs formals rets contract bod) = 
+addRequires :: [(Spec.RelExpr, [String])] -> BST.BareDecl -> BST.BareDecl
+addRequires invsWithDims (BST.ProcedureDecl nme tyargs formals rets contract bod) = 
   BST.ProcedureDecl nme tyargs formals rets (contract ++ map buildReq invs') bod
   where
     buildReq = BST.Requires False
-    invs' = map (specToBoogie []) invs
+    invs' = map (uncurry $ flip specToBoogie) invsWithDims
 addRequires _ v@_ = v
 
-addEnsures :: [Spec.RelExpr] -> BST.BareDecl -> BST.BareDecl
-addEnsures invs (BST.ProcedureDecl nme tyargs formals rets contract bod) = 
+addEnsures :: [(Spec.RelExpr, [String])]  -> BST.BareDecl -> BST.BareDecl
+addEnsures invsWithDims (BST.ProcedureDecl nme tyargs formals rets contract bod) = 
   BST.ProcedureDecl nme tyargs formals rets (contract ++ map buildReq invs') bod
   where
     buildReq = BST.Ensures False
-    invs' = map (specToBoogie []) invs
+    invs' = map (uncurry $ flip specToBoogie) invsWithDims
 addEnsures _ v@_ = v
 
 -- renamed main vars (orig -> new), components, use, returns component instantiated with args
@@ -347,7 +374,9 @@ simplArrAccess e = worker (e, [])
 -- get any free variables in these expressions anyway (because it's a thunk)
 eval' :: BST.BareExpression -> BST.Value
 eval' (BST.Literal v) = v
-eval' _ = undefined "TODO"
+eval' (BST.Logical ty val) = error "logical in eval'"
+eval' (BST.Var v) = error "var in eval'"
+eval' _ = error "inconceivable"
 
 unvalue :: BST.Value -> BST.Expression
 unvalue v@BST.IntValue{} = Pos.gen $ BST.Literal v

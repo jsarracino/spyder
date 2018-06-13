@@ -97,11 +97,13 @@ specToBoogie = recur
     recur dims (RelBinop Lt l r) = recur dims (RelUnop Not $ RelBinop Ge l r)
     recur dims (RelBinop o l r) = Pos.gen $ BST.BinaryExpression (specBop o) (recur dims l) (recur dims r)
     recur dims (RelUnop o i) = Pos.gen $ BST.UnaryExpression (specUnop o) (recur dims i)
-    recur [] x@Foreach{} = recur ["Main$x$dim0"] x
+    recur [] x@(Foreach _ (a:_) _) = recur names x
+      where
+        names = map (\suf -> a ++ "$" ++ suf) $ dimVars x
     recur (d:dims) (Foreach vs arrs bod) = Pos.gen $ BST.Quantified BST.Forall [] [(qv,BST.IntType)] inner'
       where 
         inner = recur dims bod 
-        qv = "foreach$" ++ (show $ quantDepth bod)
+        qv = "foreach$" ++ show (quantDepth bod)
         inner' = Pos.gen $ BST.BinaryExpression BST.Implies idx (alphaIdx (vs `zip` arrs) qv inner)
         idx = Pos.gen $ BST.BinaryExpression BST.And lo hi
         lo = Pos.gen $ BST.BinaryExpression BST.Geq (Pos.gen $ BST.Var qv) (Pos.gen $ BST.numeral 0)
@@ -139,4 +141,5 @@ alphaIdx renames idx e = Pos.gen $ recur $ Pos.node e
     recur (BST.UnaryExpression o i) = BST.UnaryExpression o $ Pos.gen $ recur $ Pos.node i
     recur (BST.BinaryExpression o l r) = BST.BinaryExpression o (Pos.gen $ recur $ Pos.node l) (Pos.gen $ recur $ Pos.node r)
     recur (BST.Quantified o tys bs i) = BST.Quantified o tys bs $ Pos.gen $ recur $ Pos.node i
-    recur x = x -- Logical, MapSelect, MapUpdate, old, if, coercion
+    recur (BST.MapSelection m args) = BST.MapSelection (Pos.gen $ recur $ Pos.node m) $ map (Pos.gen . recur . Pos.node) args
+    recur x = x -- Logical,  MapUpdate, old, if, coercion

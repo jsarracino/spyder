@@ -5,7 +5,7 @@ Component EqArrs {
   relation Eq(x: int[][], y: int[][]) {
     foreach (p, q) in (x, y) {
       foreach (s, t) in (p, q) {
-        p = q
+        s = t
       }
     }
   }

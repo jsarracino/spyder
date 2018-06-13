@@ -53,9 +53,10 @@ fixBlock invs relVars header globals rhsVars scope prefix fixme = fixResult inne
     wrapFixStmt (blk, prog, bod) (Pos o (ls, (Pos i s))) = (blk', prog', bod')
       where
         (s', prog', bod') = fixStmt invs relVars globals rhsVars (blk, prog, bod) s
-        blk' = blk ++ [Pos o (ls, (Pos i s'))]
-
-    -- repairBlock :: [Expression] -> Program -> [String] -> [String] -> [String] -> Body -> Block -> (Block, Program, Body)
+        prefix = case s' of 
+          x@While{} -> map buildLoopAssm invs -- TODO: this doesn't actually work because the dims are wrong. see check.bpl for details.
+          _         -> [] 
+        blk' = blk ++ prefix ++ [Pos o (ls, (Pos i s'))]
 
 
 -- specialize ForEach vs arrs bod[vs] to bod[x/v | x <- xs, v <- vs, v <= arr, arrs ~ xs by arr = xs_i]
@@ -95,7 +96,8 @@ fixStmt invs relVars globals rhsVars (prefix, prog, scope) = worker
         rhsVars' = vs
 
         spec' = spec ++ map buildLoopInv invs
-        bod' = pref ++ fixed ++ suf
+        bod' = pref ++ fixed ++ suf ++ map buildLoopAssm invs
+
       --   spec' = (map (SpecClause LoopInvariant False) invs) ++ spec
       --   (tru', prog', bod') = recur prog scope tru
       --   (fls', prog'', bod'') = case fls of 
@@ -107,6 +109,10 @@ fixStmt invs relVars globals rhsVars (prefix, prog, scope) = worker
 
 buildLoopInv :: Spec.RelExpr -> SpecClause
 buildLoopInv re = SpecClause LoopInvariant False $ specToBoogie [] re
+buildLoopAssm :: Spec.RelExpr -> LStatement
+buildLoopAssm re = gen ([], gen $ Predicate [] $ SpecClause Inline True $ specToBoogie [] re)
+
+
 findEdited :: Block -> [String]
 findEdited = foldl recurLS [] -- blk
   where

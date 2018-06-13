@@ -364,47 +364,23 @@ buildIO tc@(TestCase _ mem conMem (Just rtf)) = buildMap ((mem'^.memOld) `Map.un
     mem' :: Memory
     mem' = userMemory conMem mem
     initLocalVals :: Map.Map String Expression
-    initLocalVals = Map.mapWithKey (evalLogicals (mem^.memLogical) (rtfMemory rtf ^. memLocals)) (rtfMemory rtf ^.memLocalOld)
-    evalLogicals :: Solution -> Store -> Id -> Thunk -> Thunk
+    initLocalVals = Map.mapMaybeWithKey (evalLogicals (mem^.memLogical) (rtfMemory rtf ^. memLocals)) (rtfMemory rtf ^.memLocalOld)
+    evalLogicals :: Solution -> Store -> Id -> Thunk -> Maybe Thunk
     evalLogicals logic local var (Pos.Pos x (Logical _ v)) 
-      | Map.member v logic    = Pos.Pos x $ Literal $ (Map.!) logic v 
-      | Map.member var local  = (Map.!) local var
-      | otherwise             = error "inconceivable"
+      | Map.member v logic    = Just $ Pos.Pos x $ Literal $ (Map.!) logic v 
+      | Map.member var local  = Just $ (Map.!) local var 
+      | otherwise             = error $ "inconceivable" ++ var
+    evalLogicals _ _ _ _ = Nothing -- filter out maps... not sure if smart
+
+
+    -- takeBaseVal :: Thunk -> Maybe Thunk
+    -- takeBaseVal t@Logical{} = Nothing
+    -- takeBaseVal 
     buildMap :: Map.Map String Expression -> Map.Map String Value
-    buildMap = Map.map (\case (Pos.Pos _ e) -> eval' e)
+    buildMap mp = Map.map eval' $ Map.mapMaybe worker mp
+    worker x@(Pos.Pos _ e@Literal{}) = Just e
+    worker _ = Nothing -- filter out unconstrained, irrelevant values; i.e. variables with logical RHS in which logical hasn't been instantiated
 
-
---       -- | Default backtracking strategy
--- defaultBT = DF
-
--- -- | Default solutions per path
--- defaultPerPath = 128
-
--- -- | Default number of test cases for testing
--- defaultTCCount = 2048
-
--- -- | Default maximum number of loop iterations
--- defaultLMax = 1000
-  --     execute = Exec {
-  -- proc_       = Nothing         &= help "Program entry point (default: Main or the only procedure in a file)" &= typ "PROCEDURE" &= name "p",
-  -- file        = ""              &= typFile &= argPos 0,
-  -- -- backtrack   = defaultBT       &= help ("Backtracking strategy: DF (depth-first) or Fair (default: " ++ show defaultBT ++ ")"),
-  -- per_path    = defaultPerPath  &= help ("Maximum number of solutions to try per path; " ++
-  --                                       "unbounded if negative (default: " ++ show defaultPerPath ++ ")") &= name "n",
-  -- exec        = -1              &= help ("Maximum number of executions to try; unbounded if negative (default: -1)"),
-  -- rec_max     = -1              &= help ("Maximum number of unfolds for a recursive constraint; unbounded if negative (default: -1)"),
-  -- loop_max    = defaultLMax     &= help ("Maximum number of loop iterations; unbounded if negative (default: " ++ show defaultLMax ++ ")"),
-  -- minimize    = True            &= help ("Should solutions be minimized? (default: True)"),
-  -- concretize  = True            &= help ("Concretize in the middle of an execution? (default: True)"),
-  -- invalid     = False           &= help "Display invalid executions (default: false)" &= name "I",
-  -- nexec       = True            &= help "Display executions that cannot be carried out completely (default: true)" &= name "N",
-  -- pass        = True            &= help "Display passing executions (default: true)" &= name "P",
-  -- fail_       = True            &= help "Display failing executions (default: true)" &= name "F",
-  -- out         = 1               &= help "Maximum number of executions to display; unbounded if negative (default: 1)",
-  -- summary_    = False           &= help "Only print a summary of all executions and a list of unique failures (default: false)" &= name "S",
-  -- debug       = False           &= help "Debug output (default: false)",
-  -- format      = defaultFormat   &= help ("Output format: Plain, Ansi or Html (default: " ++ show defaultFormat ++ ")")
-  -- } &= auto &= help "Execute program"
 
 interpreter :: Maybe Int -> Maybe Int ->  Maybe Int -> Bool -> Bool -> Bool -> (Program -> Context -> Id -> [TestCase])
 interpreter branch_max rec_max loop_max minimize concretize solvePassing p context proc_ = toList $ executeProgram p context solver rec_max loop_max concretize solvePassing generator proc_

@@ -121,22 +121,27 @@ relTable   = [
     ]
   ,   [binary "=" (Spec.RelBinop Spec.Eq) AssocLeft, binary "!=" (Spec.RelBinop Spec.Neq) AssocLeft]
   ,   [binary "&&" (Spec.RelBinop Spec.And) AssocLeft, binary "||" (Spec.RelBinop Spec.Or) AssocLeft]
-  ,   [binary "==>" (Spec.RelBinop Spec.Imp) AssocLeft, binary "<==>" (Spec.RelBinop Spec.Iff) AssocLeft]
+  ,   [binary "==>" (Spec.RelBinop Spec.Imp) AssocLeft, binary "<=>" (Spec.RelBinop Spec.Iff) AssocLeft]
   ]
 
 binary name fun = Infix (do{ Tok.reservedOp lexer name; return fun })
 unary name fun  = Prefix (do{ Tok.reservedOp lexer name; return fun })
 
+baseTy :: Parser Imp.Type
+baseTy = 
+      try (res "int" >> return Imp.IntTy)
+  <|> try (res "bool" >> return Imp.BoolTy)
+  <?> "Base Type"
 
 typ :: Parser Imp.Type
 typ =
       try arrTy
-  <|> liftM Imp.BaseTy ident
+  <|> baseTy
   <?> "Type"
 
 arrTy :: Parser Imp.Type
 arrTy = do {
-  h <- liftM Imp.BaseTy ident;
+  h <- baseTy;
   arrs <- many1 (symb "[]");
   return $ foldl (\x s -> Imp.ArrTy x) h arrs
 }
@@ -250,7 +255,7 @@ procP = do {
   name <- ident;
   args <- parens $ commas vdecl;
   bod <- braces block;
-  return $ ProcDecl name args Imp.Void bod
+  return $ ProcDecl name args bod
 }
 
 comp :: Parser Component

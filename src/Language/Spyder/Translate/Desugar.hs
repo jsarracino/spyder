@@ -70,7 +70,7 @@ convertArr suffix bty es = (decls ++ assns, arrVar, arrInfo)
     arrDecl = (arrVar, ArrTy bty)
     arr = VConst arrVar
     decls = [Decl arrInfo (Just len), Decl arrDecl Nothing]
-    arrInfo = (lenVar, BaseTy "int")
+    arrInfo = (lenVar, IntTy)
     assns = zipWith worker es [0..]
     worker e i = Assgn (Index arr (IConst i)) e
 
@@ -129,7 +129,7 @@ convertForStmt arrInfo (For vs arrs (Seq bod)) = (decls, loop)
     len _ = undefined "Error: can only loop over variables (for now)"
     bnds = vs `zip` arrs
     decls = map buildIndex arrs ++ map buildIdent bnds
-    buildIndex arr = Decl (idx arr, BaseTy "int") (Just $ IConst 0)
+    buildIndex arr = Decl (idx arr, IntTy) (Just $ IConst 0)
     buildIdent (v, arr) = Decl v (Just $ Index arr (varIdx arr))
     cond = foldl (BinOp And) tru arrConds
     arrConds = map (\arr -> BinOp Lt (varIdx arr) (len arr)) arrs

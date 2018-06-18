@@ -26,7 +26,7 @@ unitPrefix = "./test/bench/spy/unit/"
 unitSuccPrefix = unitPrefix ++ "good/"
 unitSuccBenches = TestList benches
   where
-    small = ["empty", "array", "num", "two-data", "proc-empty", "proc-args", "rel", "always", "using", "two-comp"]
+    small = ["empty", "array", "num", "two-data", "proc-empty", "proc-args", "rel", "always", "using", "two-comp", "decl"]
     benchnames = map (\x -> unitSuccPrefix ++ x ++ ".spy") small
     benches = map parseSucc benchnames
 

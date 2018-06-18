@@ -20,7 +20,7 @@ data DerivDecl =
 
 data MainDecl = 
     MainDDecl VDecl
-  | ProcDecl String [VDecl] Type Block  -- name, formals, return type, body
+  | ProcDecl String [VDecl] Block  -- name, formals, body
   | MainUD UseClause
     deriving (Eq, Show, Ord)
 

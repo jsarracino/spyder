@@ -1,0 +1,20 @@
+
+
+Component Main {
+  
+  data x: int;
+  
+
+  procedure inc() {
+    let t : int = 1;
+    x = x + t;
+  }
+
+  procedure baz() {
+    let foo : int;
+    foo = 3;
+    x = x + foo;
+  }
+
+  
+}

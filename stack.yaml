@@ -1,15 +1,11 @@
-# flags:
-#   generic-deriving:
-#     base-4-9: false
-  # language-boogie:
-  #   boogaloo: false
+
 extra-package-dbs: []
 packages:
 - .
 - ./boogaloo
+- ./haskell-z3
 extra-deps:
 - lens-4.13
-- z3-4.2.0
 - random-1.0.0.0
 - mtl-2.1.2
 - ansi-wl-pprint-0.6.4

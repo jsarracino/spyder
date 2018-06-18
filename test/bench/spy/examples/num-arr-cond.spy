@@ -23,8 +23,14 @@ Component Main {
   using EqArrs(x, y);
 
   procedure incrX() {
-    for (l:int, r: int) in (x, y) {
-      l = 2 * r;
+    if (z) {
+      for (l:int, r: int) in (x, y) {
+        l = 2 * r;
+      }
+    } else {
+      for (t:int, v: int) in (x, y) {
+        v = v + 1;
+      }
     }
     
     

@@ -25,7 +25,7 @@ fwdVD :: VDecl -> Env -> VDecl
 fwdVD (s, t) env = (fwd s env, t)
 
 alphaProc :: Env -> MainDecl -> MainDecl
-alphaProc mp (ProcDecl nme formals rt body) = ProcDecl nme formals' rt body'
+alphaProc mp (ProcDecl nme formals body) = ProcDecl nme formals' body'
   where
     formals' = map (`fwdVD` mp) formals
     body' = alphaBlock mp body

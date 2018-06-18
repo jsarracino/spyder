@@ -34,7 +34,6 @@ Component Main {
   
 
   procedure incM() {
-    //let one : int = 1;
     m = m + 1;
   }
 

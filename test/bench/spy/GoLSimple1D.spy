@@ -1,26 +1,11 @@
-
-Component 1DGoL {
-  data cells : bool[]; 
-  data rendered : color[];
-
-  relation cell2color(cell : bool, color : color) {
-    cell ==> color = black && !cell ==> color = white 
-  }
-
-  relation cells2colors(clls : bool[], rndered: color[]) {
-    ForEach2(clls, rndered, cell2color)
-  }
-
-  always cells2colors(cells, rendered);
-}
-
 Component Startable {
-  running : bool;
-  start : button;
-  stop : button;
+  data running : int; // bool, = 0 or 1
+  data start : int; // button
+  data stop : int;  // button
 
-  relation goodConfig(run: bool, strt: button, stp: button) {
-    run <=> strt.enabled && !stp.enabled <=> start.enabled 
+  relation goodConfig(run: int, strt: int, stp: int) {
+    // run <=> strt.enabled && stp.enabled <=> start.enabled 
+    (0 <= run && run <= 1) && (0 <= strt && strt <= 1) && (0 <= stp && stp <= 1) && (run = 0) <=> (strt = 1) && (run = 1) <=> (strt = 0) && (strt = 1) <=> (stp = 0) && (strt = 0) <=> (stp = 1)
   }
 
   always goodConfig(running, start, stop);
@@ -41,20 +26,41 @@ Component Startable {
 
 }
 
+/*
+Component OneDGoL {
+  data cells : int[]; 
+  data rendered : int[];
+
+  // black == 0
+  // white == 1
+
+  relation cells2colors(clls : int[], rndered: int[]) {
+    foreach (c, r) in (clls, rndered) {
+      (c = 0 <=> r = 0) && (c = 1 <=> r = 1 )
+    }
+  }
+
+  always cells2colors(cells, rendered);
+}
+
+*/
+
+
 Component Main {
   // the model
-  cells :: bool[];
-  running :: bool;
+  data cells : int[]; // bool[]
+  data running : int; // bool
 
   // the view
-  rendered :: color[];
-  start :: button;
-  stop :: button;
+  data rendered : int[]; // color
+  data start : int; // button
+  data stop : int; // button
 
   using Startable(running, start, stop);
-  using 1DGoL(cells, rendered);
-  using History(cells, index, history);
+  //using OneDGoL(cells, rendered);
+  //using History(cells, index, history);
 
+  /*
   init() { // only the main component can have an init
     cells = ...; // for main, values need to be initialized.
     rendered = ...;
@@ -70,26 +76,42 @@ Component Main {
 
     setInterval golLogic 1000;
   }
+  */
 
-  function colorOnClick(clickedColor) {
-    if (clickedColor == White) {
-      clickedColor = Black;
+/*
+  procedure colorOnClick(index: int) {
+    for (color: int) with idx in (rendered) {
+      if (idx = index) {
+        if (color = 0) {
+          color = 1;
+        } else {
+          color = 0;
+        }
+      }
+    }
+    
+  }
+
+  */
+
+  procedure toggleButtons() {
+    if (start == 0) {
+      start = 1;
     } else {
-      clickedColor = White;
+      start = 0;
+    }
+    if (stop == 0) {
+      stop = 1;
+    } else {
+      stop = 0;
     }
   }
 
-  function toggleButtons(clickedButton) {
-    start.enabled = !start.enabled;
-    stop.enabled = !stop.enabled;
-
-    // @ inferred:
-    running = !running;
-  }
-
-
+  /*
   function golLogic(){
-    for (cell, i) in enumerate cells:
-      ... blah using i...
+    for (cell: int) with idx in (cells) {
+
+    }
   }
+  */
 }

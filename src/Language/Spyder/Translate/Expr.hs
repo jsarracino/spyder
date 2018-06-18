@@ -33,9 +33,8 @@ translateUop = \case
   Imp.Not -> BST.Not
 
 translateTy :: Imp.Type -> BST.Type
-translateTy (Imp.BaseTy "int") = BST.IntType
-translateTy (Imp.BaseTy "bool") = BST.BoolType
-translateTy (Imp.BaseTy _) = undefined "Error: bad type tag"
+translateTy Imp.IntTy = BST.IntType
+translateTy Imp.BoolTy = BST.BoolType
 -- huh. i think this code, and the index code, don't play well...
   -- the index code converts a[x][y] => a[x,y], while this converts
   -- int[][] to [int][int]int, which should be indexed like a[x][y]
@@ -49,7 +48,7 @@ translateVDecl x@(v, ty@Imp.ArrTy{}) = (BST.VarDecl [translateITW x]) : map buil
     depth (Imp.ArrTy i) = 1 + depth i
     depth _ = -1
 
-    buildVar n = BST.VarDecl [translateITW (nme, Imp.BaseTy "int")]
+    buildVar n = BST.VarDecl [translateITW (nme, Imp.IntTy)]
       where nme = v ++ "$dim" ++ show n
 -- simple variables are just themselves
 translateVDecl v = [BST.VarDecl [translateITW v]]

@@ -75,16 +75,18 @@ instance Translateable RhsExpr SAST.Expr where
       ops = [SAST.Plus, SAST.Minus, SAST.Mul, SAST.Lt, SAST.Gt, SAST.Le, SAST.Ge , SAST.And, SAST.Or, SAST.Eq, SAST.Neq] -- ++[SAST.Div]
       res = [(x,y) | x <- recur l, y <- recur r]
       recur = translate ctx
-      checker e = case SAST.typecheck e of
-        (Just (SAST.BaseTy "int")) -> True
-        _                          -> False
+      -- checker e = case SAST.typecheck e of
+      --   (Just (SAST.BaseTy "int")) -> True
+      --   _                          -> False
+      checker _ = True
   translate ctx@(Ctx.SynthCtx vars ints) (UnOp i) = filter checker $ [(o, i) | o <- ops] >>= worker
     where
       worker (o,i) = fmap (SAST.UnOp o) (translate ctx i)
       ops =  [ SAST.Neg, SAST.Not]
-      checker e = case SAST.typecheck e of
-        (Just (SAST.BaseTy "int")) -> True
-        _                          -> False
+      -- checker e = case SAST.typecheck e of
+      --   (Just (SAST.BaseTy "int")) -> True
+      --   _                          -> False
+      checker _ = True
 
 -- grammar for lhs expressions. for now, just variables.
 data LhsExpr = 

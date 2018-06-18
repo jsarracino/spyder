@@ -1,0 +1,41 @@
+Component Midpoint1d {
+  data lhs : int[];
+  data rhs: int[];
+  data mid: int[];
+
+  /* 
+  relation midPoint(x: int, y: int, m: int) {
+    x + y = 2 * m
+  }
+  */
+
+  relation midArrays(xs: int[], ys: int[], mids: int[]) {
+    foreach (x, y, m) in (xs, ys, mids) {
+      x + y = m && x != y
+    }
+  }
+
+
+  
+  always midArrays(lhs, rhs, mid);
+
+}
+
+
+Component Main {
+  
+  data x: int[];
+  data y: int[];
+  data m: int[];
+
+  using Midpoint1d(x, y, m);
+  
+
+  procedure incM() {
+    for (mp: int) in (m) {
+      mp = mp + 1;
+    }
+  }
+
+  
+}

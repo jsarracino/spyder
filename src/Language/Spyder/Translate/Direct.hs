@@ -61,7 +61,7 @@ import Language.Spyder.Util
 -- saturateLoops _ _ x = x
 
 saturateLoops :: [Set.Set String] -> MainDecl -> MainDecl
-saturateLoops rels (ProcDecl nme formals rt (Imp.Seq ss)) = ProcDecl nme formals rt $ Imp.Seq ss'
+saturateLoops rels (ProcDecl nme formals (Imp.Seq ss)) = ProcDecl nme formals $ Imp.Seq ss'
   where
     ss' = map worker ss
     worker :: Imp.Statement -> Imp.Statement
@@ -71,7 +71,7 @@ saturateLoops rels (ProcDecl nme formals rt (Imp.Seq ss)) = ProcDecl nme formals
         arrNames = map takeName arrs
         neededArrs = (computeRels arrNames rels) \\ arrNames
         vs' = vs ++ replicate (length neededArrs) "loop_var" `zip` tys
-        tys = repeat $ Imp.BaseTy "int"  -- TODO: real type checking
+        tys = repeat Imp.IntTy  -- TODO: real type checking
         arrs' = arrs ++ map Imp.VConst neededArrs
         bod' = map worker bod
     worker (Imp.Cond c (Imp.Seq l) (Imp.Seq r)) = Imp.Cond c (Imp.Seq $ map worker l) (Imp.Seq $ map worker r)
@@ -94,8 +94,12 @@ translateBlock (Imp.Seq ss, vs) = foldl worker ([], vs) ss
 -- for loops, we need to insert multiple statements, so we return a list.
 -- also, we need to introduce variables, so we plumb a scope around.
 translateStmt :: (Imp.Statement, [BST.IdTypeWhere]) -> ([BST.BareStatement], [BST.IdTypeWhere])
--- we can do this now TODO
-translateStmt (Imp.Decl _ _, vs) = error "Error: translation assumes decls are lifted"
+-- convert decls into a variable declaration and an assignment. program is NOT alpha-renamed, so name-collisions are a problem.
+translateStmt (Imp.Decl (v, ty) rhs, vs) = (maybeToList assn, vs'')
+  where 
+    assn = (\e -> BST.Assign [(v, [])] [transWithGen e]) `fmap` rhs
+    (v', vs') = allocFreshLocal v (translateTy ty) vs
+    vs'' = if v /= v' then error "name clash in decl" else vs'
 -- convert 
 --  for (vs) <- (arrs) {
 --    bod 
@@ -223,7 +227,7 @@ translateStmt (Imp.Cond c tr fl, vars) = ([BST.If cond ts fls], vars'')
       (Imp.Seq _) -> let (fs, vs) = translateBlock (fl, vars') in (Just fs, vs)
 
 translateProc :: MainDecl -> BST.BareDecl
-translateProc (ProcDecl nme formals rt body) = BST.ProcedureDecl nme [] formals' [] inv $ Just (decs', body')
+translateProc (ProcDecl nme formals body) = BST.ProcedureDecl nme [] formals' [] inv $ Just (decs', body')
   where
     formals' = map translateITW formals
     (vs, bod) = generateBoogieBlock body

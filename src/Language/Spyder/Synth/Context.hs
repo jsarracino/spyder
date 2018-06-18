@@ -37,7 +37,7 @@ gatherNumsDDec (InvClaus bod) = undefined "TODO" --gatherNumsBE bod
 -- TODO: arrays
 gatherNumsMDec :: MainDecl -> [Int]
 gatherNumsMDec (MainDDecl _) = []
-gatherNumsMDec (ProcDecl _ _ _ (Seq stmts)) = stmts >>= gatherNumsStmt 
+gatherNumsMDec (ProcDecl _ _ (Seq stmts)) = stmts >>= gatherNumsStmt 
 gatherNumsMDec (MainUD _) = []
 
 gatherNumsStmt :: Statement -> [Int]

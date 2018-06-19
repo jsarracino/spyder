@@ -27,6 +27,7 @@ import Language.Spyder.Translate.Related
 import Language.Spyder.Opt
 
 
+
 toBoogie :: Program -> BST.Program
 toBoogie prog@(comps, MainComp decls) = outProg 
   where

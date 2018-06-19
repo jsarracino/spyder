@@ -4,8 +4,6 @@ Component Startable {
   data stop : int;  // button
 
   relation goodConfig(run: int, strt: int, stp: int) {
-    // run <=> strt.enabled && stp.enabled <=> start.enabled 
-    //(0 <= run && run <= 1) && (0 <= strt && strt <= 1) && (0 <= stp && stp <= 1) && (run = 0) <=> (strt = 1) && (run = 1) <=> (strt = 0) && (strt = 1) <=> (stp = 0) && (strt = 0) <=> (stp = 1)
     (0 <= run && run <= 1) && (0 <= strt && strt <= 1) && (0 <= stp && stp <= 1) && run = strt && strt != stp
   }
 
@@ -27,7 +25,7 @@ Component Startable {
 
 }
 
-/*
+
 Component OneDGoL {
   data cells : int[]; 
   data rendered : int[];
@@ -37,14 +35,14 @@ Component OneDGoL {
 
   relation cells2colors(clls : int[], rndered: int[]) {
     foreach (c, r) in (clls, rndered) {
-      (c = 0 <=> r = 0) && (c = 1 <=> r = 1 )
+      c = r
     }
   }
 
   always cells2colors(cells, rendered);
 }
 
-*/
+
 
 
 Component Main {
@@ -57,8 +55,8 @@ Component Main {
   data start : int; // button
   data stop : int; // button
 
-  using Startable(running, start, stop);
-  //using OneDGoL(cells, rendered);
+  //using Startable(running, start, stop);
+  using OneDGoL(cells, rendered);
   //using History(cells, index, history);
 
   /*
@@ -79,11 +77,11 @@ Component Main {
   }
   */
 
-/*
-  procedure colorOnClick(index: int) {
-    for (color: int) with idx in (rendered) {
-      if (idx = index) {
-        if (color = 0) {
+  procedure colorOnClick() {
+    let locIndex: int; // unknown value. we would use a function param but the synthesis part is broken.
+    for (cll : int, color: int) with idx in (cells, rendered) {
+      if (idx == locIndex) {
+        if (color == 0) {
           color = 1;
         } else {
           color = 0;
@@ -93,8 +91,7 @@ Component Main {
     
   }
 
-  */
-
+/*
   procedure toggleButtons() {
     if (start == 0) {
       start = 1;
@@ -109,6 +106,7 @@ Component Main {
       stop = 0;
     }
   }
+  */
 
   /*
   function golLogic(){

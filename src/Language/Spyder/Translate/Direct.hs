@@ -34,38 +34,13 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import Language.Spyder.Util
 
--- saturateLoops :: [String] -> [Set.Set String] -> MainDecl -> MainDecl
--- saturateLoops vnames rels (ProcDecl nme formals rt (Imp.Seq ss)) = ProcDecl nme formals rt $ Imp.Seq ss'
---   where
---     (_, ss') = foldl worker (vnames, []) ss
---     worker :: ([String], [Imp.Statement]) -> Imp.Statement -> ([String], [Imp.Statement])
---     worker (names, acc) (Imp.For vs arrs (Imp.Seq bod)) = (names', acc') 
---       where
---         acc' = Imp.For vs' arrs' $ Imp.Seq bod'
---         names' = map fst vs'
---         arrNames = map takeName arrs
---         neededArrs = (computeRels arrNames rels) \\ arrNames
---         vs' = vs ++ allocVars names (length neededArrs) `zip` tys
---         tys = derefArrTys 
---         arrs' = arrs ++ map Imp.VConst neededArrs
---         bod' = map worker bod
---     takeName (Imp.VConst v) = v
-
---     allocVars :: [String] -> Int -> [String]
---     allocVars names 0 = names
---     allocVars names n = allocVars names' (n-1)
---       where
---         names' = names ++ ["loopvar" ++ show name]
---         name = until (\a -> "loopvar" ++ show a `notElem` names) (+ 1) 0
-
--- saturateLoops _ _ x = x
 
 saturateLoops :: [Set.Set String] -> MainDecl -> MainDecl
 saturateLoops rels (ProcDecl nme formals (Imp.Seq ss)) = ProcDecl nme formals $ Imp.Seq ss'
   where
     ss' = map worker ss
     worker :: Imp.Statement -> Imp.Statement
-    worker (Imp.For vs arrs (Imp.Seq bod)) = Imp.For vs' arrs' $ Imp.Seq bod'
+    worker (Imp.For vs idx arrs (Imp.Seq bod)) = Imp.For vs' idx arrs' $ Imp.Seq bod'
       where
         names' = map fst vs'
         arrNames = map takeName arrs
@@ -101,8 +76,8 @@ translateStmt (Imp.Decl (v, ty) rhs, vs) = (maybeToList assn, vs'')
     (v', vs') = allocFreshLocal v (translateTy ty) vs
     vs'' = if v /= v' then error "name clash in decl" else vs'
 -- convert 
---  for (vs) <- (arrs) {
---    bod 
+--  for (vs) (with given_idx) in (arrs) {
+--    bod
 --  } 
 
 --  idx := 0;
@@ -110,13 +85,13 @@ translateStmt (Imp.Decl (v, ty) rhs, vs) = (maybeToList assn, vs'')
 --    assert {:for-info idx vs arrs } true;
 --    {v_i := arr_i[idx];}
 --    assert {:for-begin} true;
---    bod;
+--    bod[given_idx/idx];
 --    assert {:for-end} true;
 --    {arr[idx] := v_i;}
 --    idx := idx + 1;
 --  }
 -- assumes length is stored at arr[-1]
-translateStmt (Imp.For vs arrs bod, vars) = 
+translateStmt (Imp.For vs idxDec arrs bod, vars) = 
     (idxInit : dimInit ++ [BST.While (BST.Expr cond) spec (loopInfo ++ iterUpdate ++ loopStart ++ bod' ++ loopEnd ++ arrUpdate ++ [idxUpdate])], vars')
   where
     decls = vs `zip` arrs
@@ -179,7 +154,11 @@ translateStmt (Imp.For vs arrs bod, vars) =
     buildDims (nme, ty, Imp.VConst arr) = [BST.Assign [(nme ++ "$dim" ++ show suf, [])] [Pos.gen $ BST.Var $ arr ++ "$dim" ++ show (suf + 1)] | suf <- dims]
       where dims = [0..depth ty]
 
-    (bod', vars') = translateBlock (bod, newVars')
+    idxSub = Map.fromList $ case idxDec of
+      Just idxVar -> [(idxVar, idx)]
+      Nothing     -> []
+
+    (bod', vars') = translateBlock (alphaBlock idxSub bod, newVars')
 
     cond = foldl buildCond (Pos.gen BST.tt) arrs
 
@@ -230,8 +209,8 @@ translateProc :: MainDecl -> BST.BareDecl
 translateProc (ProcDecl nme formals body) = BST.ProcedureDecl nme [] formals' [] inv $ Just (decs', body')
   where
     formals' = map translateITW formals
-    (vs, bod) = generateBoogieBlock body
-    (body', decs) = translateBlock (Imp.Seq bod, map translateITW vs)
+    bod = generateBoogieBlock body
+    (body', decs) = translateBlock (Imp.Seq bod, [])
     decs' = map (\x -> [x]) decs
     inv = []
 

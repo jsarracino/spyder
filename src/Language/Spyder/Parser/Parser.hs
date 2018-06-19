@@ -11,6 +11,7 @@ module Language.Spyder.Parser.Parser (
   , dataDeclP
   , mainCompP
   , derivCompP
+  , loopP
 ) where
 
 import Text.Parsec
@@ -154,15 +155,18 @@ vdecl = do {
   return (vname, ty)
 }
 
+loopIdxP :: Parser (Maybe String)
+loopIdxP = optionMaybe $ res "with" >> ident
 
 loopP :: Parser Imp.Statement
 loopP = do {
   res "for";
   vs <- parens $ commas vdecl;
+  idx <- loopIdxP;
   res "in";
   arrs <- parens $ commas expr;
   body <- braces block;
-  return $ Imp.For vs arrs body
+  return $ Imp.For vs idx arrs body
 }
 
 whileP :: Parser Imp.Statement

@@ -5,6 +5,7 @@ module Language.Spyder.Translate.Rename (
   , alphaRel
   , alphaExpr
   , alphaProc
+  , alphaBlock
 ) where
 
 import Language.Spyder.AST.Component
@@ -39,7 +40,7 @@ alphaBlock mp (Seq stmts) = Seq $ map recur stmts
     recur (Assgn l r) = Assgn (alphaExpr mp l) (alphaExpr mp r)
     recur (While c b) = While (alphaExpr mp c) (alphaBlock mp b)
     recur (Cond c t f) = Cond (alphaExpr mp c) (alphaBlock mp t) (alphaBlock mp f)
-    recur (For decs arrs bod) = For decs arrs' bod'
+    recur (For decs idx arrs bod) = For decs idx arrs' bod'
       where 
         arrs' = map (alphaExpr mp) arrs
         bod' = alphaBlock mp bod

@@ -46,7 +46,7 @@ stripTy = fst
 -- simple statements
 data Statement =
     Decl VDecl (Maybe Expr)           -- variable decls
-  | Assgn Expr Expr                   -- assignment e.g. x = y
+  | Assgn String Expr                   -- assignment e.g. x = y
   | For [VDecl] (Maybe String) [Expr] Block        -- forin loops with optional index capture
   | Cond Expr Block Block
   | While Expr Block                 -- while loops

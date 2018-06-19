@@ -25,7 +25,7 @@ import Language.Spyder.Synth.Verify
 import Language.Spyder.Translate.Expr
 
 import Language.Spyder.Translate.Derived          (instantiate)
-import Data.List                                  (find, (\\))
+import Data.List                                  (find, (\\), stripPrefix)
 import Data.Maybe
 
 import qualified Language.Boogie.AST as BST
@@ -52,8 +52,9 @@ saturateLoops rels (ProcDecl nme formals (Imp.Seq ss)) = ProcDecl nme formals $ 
     worker (Imp.Cond c (Imp.Seq l) (Imp.Seq r)) = Imp.Cond c (Imp.Seq $ map worker l) (Imp.Seq $ map worker r)
     worker (Imp.While c (Imp.Seq ss)) = Imp.While c $ Imp.Seq (map worker ss)
     worker x = x
+    
+    takeName (Imp.VConst v) = fromMaybe v $ stripPrefix "Main$" v 
 
-    takeName (Imp.VConst v) = v
 
 saturateLoops _ x = x
 
@@ -187,11 +188,7 @@ translateStmt (Imp.For vs idxDec arrs bod, vars) =
     buildPred lab sargs = [liftLS $ BST.Predicate [BST.Attribute lab $ map BST.SAttr sargs] assertTT]
     assertTT = BST.SpecClause BST.Inline False $ Pos.gen BST.tt
 
-translateStmt (Imp.Assgn (Imp.VConst lid) rhs, vars) = ([BST.Assign [(lid, [])] [transWithGen rhs]], vars)
-translateStmt (Imp.Assgn lhs rhs, vars) = ([BST.Assign [(lid, largs)] [transWithGen rhs]], vars)
-  where
-    (lid, lacc) = simplArrAccess lhs
-    largs = [map transWithGen lacc]
+translateStmt (Imp.Assgn lid rhs, vars) = ([BST.Assign [(lid, [])] [transWithGen rhs]], vars)
 translateStmt (Imp.While c bod, vars) = ([BST.While (BST.Expr c') [] bod'], vars')
   where
     c' = transWithGen c
@@ -239,7 +236,8 @@ type CompileState = ([Spec.RelExpr], Map.Map String String)
 translateProg :: Program -> (BST.Program, CompileState)
 translateProg prog@(comps, MainComp decls) = (debugProg "compile-debug.bpl" outProg, outState)
   where 
-    globalVars = mangleVars "Main" $ gatherDDecls decls
+    -- globalVars = mangleVars "Main" $ gatherDDecls decls
+    globalVars = gatherDDecls decls
     varMap = Map.fromList $ zipWith stripTy2 (gatherDDecls decls) globalVars
     stripTy2 (l, _) (r, _) = (l, r)
     vDecls = globalVars >>= translateVDecl

@@ -216,7 +216,7 @@ stmt =
   <|> try loopP
   <|> try whileP
   <|> try condP
-  <|> try (liftM2 Imp.Assgn expr ((symb "=" >> expr) `followedBy` semi))
+  <|> try (liftM2 Imp.Assgn ident ((symb "=" >> expr) `followedBy` semi))
   <?> "Statement"
 
 derivCompP :: Parser DerivDecl

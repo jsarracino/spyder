@@ -94,7 +94,7 @@ fixStmt invs relVars globals rhsVars (prefix, prog, scope) = worker
         relVars' = relVars ++ [Set.fromList vs]
         (fixed, prog', scope') = fixBlock invs' relVars' prog globals' rhsVars' scope prefix mid
 
-        invs' = map (specializeSpec vs arrs) invs
+        invs' = map (specializeSpec vs arrs) (filter (isRelated relVars rhsVars) invs)
         globals' = []
         rhsVars' = vs
 
@@ -115,6 +115,8 @@ buildLoopInv re = SpecClause LoopInvariant False $ specToBoogie [] re
 buildLoopAssm :: Spec.RelExpr -> LStatement
 buildLoopAssm re = gen ([], gen $ Predicate [] $ SpecClause Inline True $ specToBoogie [] re)
 
+isRelated :: [Set.Set String] -> [String] -> Spec.RelExpr -> Bool
+isRelated _ _ _ = True
 
 findEdited :: Block -> [String]
 findEdited = foldl recurLS [] -- blk

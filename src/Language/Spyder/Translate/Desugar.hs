@@ -19,7 +19,7 @@ stripLt :: Block -> Block
 stripLt (Seq ss) = Seq $ map stmtWorker ss
   where
     stmtWorker (Decl d rhs) = Decl d $ liftM exprWorker rhs
-    stmtWorker (Assgn l r) = Assgn (exprWorker l) (exprWorker r)
+    stmtWorker (Assgn l r) = Assgn l (exprWorker r)
     stmtWorker (For vs idx arrs bod) = For vs idx (map exprWorker arrs) (stripLt bod)
     stmtWorker (While c b) = While (exprWorker c) (stripLt b)
     stmtWorker (Cond c tr fl) = Cond (exprWorker c) (stripLt tr) (stripLt fl)

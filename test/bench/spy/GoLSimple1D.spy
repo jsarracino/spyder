@@ -9,20 +9,6 @@ Component Startable {
 
   always goodConfig(running, start, stop);
 
-  /*
-  procedure start() {
-    running = true;
-    start = false;
-    stop = true;
-  }
-
-  procedure stop() {
-    running = false;
-    start = true;
-    stop = false;
-  } 
-  */
-
 }
 
 
@@ -55,7 +41,7 @@ Component Main {
   data start : int; // button
   data stop : int; // button
 
-  //using Startable(running, start, stop);
+  using Startable(running, start, stop);
   using OneDGoL(cells, rendered);
   //using History(cells, index, history);
 
@@ -128,30 +114,32 @@ Component Main {
           // continue
         } else if (idx + 2 == uBound) {
           // just one cell
-          //count = cells[idx+1];
+          count = cells[idx+1];
         } else {
           // two cells
-          //count = cells[idx+1] + cells[idx+2];
+          count = cells[idx+1] + cells[idx+2];
         }
 
       } else if (idx == 1) {
+        count = cells[idx-1];
 
-        if (idx + 2 == uBound) {
-
-        } else if (idx + 1 == uBound) {
-
+        if (idx + 1 == uBound) {
+          // continue
+        } else if (idx + 2 == uBound) {
+          count = count + cells[idx+1];
         } else {
-          
+          count = count + cells[idx+1] + cells[idx+2];
         }
 
       } else {
+        count = cells[idx-1] + cells[idx-2];
 
         if (idx + 2 == uBound) {
 
         } else if (idx + 1 == uBound) {
-
+          count = count + cells[idx+1];
         } else {
-          
+          count = count + cells[idx+1] + cells[idx+2];
         }
 
       }

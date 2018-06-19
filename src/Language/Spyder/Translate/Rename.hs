@@ -37,7 +37,7 @@ alphaBlock mp (Seq stmts) = Seq $ map recur stmts
   where 
     recur :: Statement -> Statement
     recur v@Decl{} = v
-    recur (Assgn l r) = Assgn (alphaExpr mp l) (alphaExpr mp r)
+    recur (Assgn l r) = Assgn (fwd l mp) (alphaExpr mp r)
     recur (While c b) = While (alphaExpr mp c) (alphaBlock mp b)
     recur (Cond c t f) = Cond (alphaExpr mp c) (alphaBlock mp t) (alphaBlock mp f)
     recur (For decs idx arrs bod) = For decs idx arrs' bod'

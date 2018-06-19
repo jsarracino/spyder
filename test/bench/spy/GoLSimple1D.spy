@@ -5,7 +5,8 @@ Component Startable {
 
   relation goodConfig(run: int, strt: int, stp: int) {
     // run <=> strt.enabled && stp.enabled <=> start.enabled 
-    (0 <= run && run <= 1) && (0 <= strt && strt <= 1) && (0 <= stp && stp <= 1) && (run = 0) <=> (strt = 1) && (run = 1) <=> (strt = 0) && (strt = 1) <=> (stp = 0) && (strt = 0) <=> (stp = 1)
+    //(0 <= run && run <= 1) && (0 <= strt && strt <= 1) && (0 <= stp && stp <= 1) && (run = 0) <=> (strt = 1) && (run = 1) <=> (strt = 0) && (strt = 1) <=> (stp = 0) && (strt = 0) <=> (stp = 1)
+    (0 <= run && run <= 1) && (0 <= strt && strt <= 1) && (0 <= stp && stp <= 1) && run = strt && strt != stp
   }
 
   always goodConfig(running, start, stop);
@@ -97,12 +98,14 @@ Component Main {
   procedure toggleButtons() {
     if (start == 0) {
       start = 1;
-    } else {
+    }
+    if (start == 1) {
       start = 0;
     }
     if (stop == 0) {
       stop = 1;
-    } else {
+    }
+    if (stop == 1) {
       stop = 0;
     }
   }

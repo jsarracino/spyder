@@ -41,22 +41,25 @@ fixBlock :: [Spec.RelExpr] -> [Set.Set String] -> Program -> [String] -> [String
 fixBlock invs relVars header globals rhsVars scope prefix fixme = fixResult inner
   where
     inner = foldl wrapFixStmt init fixme
-    fixResult :: (Block, Program, Body) -> (Block, Program, Body)
-    fixResult x@(blk, prog@(Program decs), scope'@(vs, _)) = if not isRepaired then fixed else x
+    fixResult :: (Block, Block, Program, Body) -> (Block, Program, Body)
+    fixResult (_, blk, prog@(Program decs), scope'@(vs, _)) = if not isRepaired then fixed else (blk, prog, scope')
       where
         compInvs = map (specToBoogie []) invs
         isRepaired = checkProg $ optimize $ Program $ decs ++ [buildMain compInvs globals (vs, blk)]
-        fixed = repairBlock compInvs prog globals (findUnedited relVars rhsVars blk) rhsVars scope' blk
+        (suffix, prog', bod') = repairBlock compInvs prog globals (findUnedited relVars rhsVars blk) rhsVars scope' blk
+        fixed = (blk ++ suffix, prog', bod')
 
-    init = (prefix, header, scope)
-    wrapFixStmt :: (Block, Program, Body) -> LStatement -> (Block, Program, Body)
-    wrapFixStmt (blk, prog, bod) (Pos o (ls, (Pos i s))) = (blk', prog', bod')
+    init = (prefix, [], header, scope)
+    wrapFixStmt :: (Block, Block, Program, Body) -> LStatement -> (Block, Block, Program, Body)
+    wrapFixStmt (pref, blk, prog, bod) (Pos o (ls, Pos i s)) = (pref', blk', prog', bod')
       where
-        (s', prog', bod') = fixStmt invs relVars globals rhsVars (blk, prog, bod) s
+        (s', prog', bod') = fixStmt invs relVars globals rhsVars (pref, prog, bod) s
         prefix = case s' of 
           x@While{} -> map buildLoopAssm invs -- TODO: this doesn't actually work because the dims are wrong. see check.bpl for details.
           _         -> [] 
-        blk' = blk ++ prefix ++ [Pos o (ls, (Pos i s'))]
+        fix = prefix ++ [Pos o (ls, Pos i s')]
+        blk' = blk ++ fix
+        pref' = pref ++ fix
 
 
 -- specialize ForEach vs arrs bod[vs] to bod[x/v | x <- xs, v <- vs, v <= arr, arrs ~ xs by arr = xs_i]

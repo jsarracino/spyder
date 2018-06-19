@@ -88,9 +88,9 @@ generateSwitch es lhs prog = (controlName, finalBlock, finalProg)
 -- given a depth, candidate variables, lhs for assign, program, function scope, and block to fix, generate a fix involving assignments to lhs using the candidates.
 -- also add in an axiom for the size of the switch variable.
 -- TODO: refactor to use state monad for variable bookkeeping
-generateFix :: Int -> [String] -> String -> Program -> Body -> Block -> (Program, Body, Block)
+generateFix :: Int -> [String] -> String -> Program -> Body -> (Program, Body, Block)
 -- at depth 0, allocate a constant variable, and choose between the candidates and the constant.
-generateFix 0 cands lhs prog scope fixme = (finalProg, scope, fixme ++ newBlock)
+generateFix 0 cands lhs prog scope = (finalProg, scope, newBlock)
   where
     (constVar, withConst) = allocFreshConst prog
     rhsEs = map (Pos.gen . Var) (constVar:cands)
@@ -103,13 +103,13 @@ generateFix 0 cands lhs prog scope fixme = (finalProg, scope, fixme ++ newBlock)
 -- TODO: error in num-cond2.spy with depth=1 (i think)
 
 -- at depth n, allocate two variables for n-1 depths, and build binops/unops from the smaller vars
-generateFix n cands lhs prog scope fixme = (finalProg, newScope, rBlock ++ newBlock)
+generateFix n cands lhs prog scope = (finalProg, newScope, lBlock ++ rBlock ++ newBlock)
   where
     (lvar, scope', prog') = allocCegisLocal prog scope
     (rvar, scope'', prog'') = allocCegisLocal prog' scope'
 
-    (recurL, scope_, lBlock) = generateFix 0 cands lvar prog'' scope'' fixme
-    (recurR, scopeR, rBlock) = generateFix (n-1) cands rvar recurL scope_ lBlock
+    (recurL, scope_, lBlock) = generateFix 0 cands lvar prog'' scope''
+    (recurR, scopeR, rBlock) = generateFix (n-1) cands rvar recurL scope_
     
     rhsEs = [lv, rv] ++ binops ++ unops
 
@@ -188,10 +188,14 @@ searchAllConfigs invs prog globals scope blk lhses rhses (cand:cands) conf examp
   where
     -- (cname, configResult) = conf
     -- foreach lhs -> depth, look for a fix using depth. link all together.
-    (searchProg, searchScope, searchBlock) = Map.foldlWithKey genFix (prog, scope, blk) cand
+    (searchProg, searchScope, newFix) = Map.foldlWithKey genFix (prog, scope, []) cand
 
     genFix :: (Program, Body, Block) -> String -> Int -> (Program, Body, Block)
-    genFix (p, scop, bloc) lhs depth = generateFix depth rhses lhs p scop bloc
+    genFix (p, scop, acc) lhs depth = 
+      let (p', s', nxt) = generateFix depth rhses lhs p scop in
+        (p', s', acc ++ nxt)
+
+    searchBlock = blk ++ newFix
 
     searchBody = case searchScope of (vars, _) -> (vars, searchBlock)
         
@@ -217,7 +221,7 @@ searchAllConfigs invs prog globals scope blk lhses rhses (cand:cands) conf examp
     checkMe = debugProg "cegis-search-debug.bpl" $ optimize $ buildMainSearch globals procNames $ case searchProg of Program x -> Program $ x ++ procs
 
     buildAns :: Config -> (Program, Body, Block)
-    buildAns cs = (finalProg, searchBody, searchBlock )
+    buildAns cs = (finalProg, searchBody, newFix )
       where
         synthDecs = case searchProg of Program decs -> decs
         finalProg = Program $ synthDecs ++ buildConfVal cs

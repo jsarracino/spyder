@@ -1,0 +1,39 @@
+Component Startable {
+  data running : int; // bool, = 0 or 1
+  data start : int; // button
+  data stop : int;  // button
+
+  relation goodConfig(run: int, strt: int, stp: int) {
+    (0 <= run && run <= 1) && (0 <= strt && strt <= 1) && (0 <= stp && stp <= 1) && run = strt && strt != stp
+  }
+
+  always goodConfig(running, start, stop);
+
+}
+
+
+
+Component Main {
+  data running : int; // bool
+  data start : int; // button
+  data stop : int; // button
+
+  using Startable(running, start, stop);
+
+  procedure toggleButtons() {
+    if (start == 0) {
+      start = 1;
+    }
+    if (start == 1) {
+      start = 0;
+    }
+    /*
+    if (stop == 0) {
+      stop = 1;
+    }
+    if (stop == 1) {
+      stop = 0;
+    }
+    */
+  }
+}

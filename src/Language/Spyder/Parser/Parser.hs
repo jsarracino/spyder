@@ -12,6 +12,8 @@ module Language.Spyder.Parser.Parser (
   , mainCompP
   , derivCompP
   , loopP
+  , elifP
+  , condP
 ) where
 
 import Text.Parsec
@@ -194,7 +196,15 @@ condP = do {
   fls <- option (Imp.Seq []) tail;
   return $ Imp.Cond cond tru fls;
 } where
-    tail = try (res "else" >> braces block)
+    tail = try (res "else" >> braces block) <|> elifP
+
+elifP :: Parser Imp.Block
+elifP = do {
+  res "else";
+  cond <- condP;
+  return $ Imp.Seq [cond];
+}
+
 
 block :: Parser Imp.Block
 block = liftM Imp.Seq (spaced stmt)

@@ -116,7 +116,8 @@ buildLoopAssm :: Spec.RelExpr -> LStatement
 buildLoopAssm re = gen ([], gen $ Predicate [] $ SpecClause Inline True $ specToBoogie [] re)
 
 isRelated :: [Set.Set String] -> [String] -> Spec.RelExpr -> Bool
-isRelated _ _ _ = True
+isRelated rels vars e = null intersection
+  where intersection = gatherVars [e] `intersect` computeRels vars rels 
 
 findEdited :: Block -> [String]
 findEdited = foldl recurLS [] -- blk

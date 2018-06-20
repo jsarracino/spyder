@@ -45,28 +45,10 @@ Component Main {
   using OneDGoL(cells, rendered);
   //using History(cells, index, history);
 
-  /*
-  init() { // only the main component can have an init
-    cells = ...; // for main, values need to be initialized.
-    rendered = ...;
-
-    foreach color in rendered:
-      color.onclick = colorOnClick;
-
-    start.onclick = toggleButtons;
-    start.enabled = true;
-    stop.onclick = toggleButtons;
-    stop.enabled = false;
-    running = false;
-
-    setInterval golLogic 1000;
-  }
-  */
-
 /*
   procedure colorOnClick() {
     let locIndex: int; // unknown value. we would use a function param but the synthesis part is broken.
-    for (cll : int, color: int) with idx in (cells, rendered) {
+    for (color: int) with idx in (rendered) {
       if (idx == locIndex) {
         if (color == 0) {
           color = 1;
@@ -77,8 +59,10 @@ Component Main {
     }
     
   }
+  */
 
-*/
+  
+
 
 /*
   procedure toggleButtons() {
@@ -95,7 +79,10 @@ Component Main {
       stop = 0;
     }
   }
-  */
+*/
+  
+  
+  
 
   // from http://jonmillen.com/1dlife/index.html
 
@@ -155,5 +142,7 @@ Component Main {
       }
     }
   }
+
+  
   
 }

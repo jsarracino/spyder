@@ -44,7 +44,7 @@ fixBlock invs relVars header globals rhsVars scope prefix fixme = fixResult inne
     fixResult :: (Block, Block, Program, Body) -> (Block, Program, Body)
     fixResult (_, blk, prog@(Program decs), scope'@(vs, _)) = if not isRepaired then fixed else (blk, prog, scope')
       where
-        compInvs = map (specToBoogie []) invs
+        compInvs = map (specToBoogie []) invs -- (filter (isRelated relVars rhsVars) invs)
         isRepaired = checkProg $ optimize $ Program $ decs ++ [buildMain compInvs globals (vs, blk)]
         (suffix, prog', bod') = repairBlock compInvs prog globals (findUnedited relVars rhsVars blk) rhsVars scope' blk
         fixed = (blk ++ suffix, prog', bod')
@@ -77,6 +77,7 @@ specializeSpec loopVars loopArrs (Spec.Foreach vs arrs bod) = bod'
     buildTup mp arr arrv = case Map.lookup arr loopBinds of
       Just loopv -> Map.insert arrv (Spec.RelVar loopv) mp
       Nothing -> mp -- error "inconceivable"?
+specializeSpec _ _ x = x
 
 fixStmt :: [Spec.RelExpr] -> [Set.Set String] -> [String] -> [String] -> (Block, Program, Body) -> BareStatement -> (BareStatement, Program, Body)
 fixStmt invs relVars globals rhsVars (prefix, prog, scope) = worker
@@ -94,7 +95,8 @@ fixStmt invs relVars globals rhsVars (prefix, prog, scope) = worker
         relVars' = relVars ++ [Set.fromList vs]
         (fixed, prog', scope') = fixBlock invs' relVars' prog globals' rhsVars' scope prefix mid
 
-        invs' = map (specializeSpec vs arrs) (filter (isRelated relVars rhsVars) invs)
+        --(relInvs, unrelInvs) = partition (isRelated relVars rhsVars) invs
+        invs' = map (specializeSpec vs arrs) invs -- relInvs ++ unrelInvs
         globals' = []
         rhsVars' = vs
 

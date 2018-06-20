@@ -1,3 +1,5 @@
+{-# LANGUAGE BangPatterns #-}
+
 module Language.Spyder.Synth.Verify (
     checkProgFile
   , debugBoogie
@@ -21,6 +23,7 @@ import System.IO.Unsafe                           (unsafePerformIO)
 checkProg :: Program -> Bool
 checkProg p = unsafePerformIO $! compileProg "check.bpl" p >> checkProgFile "check.bpl" 
 
+{-# NOINLINE checkProgFile #-}
 checkProgFile :: FilePath -> IO Bool
 checkProgFile f = do {
   (_, _, _, ph) <- createProcess $ shell cmd;
@@ -31,15 +34,16 @@ checkProgFile f = do {
 
 
 debugProg :: FilePath -> Program -> Program
-debugProg f p = unsafePerformIO $! compileProg f p >> return p
+debugProg f !p = unsafePerformIO $! compileProg f p >> return p
 
 debugBoogie :: [Decl] -> [Decl]
-debugBoogie p = unsafePerformIO $! compileProg "debug.bpl"  (Program p) >> return p
+debugBoogie !p = unsafePerformIO $! compileProg "debug.bpl"  (Program p) >> return p
 
 debugBlock :: Block -> Block
-debugBlock b = unsafePerformIO $! compileProg "debug.bpl" prog >> return b
+debugBlock !b = unsafePerformIO $! compileProg "debug.bpl" prog >> return b
   where 
     prog = Program [Pos.gen $ ProcedureDecl "Main" [] [] [] [] $ Just ([], b)]
+
 {-# NOINLINE compileProg #-}
 compileProg :: String -> Program -> IO ()
-compileProg path p = writeFile path (show $ pretty $ p)
+compileProg path !p = writeFile path (show $! pretty p)

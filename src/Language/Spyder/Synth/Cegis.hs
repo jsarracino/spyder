@@ -382,7 +382,7 @@ buildIO tc@(TestCase _ mem conMem (Just rtf)) = buildMap ((mem'^.memOld) `Map.un
     -- takeBaseVal 
     buildMap :: Map.Map String Expression -> Map.Map String Value
     buildMap mp = Map.map eval' $ Map.mapMaybe worker mp
-    worker x@(Pos.Pos _ e@Literal{}) = Just e
+    worker x@(Pos.Pos _ e@(Literal (IntValue _))) = Just e
     worker _ = Nothing -- filter out unconstrained, irrelevant values; i.e. variables with logical RHS in which logical hasn't been instantiated
 
 

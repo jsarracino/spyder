@@ -165,26 +165,26 @@ type IOExamples = [Map.Map String Value] -- list of states, where each state is 
 -- find a repair for a single lhs expr
 -- params: invariants, program preamble, global variables, rhs expression seeds, lhs expressions to fix, enclosing function scope, and a basic block for repair.
 -- returns: the repaired block, a new program, and a new function scope
-repairBlock :: [Expression] -> Program -> [String] -> [String] -> [String] -> Body -> Block -> (Block, Program, Body)
-repairBlock invs prog globals lhsVars rhsVars scope blk =  (fixedBlock, optimize newProg, newScope)
+repairBlock :: [Expression] -> Program -> [String] -> [String] -> [String] -> Body -> Block -> (Block -> Block) -> (Block, Program, Body)
+repairBlock invs prog globals lhsVars rhsVars scope blk builder =  (fixedBlock, optimize newProg, newScope)
   where
     initConfig = Map.fromList []
 
-    firstEx = case checkConfig invs prog globals initConfig scope blk of 
+    firstEx = case checkConfig invs prog globals initConfig scope (blk ++ builder []) of 
       Left _ -> error "inconceivable"
       Right io -> io
     initIO = [firstEx]
     initCandDepths = [Map.fromList $ lhsVars `zip` (repeat 0)]
 
-    (newProg, newScope, fixedBlock) = searchAllConfigs invs prog globals scope blk lhsVars rhsVars initCandDepths initConfig initIO
+    (newProg, newScope, fixedBlock) = searchAllConfigs invs prog globals scope blk builder lhsVars rhsVars initCandDepths initConfig initIO
     
 -- given a set of invariants, a preamble, global variables, a block to fix, a set of base values, and a variable to add an edit, use cegis to
 -- search for a configuration that correctly edits the variable. return the resulting block.
 
 -- assumes at least one IO example
-searchAllConfigs :: [Expression] -> Program -> [String] -> Body -> Block -> [String] -> [String] -> [Candidate] -> Config -> IOExamples -> (Program, Body, Block)
+searchAllConfigs :: [Expression] -> Program -> [String] -> Body -> Block -> (Block -> Block) -> [String] -> [String] -> [Candidate] -> Config -> IOExamples -> (Program, Body, Block)
     
-searchAllConfigs invs prog globals scope blk lhses rhses (cand:cands) conf examples = result
+searchAllConfigs invs prog globals scope blk builder lhses rhses (cand:cands) conf examples = result
   where
     -- (cname, configResult) = conf
     -- foreach lhs -> depth, look for a fix using depth. link all together.
@@ -195,12 +195,10 @@ searchAllConfigs invs prog globals scope blk lhses rhses (cand:cands) conf examp
       let (p', s', nxt) = generateFix depth rhses lhs p scop in
         (p', s', acc ++ nxt)
 
-    searchBlock = blk ++ newFix
+    searchBlock = blk ++ builder newFix
 
     searchBody = case searchScope of (vars, _) -> (vars, searchBlock)
         
-
-
 
     procs = map buildProc $ [0..] `zip` examples
     
@@ -234,10 +232,10 @@ searchAllConfigs invs prog globals scope blk lhses rhses (cand:cands) conf examp
           Left c    -> 
             if checkProg $ case searchProg of (Program decs) -> optimize $ Program $ decs ++ buildConfVal c ++ [buildMain invs globals searchBody] --the candidate seems to work...use expensive check. if that fails, get more expressions
             then buildAns c  -- we have a winner!
-            else searchAllConfigs invs prog globals scope blk lhses rhses (cands ++ newCands) newConfig examples -- get more exprs
-          Right io  -> searchAllConfigs invs prog globals scope blk lhses rhses (cand:cands) newConfig (io:examples) -- retry current exprs
+            else searchAllConfigs invs prog globals scope blk builder lhses rhses (cands ++ newCands) newConfig examples -- get more exprs
+          Right io  -> searchAllConfigs invs prog globals scope blk builder lhses rhses (cand:cands) newConfig (io:examples) -- retry current exprs
       
-      []   -> searchAllConfigs invs prog globals scope blk lhses rhses (cands ++ newCands) conf examples -- can't find a new candidate...O.O
+      []   -> searchAllConfigs invs prog globals scope blk builder lhses rhses (cands ++ newCands) conf examples -- can't find a new candidate...O.O
 
 
 

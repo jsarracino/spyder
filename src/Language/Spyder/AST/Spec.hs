@@ -21,6 +21,7 @@ data RelExpr =
     RelVar String       -- Variables
   | RelInt Int      -- Integers
   | RelBool Bool         -- Booleans
+  -- | RelIndex RelExpr RelExpr -- index
   | RelBinop RelBop RelExpr RelExpr -- Binary operations
   | RelUnop RelUop RelExpr       -- Unary operations
   | RelApp String [RelExpr]       -- function calls (not procedure calls)

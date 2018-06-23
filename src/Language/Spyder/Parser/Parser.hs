@@ -93,8 +93,15 @@ specTerm  =  parens relexpr
   <|> try (liftM Spec.RelBool bools)
   <|> try relApp
   <|> try relForeach
+  -- <|> try relIndex
   <|> try (liftM Spec.RelVar ident)
   <?> "spec expr"
+
+-- relIndex = do {
+--   pref <- liftM Spec.RelVar ident;
+--   rhs <- many1 $ brackets relexpr;
+--   return $ foldl Spec.RelIndex pref rhs
+-- }
 
 expr :: Parser Imp.Expr
 expr = buildExpressionParser exprTable exprTerm <?> "expression"

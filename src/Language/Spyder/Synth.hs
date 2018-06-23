@@ -46,8 +46,11 @@ fixBlock invs relVars header globals rhsVars scope prefix fixme = fixResult inne
       where
         compInvs = map (specToBoogie []) invs -- (filter (isRelated relVars rhsVars) invs)
         isRepaired = checkProg $ optimize $ Program $ decs ++ [buildMain compInvs globals (vs, blk)]
-        (suffix, prog', bod') = repairBlock compInvs prog globals (findUnedited relVars rhsVars blk) rhsVars scope' blk
-        fixed = (blk ++ suffix, prog', bod')
+
+        (invs', builder) = transRels invs
+
+        (suffix, prog', bod') = repairBlock (map (specToBoogie []) invs') prog globals (findUnedited relVars rhsVars blk) rhsVars scope' blk builder
+        fixed = (blk ++ builder suffix, prog', bod')
 
     init = (prefix, [], header, scope)
     wrapFixStmt :: (Block, Block, Program, Body) -> LStatement -> (Block, Block, Program, Body)
@@ -61,7 +64,26 @@ fixBlock invs relVars header globals rhsVars scope prefix fixme = fixResult inne
         blk' = blk ++ fix
         pref' = pref ++ fix
 
+    transRels :: [Spec.RelExpr] -> ([Spec.RelExpr], Block -> Block)
+    -- transRels rels = snd $ until done step init
+    --   where 
+    --     nxt :: ([Spec.RelExpr], Block -> Block)
+    --     nxt = let (rs', fs') = unzip $ map simplSpec rels in (rs', foldl (.) id fs')
+    --     init :: (([Spec.RelExpr], Block -> Block), ([Spec.RelExpr], Block -> Block))
+    --     init = ((rels, id), nxt)
+    --     step :: (([Spec.RelExpr], Block -> Block), ([Spec.RelExpr], Block -> Block)) -> (([Spec.RelExpr], Block -> Block), ([Spec.RelExpr], Block -> Block))
+    --     step (_, x@(rs, f)) = (x, (rs', f'))
+    --       where 
+    --         (rs', fs) = unzip $ map simplSpec rs
+    --         f' = foldl (.) f fs
 
+    --     done :: (([Spec.RelExpr], Block -> Block), ([Spec.RelExpr], Block -> Block)) -> Bool
+    --     done ((rs, _), (rs', _)) = all (uncurry (==)) $ rs `zip` rs'
+    transRels rels = (rels, foldl (.) id $ map simplSpec rels)
+
+    simplSpec :: Spec.RelExpr -> Block -> Block
+    simplSpec (Spec.RelBinop Spec.Imp l r) b = singletonBlock $ gen $ If (Expr $ specToBoogie [] l) b Nothing
+    simplSpec x b = b
 -- specialize ForEach vs arrs bod[vs] to bod[x/v | x <- xs, v <- vs, v <= arr, arrs ~ xs by arr = xs_i]
 -- loopArrs should be strictly bigger than arrs. loopArrs is all arrays that might be related to the source
 -- array, which includes arrs. 
@@ -69,14 +91,17 @@ specializeSpec :: [String] -> [String] -> Spec.RelExpr -> Spec.RelExpr
 specializeSpec loopVars loopArrs (Spec.Foreach vs arrs bod) = bod'
   where
     bod' = alphaRel names bod
-    loopBinds = Map.fromList $  loopArrs `zip` loopVars
+    loopBinds = Map.fromList $ loopArrs `zip` loopVars
     foreachBinds = Map.fromList $ arrs `zip` vs
     names :: Map.Map String Spec.RelExpr
     names = Map.foldlWithKey buildTup Map.empty foreachBinds
 
+    buildTup :: Map.Map String Spec.RelExpr -> String -> String -> Map.Map String Spec.RelExpr
     buildTup mp arr arrv = case Map.lookup arr loopBinds of
       Just loopv -> Map.insert arrv (Spec.RelVar loopv) mp
       Nothing -> mp -- error "inconceivable"?
+
+    
 specializeSpec _ _ x = x
 
 fixStmt :: [Spec.RelExpr] -> [Set.Set String] -> [String] -> [String] -> (Block, Program, Body) -> BareStatement -> (BareStatement, Program, Body)

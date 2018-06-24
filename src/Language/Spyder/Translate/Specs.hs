@@ -32,7 +32,7 @@ inlineApps decs = recur
       in recur $ alphaRel binds bod
     recur (RelBinop o l r) = RelBinop o (recur l) (recur r)
     recur (RelUnop o i) = RelUnop o (recur i)
-    recur (Foreach vs arrs bod) = Foreach vs arrs $ recur bod
+    recur (Foreach vs idx arrs bod) = Foreach vs idx arrs $ recur bod
     recur x@RelVar{} = x
     recur x@RelInt{} = x
     recur x@RelBool{} = x
@@ -46,7 +46,7 @@ prefixApps pref = recur
     recur (RelApp f args) = RelApp (pref ++ f) $ map recur args
     recur (RelBinop o l r) = RelBinop o (recur l) (recur r)
     recur (RelUnop o i) = RelUnop o (recur i)
-    recur (Foreach vs arrs bod) = Foreach vs arrs $ recur bod
+    recur (Foreach vs idx arrs bod) = Foreach vs idx arrs $ recur bod
     recur x@RelVar{} = x
     recur x@RelInt{} = x
     recur x@RelBool{} = x
@@ -83,7 +83,7 @@ dimVars e = map (\i -> "dim" ++ show i) [0..quantDepth e -1]
 quantDepth :: RelExpr -> Int
 quantDepth (RelUnop _ i) = quantDepth i
 quantDepth (RelBinop _ l _ ) = quantDepth l -- TODO: only works if both are the same dimension. also, we don't currently have binops over arrays.
-quantDepth (Foreach _ _ bod) = 1 + quantDepth bod
+quantDepth (Foreach _ _ _ bod) = 1 + quantDepth bod
 quantDepth _ = 0 -- App, Var, Int, Bool
 
 
@@ -97,15 +97,19 @@ specToBoogie = recur
     recur dims (RelBinop Lt l r) = recur dims (RelUnop Not $ RelBinop Ge l r)
     recur dims (RelBinop o l r) = Pos.gen $ BST.BinaryExpression (specBop o) (recur dims l) (recur dims r)
     recur dims (RelUnop o i) = Pos.gen $ BST.UnaryExpression (specUnop o) (recur dims i)
-    recur [] x@(Foreach _ (a:_) _) = recur names x
+    recur [] x@(Foreach _ _ (a:_) _) = recur names x
       where
         names = map (\suf -> a ++ "$" ++ suf) $ dimVars x
-    recur (d:dims) (Foreach vs arrs bod) = Pos.gen $ BST.Quantified BST.Forall [] [(qv,BST.IntType)] inner'
+    recur (d:dims) (Foreach vs idx arrs bod) = Pos.gen $ BST.Quantified BST.Forall [] [(qv,BST.IntType)] inner'
       where 
-        inner = recur dims bod 
         qv = "foreach$" ++ show (quantDepth bod)
-        inner' = Pos.gen $ BST.BinaryExpression BST.Implies idx (alphaIdx (vs `zip` arrs) qv inner)
-        idx = Pos.gen $ BST.BinaryExpression BST.And lo hi
+        inner =  recur dims $ alphaRel idxBind bod 
+        idxBind :: Map.Map String RelExpr
+        idxBind = case idx of 
+          Just v  -> Map.singleton v (RelVar qv)
+          Nothing -> Map.empty
+        inner' = Pos.gen $ BST.BinaryExpression BST.Implies validIdx (alphaIdx (vs `zip` arrs) qv inner)
+        validIdx = Pos.gen $ BST.BinaryExpression BST.And lo hi
         lo = Pos.gen $ BST.BinaryExpression BST.Geq (Pos.gen $ BST.Var qv) (Pos.gen $ BST.numeral 0)
         hi = Pos.gen $ BST.BinaryExpression BST.Gt (Pos.gen $ BST.Var d) (Pos.gen $ BST.Var qv)
     recur _ (RelVar x) = Pos.gen $ BST.Var x

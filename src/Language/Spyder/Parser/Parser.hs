@@ -82,10 +82,11 @@ relForeach :: Parser Spec.RelExpr
 relForeach = do {
   res "foreach";
   vs <- parens $ commas ident;
+  idx <- loopIdxP;
   res "in";
   arrs <- parens $ commas ident;
   body <- braces relexpr;
-  return $ Spec.Foreach vs arrs body
+  return $ Spec.Foreach vs idx arrs body
 }
 specTerm :: Parser Spec.RelExpr
 specTerm  =  parens relexpr

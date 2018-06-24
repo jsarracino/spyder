@@ -18,10 +18,11 @@ import Language.Spyder.AST.Component          (Component(..), MainDecl(..))
 import Language.Spyder.AST.Imp                (VDecl, Type(..))
 import Language.Spyder.Synth.Context          (buildContext)
 import Language.Boogie.AST                    
-import qualified Data.Map.Strict as Map
+import qualified Data.Map.Strict as Map       
 import qualified Data.Set as Set
 import Language.Boogie.Position               (node, Pos(..), gen)
 import Data.List                              (delete, nub, intersect, (\\))
+import Data.Maybe
 import Language.Spyder.Opt 
 
 import Language.Spyder.Translate.Expr
@@ -47,13 +48,26 @@ fixBlock invs relVars header globals rhsVars scope prefix fixme = fixResult inne
         compInvs = map (specToBoogie []) invs -- (filter (isRelated relVars rhsVars) invs)
         isRepaired = checkProg $ optimize $ Program $ decs ++ [buildMain compInvs globals (vs, blk)]
 
+        -- staleInvs = useVars invs $ Set.fromList $ findEdited blk
+
         (invs', builder) = transRels invs
+
+        
 
         (suffix, prog', bod') = repairBlock (map (specToBoogie []) invs') prog globals (findUnedited relVars rhsVars blk) rhsVars scope' blk builder
         fixed = (blk ++ builder suffix, prog', bod')
 
     init = (prefix, [], header, scope)
     wrapFixStmt :: (Block, Block, Program, Body) -> LStatement -> (Block, Block, Program, Body)
+    wrapFixStmt (pref, blk, prog, bod) (Pos o (ls, Pos i s@While{})) = (pref', blk'', prog'', bod')
+      where
+        (s', prog'', bod') = fixStmt invs relVars globals rhsVars (pref, prog', scope') s
+        prefix = case s' of 
+          x@While{} -> map buildLoopAssm invs -- TODO: this doesn't actually work because the dims are wrong. see check.bpl for details.
+          _         -> [] 
+        (blk', prog', scope') = fixBlock invs relVars prog globals rhsVars bod pref blk
+        blk'' = blk' ++ prefix ++ [Pos o (ls, Pos i s')]
+        pref' = blk''
     wrapFixStmt (pref, blk, prog, bod) (Pos o (ls, Pos i s)) = (pref', blk', prog', bod')
       where
         (s', prog', bod') = fixStmt invs relVars globals rhsVars (pref, prog, bod) s
@@ -87,10 +101,11 @@ fixBlock invs relVars header globals rhsVars scope prefix fixme = fixResult inne
 -- specialize ForEach vs arrs bod[vs] to bod[x/v | x <- xs, v <- vs, v <= arr, arrs ~ xs by arr = xs_i]
 -- loopArrs should be strictly bigger than arrs. loopArrs is all arrays that might be related to the source
 -- array, which includes arrs. 
-specializeSpec :: [String] -> [String] -> Spec.RelExpr -> Spec.RelExpr
-specializeSpec loopVars loopArrs (Spec.Foreach vs arrs bod) = bod'
+specializeSpec :: [String] -> [String] -> String -> Spec.RelExpr -> Spec.RelExpr
+specializeSpec loopVars loopArrs loopIdx (Spec.Foreach vs relIdx arrs bod) = bod'
   where
-    bod' = alphaRel names bod
+    bod' = alphaRel (names `Map.union` idxBind) bod
+    idxBind = Map.fromList $ maybeToList relIdx `zip` [Spec.RelVar loopIdx]
     loopBinds = Map.fromList $ loopArrs `zip` loopVars
     foreachBinds = Map.fromList $ arrs `zip` vs
     names :: Map.Map String Spec.RelExpr
@@ -102,7 +117,7 @@ specializeSpec loopVars loopArrs (Spec.Foreach vs arrs bod) = bod'
       Nothing -> mp -- error "inconceivable"?
 
     
-specializeSpec _ _ x = x
+specializeSpec _ _ _ x = x
 
 fixStmt :: [Spec.RelExpr] -> [Set.Set String] -> [String] -> [String] -> (Block, Program, Body) -> BareStatement -> (BareStatement, Program, Body)
 fixStmt invs relVars globals rhsVars (prefix, prog, scope) = worker
@@ -121,7 +136,7 @@ fixStmt invs relVars globals rhsVars (prefix, prog, scope) = worker
         (fixed, prog', scope') = fixBlock invs' relVars' prog globals' rhsVars' scope prefix mid
 
         --(relInvs, unrelInvs) = partition (isRelated relVars rhsVars) invs
-        invs' = map (specializeSpec vs arrs) invs -- relInvs ++ unrelInvs
+        invs' = map (specializeSpec vs arrs idx) invs -- relInvs ++ unrelInvs
         globals' = []
         rhsVars' = vs
 
@@ -157,6 +172,7 @@ findEdited = foldl recurLS [] -- blk
     recurStmt edits s = recurBStmt edits (node s)
     recurBStmt edits (Assign assns _) = map fst assns
     recurBStmt edits _ = edits
+
 
 findUnedited :: [Set.Set String] -> [String] -> Block -> [String]
 findUnedited rels globals blk = (computeRels (foldl recurLS globals blk) rels) \\ used

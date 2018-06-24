@@ -2,13 +2,23 @@ module Language.Spyder.Translate.Related (
     relatedVars
   , computeRels
   , alphaRels
+  , completeLoop
+  , dim
+  , addDim
+  , DimEnv
+  , addDims
 ) where
 
 import Language.Spyder.AST
 import Language.Spyder.AST.Component
+import qualified Language.Spyder.AST.Imp as Imp
 
 import qualified Data.Set as Set
 import qualified Data.Map.Strict as Map
+
+
+import Data.Maybe
+import Data.List
 
 -- given a program, calculate groups of related vars
 -- two vars are *related* if there is a transitive data dependency between the two wrt relations.
@@ -36,3 +46,55 @@ computeRels vs rels = (Set.toList . snd) $ until transitiveClo growRels init
     transitiveClo (l, r) = l == r
     init :: (Set.Set String, Set.Set String)
     init = (Set.fromList vs, grow $ fst init)
+
+type DimEnv = Map.Map String Int
+
+buildTy :: Int -> Imp.Type
+buildTy n 
+  | n == 0    = Imp.IntTy
+  | otherwise = Imp.ArrTy $ buildTy (n-1)
+
+dim :: Imp.Type -> Int
+dim (Imp.ArrTy i) = 1 + dim i
+dim _ = 0
+
+addDim :: DimEnv -> Imp.VDecl -> DimEnv
+addDim env (v, ty) = Map.insert v (dim ty) env
+
+addDims :: DimEnv -> [Imp.VDecl] -> DimEnv
+addDims = foldl addDim
+
+
+completeLoop :: [Set.Set String] -> DimEnv -> MainDecl -> MainDecl
+completeLoop rels dims (ProcDecl nme formals (Imp.Seq ss)) = ProcDecl nme formals $ Imp.Seq ss'
+  where
+    ss' = map (worker dims) ss
+    worker :: DimEnv -> Imp.Statement -> Imp.Statement
+    worker dims (Imp.For vs idx arrs (Imp.Seq bod)) = Imp.For vs' idx arrs' $ Imp.Seq bod'
+      where
+        names' = map fst vs'
+        arrNames = map takeName arrs
+        neededArrs = filter (eqDims dims $ head arrNames) $ computeRels arrNames rels \\ arrNames
+        neededVars = map buildIter neededArrs
+        vs' = vs ++ neededVars
+        arrs' = arrs ++ map Imp.VConst neededArrs
+        bod' = map (worker dims') bod
+        dims' = addDims dims vs'
+
+        buildIter :: String -> Imp.VDecl
+        buildIter arrName = ("loop_var", buildTy arrDim)
+          where
+            arrDim = (Map.!) dims arrName
+
+
+    worker dims (Imp.Cond c (Imp.Seq l) (Imp.Seq r)) = Imp.Cond c (Imp.Seq $ map (worker dims) l) (Imp.Seq $ map (worker dims) r)
+    worker dims (Imp.While c (Imp.Seq ss)) = Imp.While c $ Imp.Seq (map (worker dims) ss)
+    worker _ x = x
+        
+    takeName (Imp.VConst v) = fromMaybe v $ stripPrefix "Main$" v 
+    eqDims ds s t = (Map.!) ds s == (Map.!) ds t
+
+
+completeLoop _ _ x = x
+
+

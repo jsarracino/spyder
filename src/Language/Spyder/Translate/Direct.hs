@@ -25,7 +25,7 @@ import Language.Spyder.Synth.Verify
 import Language.Spyder.Translate.Expr
 
 import Language.Spyder.Translate.Derived          (instantiate)
-import Data.List                                  (find, (\\), stripPrefix)
+import Data.List                                  
 import Data.Maybe
 
 import qualified Language.Boogie.AST as BST
@@ -35,28 +35,7 @@ import qualified Data.Set as Set
 import Language.Spyder.Util
 
 
-saturateLoops :: [Set.Set String] -> MainDecl -> MainDecl
-saturateLoops rels (ProcDecl nme formals (Imp.Seq ss)) = ProcDecl nme formals $ Imp.Seq ss'
-  where
-    ss' = map worker ss
-    worker :: Imp.Statement -> Imp.Statement
-    worker (Imp.For vs idx arrs (Imp.Seq bod)) = Imp.For vs' idx arrs' $ Imp.Seq bod'
-      where
-        names' = map fst vs'
-        arrNames = map takeName arrs
-        neededArrs = (computeRels arrNames rels) \\ arrNames
-        vs' = vs ++ replicate (length neededArrs) "loop_var" `zip` tys
-        tys = repeat Imp.IntTy  -- TODO: real type checking
-        arrs' = arrs ++ map Imp.VConst neededArrs
-        bod' = map worker bod
-    worker (Imp.Cond c (Imp.Seq l) (Imp.Seq r)) = Imp.Cond c (Imp.Seq $ map worker l) (Imp.Seq $ map worker r)
-    worker (Imp.While c (Imp.Seq ss)) = Imp.While c $ Imp.Seq (map worker ss)
-    worker x = x
-    
-    takeName (Imp.VConst v) = fromMaybe v $ stripPrefix "Main$" v 
 
-
-saturateLoops _ x = x
 
 translateBlock :: (Imp.Block, [BST.IdTypeWhere])  -> (BST.Block, [BST.IdTypeWhere])
 translateBlock (Imp.Seq ss, vs) = foldl worker ([], vs) ss
@@ -110,8 +89,7 @@ translateStmt (Imp.For vs idxDec arrs bod, vars) =
     -- to the LHS
     -- e.g. if RHS is [[1,2],[3,4]], and LHS is foo, foo$dim0 := 2.
 
-    depth (Imp.ArrTy i) = 1 + depth i
-    depth _ = -1
+    
 
     dimInfo = zip3 lvars (map snd vs) arrs
 
@@ -119,7 +97,7 @@ translateStmt (Imp.For vs idxDec arrs bod, vars) =
     allocDims :: ([BST.IdTypeWhere], [[String]]) -> (String, Imp.Type, Imp.Expr) -> ([BST.IdTypeWhere], [[String]])
     allocDims (vs, dimvs) (lvar, lvTy, Imp.VConst arrv) = (vs', dimvs ++ [lDims])
       where
-        dimNames = map (\i -> lvar ++ "$dim" ++ show i) [0..depth lvTy]
+        dimNames = map (\i -> lvar ++ "$dim" ++ show i) [0..(dim lvTy - 1)]
         
 
         (vs', lDims) = foldl worker (vs, []) dimNames
@@ -152,8 +130,8 @@ translateStmt (Imp.For vs idxDec arrs bod, vars) =
     buildArrUp ((r, _), Imp.VConst l) = BST.Assign [(l, [[Pos.gen $ BST.Var idx]])] [Pos.gen $ BST.Var r]
 
     buildDims :: (String, Imp.Type, Imp.Expr) -> [BST.BareStatement]
-    buildDims (nme, ty, Imp.VConst arr) = [BST.Assign [(nme ++ "$dim" ++ show suf, [])] [Pos.gen $ BST.Var $ arr ++ "$dim" ++ show (suf + 1)] | suf <- dims]
-      where dims = [0..depth ty]
+    buildDims (nme, ty, Imp.VConst arr) = [BST.Assign [(nme ++ "$dim" ++ show suf, [])] [Pos.gen $ BST.Var $ arr ++ "$dim" ++ show suf ] | suf <- dims]
+      where dims = [0..dim ty - 1]
 
     idxSub = Map.fromList $ case idxDec of
       Just idxVar -> [(idxVar, idx)]
@@ -249,11 +227,11 @@ translateProg prog@(comps, MainComp decls) = (debugProg "compile-debug.bpl" outP
 
     invs = (comps' `zip` [0..]) >>= buildInvs relSigs
 
-    
+    globalDims = addDims Map.empty globalVars
 
     procs = map (alphaProc varMap) $ filter takeProcs decls
 
-    procDecls = map (translateProc . saturateLoops (relatedVars prog)) procs
+    procDecls = map (translateProc . completeLoop (relatedVars prog) globalDims) procs
 
     withModifies = map (addModifies (map fst globalVars)) procDecls
     withRequires = map (addRequires invs) withModifies
@@ -281,9 +259,16 @@ buildInvs funcs (DerivComp nme decs, x) = exprs `zip` dims
     prefix = mangleFunc nme x
 
     buildExpr = inlineApps funcs . saturateApps 
-    extractDims (Spec.RelApp f (Spec.RelVar a:_)) = map (\s -> a ++ "$" ++ s) $ dimVars bod
+    extractDims (Spec.RelApp f args) = map (\s -> topRV ++ "$" ++ s) $ dimVars bod
       where 
-        bod = snd $ (Map.!) funcs f
+        (formals, bod) = (Map.!) funcs f
+        
+        topIdx = case bod of 
+          Spec.Foreach _ _ (rv:_) _ -> elemIndex rv formals
+          _                         -> error "need dimension of non-foreach spec"
+        topRV = case args !! fromJust topIdx of 
+          Spec.RelVar v -> v
+          _             -> error "Expected variable argument to always clause"
 
 mangleFunc :: String -> Int -> String
 mangleFunc prefix count = prefix ++ "__" ++ show count ++ "_"
@@ -334,7 +319,7 @@ addEnsures _ v@_ = v
 processUsing :: Map.Map String String -> [Component] -> MainDecl -> Component
 processUsing vs comps (MainUD (nme, args)) = case usedComp of 
     Just c  -> renamedComp c 
-    Nothing -> undefined "couldn't find the used component"
+    Nothing -> error $ "can't find the component named by using: " ++ nme
   where
     usedComp = find takeNme comps
     takeNme (DerivComp n _) = n == nme
@@ -347,7 +332,7 @@ simplArrAccess :: Imp.Expr -> (String, [Imp.Expr])
 simplArrAccess e = worker (e, [])
   where worker (Imp.VConst s, args) = (s, args)
         worker (Imp.Index l r, args) = worker (l, r:args)
-        worker (x, _) = undefined $ "tried to convert to array access: " ++ show x
+        worker (x, _) = error $ "tried to convert to array access: " ++ show x
 
         
         

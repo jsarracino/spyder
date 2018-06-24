@@ -16,6 +16,7 @@ import Language.Boogie.Position           (Pos(..), attachPos)
 
 import qualified Data.Map.Strict as Map
 
+import Data.Maybe
 
 type Env = Map.Map String String
 
@@ -90,7 +91,7 @@ alphaRel mp = recur
     recur (RelUnop op i) = RelUnop op $ recur i
     recur (RelBinop op l r) = RelBinop op (recur l) (recur r)
     recur (RelApp v args) = RelApp (subVar v) $ map recur args
-    recur (Foreach vs arrs bod) = Foreach (map subVar vs) (map subVar arrs) $ recur bod
+    recur (Foreach vs idx arrs bod) = Foreach (map subVar vs) (fmap subVar idx) (map subVar arrs) $ recur bod
 
     subVar s = case Map.lookup s mp of 
       Just x@(RelVar v) -> v

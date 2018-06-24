@@ -1,11 +1,11 @@
-Component Midpoint {
+Component Tracker {
   data x : int;
   data idx: int;
   data hist: int[];
 
   relation tracked(x: int, idx: int, hist: int[]) {
-    foreach (h) with i in (hist) {
-      i = idx ==> h = x
+    foreach (h) with inner in (hist) {
+      inner = idx ==> h = x
     }
   }
   
@@ -19,17 +19,14 @@ Component Main {
   data i: int;
   data xs: int[];
 
-  using tracked(x, i, xs);
+  using Tracker(x, i, xs);
   
 
   procedure incX() {
     x = x + 1;
     i = i + 1; // need this to narrow option to foreach loop; otherwise, wouldn't bump index
     // should gen:
-    for (h:int) with i0 in (xs) {
-      if (i0 == i) {
-        h = x;
-      }
+    for (p:int) in (xs) {
     }
   }
 

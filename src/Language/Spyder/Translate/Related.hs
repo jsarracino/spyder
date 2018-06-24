@@ -7,11 +7,13 @@ module Language.Spyder.Translate.Related (
   , addDim
   , DimEnv
   , addDims
+  , addITWs
 ) where
 
 import Language.Spyder.AST
 import Language.Spyder.AST.Component
 import qualified Language.Spyder.AST.Imp as Imp
+import qualified Language.Boogie.AST as BST
 
 import qualified Data.Set as Set
 import qualified Data.Map.Strict as Map
@@ -58,11 +60,21 @@ dim :: Imp.Type -> Int
 dim (Imp.ArrTy i) = 1 + dim i
 dim _ = 0
 
+dimBT :: BST.Type -> Int
+dimBT (BST.MapType _ _ i) = 1 + dimBT i
+dimBT _ = 0
+
 addDim :: DimEnv -> Imp.VDecl -> DimEnv
 addDim env (v, ty) = Map.insert v (dim ty) env
 
 addDims :: DimEnv -> [Imp.VDecl] -> DimEnv
 addDims = foldl addDim
+
+
+addITW :: DimEnv -> BST.IdTypeWhere -> DimEnv
+addITW env (BST.IdTypeWhere v bt _) = Map.insert v (dimBT bt) env
+addITWs :: DimEnv -> [[BST.IdTypeWhere]] -> DimEnv
+addITWs env itws = foldl addITW env $ concat itws
 
 
 completeLoop :: [Set.Set String] -> DimEnv -> MainDecl -> MainDecl

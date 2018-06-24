@@ -32,7 +32,7 @@ toBoogie :: Program -> BST.Program
 toBoogie prog@(comps, MainComp decls) = outProg 
   where
     
-    (bprog, (invs, varMap)) = translateProg prog
+    (bprog, (invs, varMap, dims)) = translateProg prog
     boogDecs = case bprog of BST.Program ds -> map Pos.node ds
     
     reledVars = alphaRels (relatedVars prog) varMap
@@ -55,8 +55,9 @@ toBoogie prog@(comps, MainComp decls) = outProg
     repProc p (BST.ProcedureDecl nme tyargs formals rets contr (Just bod@(oldvars, fixme))) = optimize $ BST.Program $ decs ++ [newProc]
       where
         decs = case newProg of BST.Program i -> i
+        dims' = dims `addITWs` oldvars
         newProc = Pos.gen $ BST.ProcedureDecl nme tyargs formals rets contr (Just (newvars, fixed))
-        (fixed, newProg, (newvars, _)) = fixProc invs reledVars p bod globals prog fixme  
+        (fixed, newProg, (newvars, _)) = fixProc dims' invs reledVars p bod globals prog fixme  
         
         
     takeHeader = not . takeProc -- everything but procedures

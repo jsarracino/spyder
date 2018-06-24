@@ -210,7 +210,8 @@ genSig (DerivComp nme decs, x) = Map.fromList $ map worker decs'
 -- returns the program, as well as the:
     -- compiled invariants
     -- a map from old variable names to new variable names
-type CompileState = ([Spec.RelExpr], Map.Map String String)
+    -- a map from variables to dimensions
+type CompileState = ([Spec.RelExpr], Map.Map String String, DimEnv)
 translateProg :: Program -> (BST.Program, CompileState)
 translateProg prog@(comps, MainComp decls) = (debugProg "compile-debug.bpl" outProg, outState)
   where 
@@ -237,7 +238,7 @@ translateProg prog@(comps, MainComp decls) = (debugProg "compile-debug.bpl" outP
     withRequires = map (addRequires invs) withModifies
     withContracts = map (addEnsures invs) withRequires
 
-    outState = (map fst invs, varMap)
+    outState = (map fst invs, varMap, globalDims)
     outProg = BST.Program $ map Pos.gen $ vDecls ++ relDecls ++ withContracts
 
 

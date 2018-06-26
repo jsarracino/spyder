@@ -8,6 +8,7 @@ module Language.Spyder.Translate.Related (
   , DimEnv
   , addDims
   , addITWs
+  , buildTy
 ) where
 
 import Language.Spyder.AST
@@ -94,7 +95,7 @@ completeLoop rels dims (ProcDecl nme formals (Imp.Seq ss)) = ProcDecl nme formal
         dims' = addDims dims vs'
 
         buildIter :: String -> Imp.VDecl
-        buildIter arrName = ("loop_var", buildTy arrDim)
+        buildIter arrName = ("loop_var", buildTy (arrDim - 1))
           where
             arrDim = (Map.!) dims arrName
 

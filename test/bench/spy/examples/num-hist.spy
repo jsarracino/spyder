@@ -4,12 +4,23 @@ Component Tracker {
   data hist: int[];
 
   relation tracked(x: int, idx: int, hist: int[]) {
-    foreach (h) with inner in (hist) {
+
+    foreach (h, oh) with inner in (hist, ohist) {
       inner = idx ==> h = x
     }
+    
   }
+
+  relation eqArrs(l: int[], r: int[]) {
+    foreach (a, b) in (l, r) {
+      a = b
+    }
+  }
+
+
   
   always tracked(x, idx, hist);
+  //always eqArrs(hist, old(hist));
   
 }
 
@@ -25,7 +36,6 @@ Component Main {
   procedure incX() {
     x = x + 1;
     i = i + 1; // need this to narrow option to foreach loop; otherwise, wouldn't bump index
-    // should gen:
   }
 
   

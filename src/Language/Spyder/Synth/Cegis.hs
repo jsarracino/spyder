@@ -247,7 +247,7 @@ buildConfVal cs = map buildAsn $ Map.toList cs
 checkConfig :: [Expression] -> Program -> [String] -> Config -> Body -> Block -> Either Config (Map.Map String Value)
 checkConfig invs (Program header) globals config (vs, _) blk = result
   where
-    prog =  optimize $ Program $ header ++ [main] ++ buildConfVal config
+    prog = debugProg "cegis-test-debug.bpl" $ optimize $ Program $ header ++ [main] ++ buildConfVal config
     bod = (vs, saveLocals:blk)
     saveLocals = Pos.gen ([], Pos.gen $ Predicate [Attribute "save" (vs >>= buildAV)] clause)
     buildAV itws = [EAttr $ Pos.gen $ Var $ itwId itw | itw <- itws]

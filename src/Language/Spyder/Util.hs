@@ -5,6 +5,7 @@ module Language.Spyder.Util (
   , breadthFirst
   , allocFreshLocal
   , preservePos
+  , allocInBlock
 ) where
 
 -- import Data.List
@@ -44,6 +45,12 @@ breadthFirst = foldl worker [[]]
 
 preservePos :: (a -> a) -> Pos.Pos a -> Pos.Pos a
 preservePos f x = Pos.attachPos (Pos.position x) (f $ Pos.node x)
+
+allocInBlock :: String -> Type -> Body -> (String, Body)
+allocInBlock pref ty (itws, b) = (vname, ([vdec] : itws, b))
+  where
+    vname = fst $ allocFreshLocal pref ty $ concat itws
+    vdec  = IdTypeWhere vname ty $ Pos.gen tt
 
 
 -- given a overall scope, a prefix, and a list of variables, allocate a new variable (of int type)

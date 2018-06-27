@@ -9,7 +9,14 @@ module Language.Spyder.Synth (
   , parseLoopInfo
   , findEdited
   , findUnedited
+  , rebuildLoops
+  , dimzero
+  , insertIntoLoop
 ) where
+
+import Prelude hiding (foldl, all, concat, any)
+import Data.Foldable                
+
 
 import Language.Spyder.Synth.Verify
 import Language.Spyder.Synth.Enum
@@ -23,7 +30,9 @@ import Language.Boogie.AST
 import qualified Data.Map.Strict as Map       
 import qualified Data.Set as Set
 import Language.Boogie.Position               (node, Pos(..), gen)
-import Data.List                              (delete, nub, intersect, (\\))
+import Data.List                              (delete, nub, intersect, (\\), partition)
+-- import qualified Data.Foldable  as FLD
+
 import Data.Maybe
 import Language.Spyder.Opt 
 
@@ -64,6 +73,37 @@ fixForInvs invs dims = foldl worker Indet $ map neededSynth invs
       otherwise -> Loop
 
 
+rebuildLoops :: Map.Map String Block -> Block -> Block
+rebuildLoops assigns = map worker
+  where
+    worker :: LStatement -> LStatement
+    worker (Pos x (xs, Pos t (While c spec bod))) = Pos x (xs, Pos t $ While c spec bod')
+      where
+        (idx, vs, _) = parseLoopInfo $ head bod
+        (pref, mid, suf) = parseLoop bod
+        bod' = pref ++ recur mid ++ updates ++ suf
+        updates = concat $ mapMaybe (`Map.lookup` assigns) $ idx:vs
+    worker (Pos x (xs, Pos t (If c l r))) = Pos x (xs, Pos t $ If c l' r)
+      where
+        l' = recur l
+        -- r' = fmap recur r
+    worker s = s
+
+    recur = rebuildLoops assigns
+
+
+insertIntoLoop :: Block -> LStatement -> Block
+insertIntoLoop ins (Pos p (x, Pos q (While c s bod))) = [Pos p (x, Pos q $ While c s bod')]
+  where
+    (pre, mid, suf) = parseLoop bod
+    (midp, midl) = (init mid, last mid)
+    newMid = case midl of 
+      (s@(Pos _ (_, Pos _ While{}))) -> insertIntoLoop ins s
+      _ -> ins 
+    bod' = pre ++ mid ++ newMid ++ suf
+
+dimzero :: DimEnv -> String -> Bool
+dimzero d s = (Map.!) d s == 0
 
 fixBlock :: DimEnv -> [Spec.RelExpr] -> [Set.Set String] -> Program -> [String] -> [String] -> Body -> Block -> Block -> (Block, Program, Body)
 fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult inner
@@ -83,7 +123,7 @@ fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult
 
         
 
-        (suffix, prog', bod') = createFix dims invs prog globals staleVars rhsVars scope' blk 
+        (suffix, prog', bod') = createFix dims invs prog globals staleVars (filter (dimzero dims) rhsVars) scope' blk 
 
         fixed = (blk ++ suffix, prog', bod')
 
@@ -112,46 +152,97 @@ fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult
     buildLS s = gen ([], gen s)
 
     createFix :: DimEnv -> [Spec.RelExpr] -> Program -> [String] -> [String] -> [String] -> Body -> Block -> (Block, Program, Body)
-    createFix dims invs prog globals lvars rvars scope blk = case fixForInvs lvars dims of 
-      Base -> repairBlock (map (specToBoogie []) invs') prog globals lvars' rvars' scope blk builder
-      Loop -> (map buildLS $ loopPre ++ [While c spec' bod'], finalProg, finalScope) -- let specInvs = specializeSpec
-      Indet -> error "inconceivable"
-      Mixed -> error "unsatisfiable invariants in program"
+    createFix dims invs prog globals lvars rvars scope oldblk = (concat (Map.elems baseFixes) ++ rebuildLoops arrFixes skeleton, finalProg, finalScope)
       where
+        initState = (dims, invs, scope, [], Set.fromList lvars, Set.fromList rvars)
+        canSynth (ds, _, _, _, lvs, _) = all (dimzero ds) lvs
 
-        lvars' = filter (\s -> (Map.!) dims s == 0) lvars
-        rvars' = filter (\s -> (Map.!) dims s == 0) rvars
+        worker (odims, oinvs, oscope, blk, lvs, rvs) = (dims', invs', scope', blk', lvs', rvs')
+          where 
+            lvs' = okvs `Set.union` Set.fromList loopVars
+            rvs' = rvs `Set.union`  (Set.filter (dimzero dims') $ Set.fromList (idx : loopVars))
+            (okvs, arrvs) = Set.partition (dimzero odims) lvs
 
-        (invs', builder) = transRels invs
-        loopDecs = map worker lvars
+            loopDecs = map genLoopV $ Set.toList arrvs
 
-        (itws, r) = scope
+            genLoopV arrV = ("cegis_loop_var", lty)
+              where
+                lty = case buildTy $ (Map.!) odims arrV of 
+                  (Imp.ArrTy i) -> i
+                  _         -> error "inconceivable"
 
-        (loopSS, newItws) = translateStmt (Imp.For loopDecs (Just "cegis_loop_idx") (map Imp.VConst lvars) (Imp.Seq []), concat itws)
-        scope' = ([newItws], r)
+            (itws, r) = oscope
 
-        (loopPre, While c spec loopBod) = (init loopSS, last loopSS)
+            (loopSS, newItws) = translateStmt (Imp.For loopDecs (Just "cegis_loop_idx") (map Imp.VConst $ Set.toList arrvs) (Imp.Seq []), concat itws)
+            scope' = ([newItws], r)
 
-        (idx, loopVars, arrVs) = parseLoopInfo $ head loopBod
-        (pref, mid, suf) = parseLoop loopBod
+            (oldPre, oldLoop) = (init blk, last blk)
 
-        --(relInvs, unrelInvs) = partition (isRelated relVars rhsVars) invs
-        invs'' = map (specializeSpec loopVars arrVs idx) invs' 
+  
 
-        spec' = spec ++ map buildLoopInv invs
-        bod' = pref ++ loopFix ++ suf ++ map buildLoopAssm invs''
+            blk' = if null blk then loopBLK else oldPre ++ insertIntoLoop loopBLK oldLoop
 
-        (_, builder') = transRels invs''
+            (newLoopPre, While c spec bod) = (init loopSS, last loopSS)
+            loopSS' = newLoopPre ++ [While c spec' bod']
+            loopBLK = map (\s -> gen ([], gen s)) loopSS'
 
-        dims' = addDims dims loopDecs
+            (idx, loopVars, arrVs) = parseLoopInfo $ head bod
+            (pref, mid, suf) = parseLoop bod
+    
+            --(relInvs, unrelInvs) = partition (isRelated relVars rhsVars) invs
+            invs' = map (specializeSpec loopVars arrVs idx) invs 
+    
+            spec' = spec ++ map buildLoopInv invs
+            bod' = pref ++ mid ++ suf ++ map buildLoopAssm invs'
+    
+            dims' = addDims odims loopDecs `Map.union` Map.singleton idx 0
 
-        (loopFix, finalProg, finalScope) = createFix dims' invs'' prog globals loopVars (rvars ++ loopVars) scope' blk
 
-        worker arrV = ("cegis_loop_var", lty)
-          where
-            lty = case buildTy $ (Map.!) dims arrV of 
-              (Imp.ArrTy i) -> i
-              _         -> error "inconceivable"
+        (finalDims, finalInvs, synthScope, skeleton, lvs, rvs) = until canSynth worker initState
+        (finalInvs', builder) = transRels finalInvs
+
+        (fixes, finalProg, finalScope) = repairBlock (map (specToBoogie []) finalInvs') prog globals (Set.toList lvs) (Set.toList rvs) synthScope oldblk id
+
+        (baseFixes, arrFixes) = Map.partitionWithKey (\s _ -> dimzero finalDims s) fixes
+      
+        
+      
+      -- case fixForInvs lvars dims of 
+      -- Base -> repairBlock (map (specToBoogie []) invs') prog globals lvars' rvars' scope blk builder
+      -- Loop -> (map buildLS $ loopPre ++ [While c spec' bod'], finalProg, finalScope) -- let specInvs = specializeSpec
+      -- Indet -> error "inconceivable"
+      -- Mixed -> error "unsatisfiable invariants in program"
+      -- where
+
+      --   lvars' = filter (\s -> (Map.!) dims s == 0) lvars
+      --   rvars' = filter (\s -> (Map.!) dims s == 0) rvars
+
+      --   (invs', builder) = transRels invs
+      --   loopDecs = map worker lvars
+
+        -- (itws, r) = scope
+
+        -- (loopSS, newItws) = translateStmt (Imp.For loopDecs (Just "cegis_loop_idx") (map Imp.VConst lvars) (Imp.Seq []), concat itws)
+        -- scope' = ([newItws], r)
+
+        -- (loopPre, While c spec loopBod) = (init loopSS, last loopSS)
+
+        -- (idx, loopVars, arrVs) = parseLoopInfo $ head loopBod
+        -- (pref, mid, suf) = parseLoop loopBod
+
+        -- --(relInvs, unrelInvs) = partition (isRelated relVars rhsVars) invs
+        -- invs'' = map (specializeSpec loopVars arrVs idx) invs' 
+
+        -- spec' = spec ++ map buildLoopInv invs
+        -- bod' = pref ++ loopFix ++ suf ++ map buildLoopAssm invs''
+
+        -- (_, builder') = transRels invs''
+
+        -- dims' = addDims dims loopDecs
+
+      --   (loopFix, finalProg, finalScope) = createFix dims' invs'' prog globals loopVars (rvars ++ loopVars) scope' blk
+
+  
             
         
     
@@ -253,17 +344,9 @@ findEdited = foldl recurLS [] -- blk
 
 
 findUnedited :: [Set.Set String] -> [String] -> Block -> [String]
-findUnedited rels globals blk = (computeRels (foldl recurLS globals blk) rels) \\ used
+findUnedited rels globals blk = (computeRels used rels) \\ used
   where
     used = findEdited blk
-    recurLS :: [String] -> LStatement -> [String]
-    recurLS edits ss = recurBLS edits $ node ss
-    recurBLS :: [String] -> BareLStatement -> [String]
-    recurBLS edits (_, stmt) = recurStmt edits stmt
-    recurStmt :: [String] -> Statement -> [String]
-    recurStmt edits s = recurBStmt edits (node s)
-    recurBStmt edits (Assign assns _) = foldl (flip delete) edits $ map fst assns
-    recurBStmt edits _ = edits
 
 findInScope :: Program -> Body -> [Spec.RelExpr] -> [String]
 findInScope (Program decs) _ desugInvs = (decs >>= (getVars . node)) `intersect` invVars

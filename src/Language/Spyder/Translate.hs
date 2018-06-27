@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE BangPatterns #-}
 
 module Language.Spyder.Translate (
     toBoogie
@@ -26,6 +27,8 @@ import Language.Spyder.Translate.Related
 
 import Language.Spyder.Opt
 
+import Control.Monad
+import System.IO.Unsafe
 
 
 toBoogie :: Program -> BST.Program
@@ -49,14 +52,20 @@ toBoogie prog@(comps, MainComp decls) = outProg
     linkHeader :: BST.BareDecl -> BST.Program
     linkHeader pd = BST.Program $ map Pos.gen $ boogHeader ++ [pd]
 
-    outProg = foldl repProc (BST.Program $ map Pos.gen $ boogHeader ++ okProcs) brokenProcs
+    outProg = unsafePerformIO $ foldM repProc (BST.Program $ map Pos.gen $ boogHeader ++ okProcs) brokenProcs
 
-    repProc :: BST.Program -> BST.BareDecl -> BST.Program
-    repProc p (BST.ProcedureDecl nme tyargs formals rets contr (Just bod@(oldvars, fixme))) = optimize $ BST.Program $ decs ++ [newProc]
+    repProc :: BST.Program -> BST.BareDecl -> IO BST.Program
+    repProc p (BST.ProcedureDecl nme tyargs formals rets contr (Just bod@(oldvars, fixme))) = do {
+      putStrLn $ "repairing: " ++ nme;
+      let !ret = optimize $! BST.Program $! decs ++ [newProc] in do {
+        putStrLn "done!";
+        return ret;
+      }
+    }
       where
         decs = case newProg of BST.Program i -> i
         dims' = dims `addITWs` oldvars
-        newProc = Pos.gen $ BST.ProcedureDecl nme tyargs formals rets contr (Just (newvars, fixed))
+        newProc = Pos.gen $! BST.ProcedureDecl nme tyargs formals rets contr (Just (newvars, fixed))
         (fixed, newProg, (newvars, _)) = fixProc dims' invs reledVars p bod globals prog fixme  
         
         

@@ -165,7 +165,7 @@ type IOExamples = [Map.Map String Value] -- list of states, where each state is 
 -- find a repair for a single lhs expr
 -- params: invariants, program preamble, global variables, rhs expression seeds, lhs expressions to fix, enclosing function scope, and a basic block for repair.
 -- returns: the repaired block, a new program, and a new function scope
-repairBlock :: [Expression] -> Program -> [String] -> [String] -> [String] -> Body -> Block -> (Block -> Block) -> (Block, Program, Body)
+repairBlock :: [Expression] -> Program -> [String] -> [String] -> [String] -> Body -> Block -> (Block -> Block) -> (Map.Map String Block, Program, Body)
 repairBlock invs prog globals lhsVars rhsVars scope blk builder =  (fixedBlock, optimize newProg, newScope)
   where
     initConfig = Map.fromList []
@@ -179,23 +179,24 @@ repairBlock invs prog globals lhsVars rhsVars scope blk builder =  (fixedBlock, 
     (newProg, newScope, fixedBlock) = searchAllConfigs invs prog globals scope blk builder lhsVars rhsVars initCandDepths initConfig initIO
     
 -- given a set of invariants, a preamble, global variables, a block to fix, a set of base values, and a variable to add an edit, use cegis to
--- search for a configuration that correctly edits the variable. return the resulting block.
+-- search for a configuration that correctly edits the variable. return a map from the lhs values to their RHS blocks.
 
 -- assumes at least one IO example
-searchAllConfigs :: [Expression] -> Program -> [String] -> Body -> Block -> (Block -> Block) -> [String] -> [String] -> [Candidate] -> Config -> IOExamples -> (Program, Body, Block)
+searchAllConfigs :: [Expression] -> Program -> [String] -> Body -> Block -> (Block -> Block) -> [String] -> [String] -> [Candidate] -> Config -> IOExamples -> (Program, Body, Map.Map String Block)
     
 searchAllConfigs invs prog globals scope blk builder lhses rhses (cand:cands) conf examples = result
   where
     -- (cname, configResult) = conf
     -- foreach lhs -> depth, look for a fix using depth. link all together.
-    (searchProg, searchScope, newFix) = Map.foldlWithKey genFix (prog, scope, []) cand
+    (searchProg, searchScope, newFixMap) = Map.foldlWithKey genFix (prog, scope, Map.empty) cand
+    newFixBlock = concat $ Map.elems newFixMap
 
-    genFix :: (Program, Body, Block) -> String -> Int -> (Program, Body, Block)
+    genFix :: (Program, Body, Map.Map String Block) -> String -> Int -> (Program, Body, Map.Map String Block)
     genFix (p, scop, acc) lhs depth = 
       let (p', s', nxt) = generateFix depth rhses lhs p scop in
-        (p', s', acc ++ nxt)
+        (p', s', Map.insert lhs nxt acc)
 
-    searchBlock = blk ++ builder newFix
+    searchBlock = blk ++ builder newFixBlock
 
     searchBody = case searchScope of (vars, _) -> (vars, searchBlock)
         
@@ -218,8 +219,8 @@ searchAllConfigs invs prog globals scope blk builder lhses rhses (cand:cands) co
   
     checkMe = debugProg "cegis-search-debug.bpl" $ optimize $ buildMainSearch globals procNames $ case searchProg of Program x -> Program $ x ++ procs
 
-    buildAns :: Config -> (Program, Body, Block)
-    buildAns cs = (finalProg, searchBody, newFix )
+    buildAns :: Config -> (Program, Body, Map.Map String Block)
+    buildAns cs = (finalProg, searchBody, newFixMap )
       where
         synthDecs = case searchProg of Program decs -> decs
         finalProg = Program $ synthDecs ++ buildConfVal cs

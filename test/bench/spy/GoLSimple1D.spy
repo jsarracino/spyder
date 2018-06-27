@@ -45,7 +45,7 @@ Component Main {
   using OneDGoL(cells, rendered);
   //using History(cells, index, history);
 
-
+  /*
   procedure colorOnClick() {
     let locIndex: int; // unknown value. we would use a function param but the synthesis part is broken.
     for (color: int) with idx in (rendered) {
@@ -59,6 +59,7 @@ Component Main {
     }
     
   }
+  */
   
 
   
@@ -68,7 +69,6 @@ Component Main {
   procedure toggleButtons() {
     if (start == 0) {
       start = 1;
-
     }
     if (start == 1) {
       start = 0;

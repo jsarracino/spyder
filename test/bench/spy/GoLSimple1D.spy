@@ -31,6 +31,7 @@ Component OneDGoL {
 
 Component Main {
   // the model
+  data oldCells : int[]; // bool[]
   data cells : int[]; // bool[]
   data running : int; // bool
 
@@ -85,44 +86,48 @@ Component Main {
     let uBound: int; // don't actually know the range of the cells
     let count : int = 0;
 
-    for (cell: int) with idx in (cells) {
+    for (oc: int, nc: int) in (oldCells, cells) {
+      oc = nc;
+    }
+
+    for (cell: int, oldCell: int) with idx in (cells, oldCells) {
       if (idx == 0) {
 
         if (idx + 1 == uBound) { // no slack
           // continue
         } else if (idx + 2 == uBound) {
           // just one cell
-          count = cells[idx+1];
+          count = oldCells[idx+1];
         } else {
           // two cells
-          count = cells[idx+1] + cells[idx+2];
+          count = oldCells[idx+1] + oldCells[idx+2];
         }
 
       } else if (idx == 1) {
-        count = cells[idx-1];
+        count = oldCells[idx-1];
 
         if (idx + 1 == uBound) {
           // continue
         } else if (idx + 2 == uBound) {
-          count = count + cells[idx+1];
+          count = count + oldCells[idx+1];
         } else {
-          count = count + cells[idx+1] + cells[idx+2];
+          count = count + oldCells[idx+1] + oldCells[idx+2];
         }
 
       } else {
-        count = cells[idx-1] + cells[idx-2];
+        count = oldCells[idx-1] + oldCells[idx-2];
 
         if (idx + 1 == uBound) {
 
         } else if (idx + 2 == uBound) {
-          count = count + cells[idx+1];
+          count = count + oldCells[idx+1];
         } else {
-          count = count + cells[idx+1] + cells[idx+2];
+          count = count + oldCells[idx+1] + oldCells[idx+2];
         }
 
       }
 
-      if (cell == 0) {
+      if (oldCell == 0) {
         if (count == 2 || count == 3) {
           cell = 1;
         }

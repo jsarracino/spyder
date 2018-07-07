@@ -1,0 +1,159 @@
+
+
+ 
+<html>
+  <header><title>Spreadsheet test</title></header>
+  <body>
+    <table id = "table">
+        <tr>
+            <td><div>Weekly</div></td>
+            <td><div>Monthly</div></td>
+            <td><div>Yearly</div></td>
+        </tr>
+        <tr>
+          <td><div contenteditable>-200</div></td>
+          <td><div contenteditable>-800</div></td>
+          <td><div contenteditable>-9600</div></td>
+        </tr>
+        <tr>
+            <td><div contenteditable>-50</div></td>
+            <td><div contenteditable>-200</div></td>
+            <td><div contenteditable>-2400</div></td>
+          </tr>
+        <tr>
+            <td><div contenteditable>750</div></td>
+            <td><div contenteditable>3000</div></td>
+            <td><div contenteditable>36000</div></td>
+            </tr>
+        <tr>
+            <td><div contenteditable>-45</div></td>
+            <td><div contenteditable>-180</div></td>
+            <td><div contenteditable>-2160</div></td>
+        </tr>
+    </table>
+
+    <div>
+      <input type="color" id="evenPicker" value="#ffffff"/>
+      <label for="evenPicker">Color of Even Rows</label>
+    </div>
+    <div>
+        <input type="color" id="oddPicker" value="#D3D3D3"/>
+        <label for="oddPicker">Color of Odd Rows</label>
+    </div>
+  </body>
+  </html>
+  
+
+<script>
+var negColor, posColor,  // string
+    oddColor, evenColor;
+
+var week, month, year; // HTMLElement[]
+var evenPicker, oddPicker; // HTMLInputElement
+
+// initialize values
+(function() {
+  // cells = [[0,0,0], [0,0,0], [0,0,0], [0,0,0]];
+  posColor = "black";
+  negColor = "red";
+  oddColor = document.getElementById('evenPicker').value;
+  evenColor = document.getElementById("oddPicker").value;
+  [week, month, year] = [[], [], []];
+  let cls = [].slice.call(document.getElementById('table').rows);
+  for (let row of cls.slice(1)) {
+    let [r, e, s] = row.cells;
+    week.push(r); month.push(e); year.push(s);
+  }
+
+  for (let index = 0; index != week.length; ++index) {
+    if (index % 2 == 0) {
+      week[index].style.backgroundColor = evenColor;
+      month[index].style.backgroundColor = evenColor;
+      year[index].style.backgroundColor = evenColor;
+    } else {
+      week[index].style.backgroundColor = oddColor;
+      month[index].style.backgroundColor = oddColor;
+      year[index].style.backgroundColor = oddColor;
+    }
+  }
+}) ();
+
+
+function refreshColors(idx) { // int
+  let color;
+  if (parseFloat(week[idx].textContent) < 0) {
+    color = negColor;
+  } else {
+    color = posColor;
+  }
+
+  week[idx].style.color = color;
+  month[idx].style.color = color;
+  year[idx].style.color = color;
+}
+
+
+for (let i = 0; i != week.length; ++i) {
+  refreshColors(i);
+}
+
+// let cells = me.rows[0].cells;
+for (let index = 0; index != week.length; ++index) {
+
+  week[index].oninput = () => {
+    let w = parseFloat(week[index].textContent);
+    month[index].textContent = w * 4;
+    year[index].textContent = w * 12 * 4;
+    refreshColors(index);
+  }
+
+  month[index].oninput = () => {
+    let m = parseFloat(month[index].textContent);
+    week[index].textContent = m / 4;
+    year[index].textContent = m * 12;
+    refreshColors(index);
+  }
+
+  year[index].oninput = () => {
+    let y = parseFloat(year[index].textContent);
+    week[index].textContent = y / (4 * 12);
+    month[index].textContent = y / 12;
+    refreshColors(index);
+  }
+}
+
+
+document.getElementById('evenPicker').oninput = () => {
+  evenColor = document.getElementById('evenPicker').value;
+  for (let index = 0; index != week.length; ++index) {
+    if (index % 2 == 0) {
+      week[index].style.backgroundColor = evenColor;
+      month[index].style.backgroundColor = evenColor;
+      year[index].style.backgroundColor = evenColor;
+    } else {
+      week[index].style.backgroundColor = oddColor;
+      month[index].style.backgroundColor = oddColor;
+      year[index].style.backgroundColor = oddColor;
+    }
+  }
+}
+
+document.getElementById('oddPicker').oninput = () => {
+  oddColor = document.getElementById('oddPicker').value;
+  for (let index = 0; index != week.length; ++index) {
+    if (index % 2 == 0) {
+      week[index].style.backgroundColor = evenColor;
+      month[index].style.backgroundColor = evenColor;
+      year[index].style.backgroundColor = evenColor;
+    } else {
+      week[index].style.backgroundColor = oddColor;
+      month[index].style.backgroundColor = oddColor;
+      year[index].style.backgroundColor = oddColor;
+    }
+  }
+}
+
+
+
+
+</script>

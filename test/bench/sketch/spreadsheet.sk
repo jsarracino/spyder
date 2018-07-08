@@ -1,0 +1,60 @@
+void months_weeks(int n, int[n] w, int[n] m){
+	for(int i=0; i<n; i++){
+		assert m[i] == 4 * w[i];
+	}
+}
+
+void years_months(int n, int[n] y, int[n] m){
+	for(int i=0; i<n; ++i){
+		assert y[i] == 12 * m[i];
+	}
+}
+
+void altcolor(int evencolor, int oddcolor, int n, int[n] rows){
+	for(int i=0; i<n; ++i){
+		if(i%2==0) 
+			assert rows[i] == evencolor;
+		else if(i%2==1) 
+			assert rows[i] == oddcolor;
+	}
+}
+
+void backgroud(int evencolor, int oddcolor, int n, int[n] rows){
+	for(int i=0; i<n; ++i){
+		assert rows[i] == evencolor || rows[i] == oddcolor;
+	}
+}
+
+generator int expr(int x, int y, int z) {
+	return {| x | y | z|} * {| x | y | z| ?? |};
+}
+
+generator void editWeekly(int val, int idx, int n, int[n] weeks, int[n] months, int[n] years){
+	for(int i=0; i<n; ++i){
+		if(idx == i){
+			weeks[i] = val;
+			months[i] = expr(weeks[i],months[i],years[i]);
+			years[i] = expr(weeks[i],months[i],years[i]);
+			months_weeks(3, weeks, months);
+			years_months(3, years, months);
+		}
+	}
+}
+
+generator void editMonthly(int val, int idx, int n, int[n] months, int[n] years){
+	for(int i=0; i<n; ++i){
+		if(idx == i){
+			months[i] = val;
+			years[i] = expr(val,months[i],years[i]);
+			years_months(3, years, months);
+		}
+	}
+}
+
+harness void sketch (int a, int b, int c, int d) {
+	int[3] weeks = {a,b,c};
+	int[3] months = {4*a,4*b,4*c};
+	int[3] years = {48*a,48*b,48*c};
+	editWeekly(d, 2, 3, weeks, months, years);
+	editMonthly(d, 2, 3, months, years);
+}

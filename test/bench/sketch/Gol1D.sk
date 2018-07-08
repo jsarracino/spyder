@@ -1,6 +1,6 @@
-void cells2colors(int n, int[n] cells, int[n] rendered){
+void cells2colors(int n, int[n] p, int[n] q){
 	for(int i=0; i<n; ++i){
-		assert cells[i] == rendered[i];
+		assert p[i] == q[i];
 	}
 }
 
@@ -8,50 +8,53 @@ void goodConfig(int start, int stop, int run){
 	assert ((0 <= run && run <= 1) && (0 <= start && start <= 1) && (0 <= stop && stop <= 1) && start != stop && run == start);
 }
 
-generator void toggleStart(int start, int stop, int running){
-	if (start == 0) {
-    	start = 1;
-		stop = expr(start, stop, running);
-		running = expr(start, stop, running);
-	}
-	if (start == 1) {
-   		start = 0;
-		stop = expr(start, stop, running);
-		running = expr(start, stop, running);
- 	}
-}
-
-generator void toggleStop(int start, int stop, int running){
-    if (stop == 0) {
-    	stop = 1;
-		start = expr(start, stop, running);
-		running = expr(start, stop, running);
-    }
-    if (stop == 1) {
-    	stop = 0;
-		start = expr(start, stop, running);
-		running = expr(start, stop, running);
-    }
-}
-
 generator int expr(int x, int y, int z) {
-	generator int sum(){
-		return {| x | y | z|} * {| x | y | z| ?? |};
-	}
-	if(??) { return sum(); }
-	else { return sum() + expr(x, y, z); }
-	
+	return {| x | y | z|} * {| x | y | z| ?? |};
+}
+
+generator void toggleStart(int start, int stop, int run){
+	if(start == 0){
+		start = 1;
+		stop = expr(start,stop,run);
+		run = expr(start,stop,run);
+		goodConfig(start,stop,run);
+    }
+    else if(start == 1){
+		start = 0;
+		stop = expr(start,stop,run);
+		run = expr(start,stop,run);
+		goodConfig(start,stop,run);
+    }
+}
+
+generator void toggleStop(int start, int stop, int run){
+	if(stop == 0){
+		stop = 1;
+		start = expr(start,stop,run);
+		run = expr(start,stop,run);
+		goodConfig(start,stop,run);
+    }
+    else if(stop == 1){
+		stop = 0;
+		start = expr(start,stop,run);
+		run = expr(start,stop,run);
+		goodConfig(start,stop,run);
+    }
 }
 
 generator void colorOnClick(int n, int[n] rendered, int[n] cells, int locIndex){
 	for(int idx=0; idx<n; idx++){
-		if(idx == locIndex && rendered[idx] == 1) {
-		    rendered[idx] = 0;
-			cells[idx] = expr(cells[idx], idx, rendered[idx]);
-		}
-		if(idx == locIndex && rendered[idx] == 0){
-			rendered[idx] = 1;
-			cells[idx] = expr(cells[idx], idx, rendered[idx]);
+		if(idx == locIndex){
+			if(rendered[idx] == 0) {
+				rendered[idx] = 1;
+				cells[idx] = expr(cells[idx],rendered[idx],idx);
+				cells2colors(n, cells, rendered);
+			}
+			else if(rendered[idx] == 1){
+				rendered[idx] = 0;
+				cells[idx] = expr(cells[idx],rendered[idx],idx);
+				cells2colors(n, cells, rendered);
+			}
 		}
 	}
 }
@@ -68,20 +71,20 @@ generator void golLogic(int uBound, int n, int[n] cells, int idx, int[n] rendere
 		if(idx == 0){
 			if (idx + 1 == uBound) { 
 		    } if (idx + 2 == uBound) {
-          		count = oldCells[idx+1];
+				count = oldCells[idx+1];
         	} else {
-		        count = oldCells[idx+1] + oldCells[idx+2];
+				count = oldCells[idx+1] + oldCells[idx+2];
         	}
 		}
 
 		if (idx == 1) {
-        	count = oldCells[idx-1];
+			count = oldCells[idx-1];
 
         	if (idx + 1 == uBound) {
 	        } if (idx + 2 == uBound) {
-          		count = count + oldCells[idx+1];
+				count = count + oldCells[idx+1];
         	} else {
-          		count = count + oldCells[idx+1] + oldCells[idx+2];
+				count = count + oldCells[idx+1] + oldCells[idx+2];
         	}
 		}
 
@@ -90,33 +93,33 @@ generator void golLogic(int uBound, int n, int[n] cells, int idx, int[n] rendere
 
         	if (idx + 1 == uBound) {
 			} else if (idx + 2 == uBound) {
-          		count = count + oldCells[idx+1];
+				count = count + oldCells[idx+1];
         	} else {
-          		count = count + oldCells[idx+1] + oldCells[idx+2];
+				count = count + oldCells[idx+1] + oldCells[idx+2];
         	}
       	}
 
     	if (oldCells[idx] == 0) {
         	if (count == 2 || count == 3) {
-        		cells[idx] = 1;
-          		rendered[idx] = expr(cells[idx], idx, count);
+				cells[idx] = 1;
+				rendered[idx] = expr(cells[idx],rendered[idx],count);
+				cells2colors(n, cells, rendered);
         		}
     	} else {
        		if (count != 2 && count != 4) {
-          		cells[idx] = 0;
-         		rendered[idx] = expr(cells[idx], idx, count);
+				cells[idx] = 0;
+				rendered[idx] = expr(cells[idx],rendered[idx],count);
+				cells2colors(n, cells, rendered);
         	}
     	}
   	}
 }
 
-harness void sketch (int start, int stop, int running) {
-	int[4] rendered = {0, 0, 1, 1};
-	int[4] cells = {0, 0, 1, 1};
+harness void sketch (int start, int stop, int run) {
+	int[4] rendered = {0, 1, 1, 1};
+	int[4] cells = {0, 1, 1, 1};
+	toggleStart(0, stop, run);
+	toggleStop(start, 0, run);
 	colorOnClick(4, rendered, cells, 1);
-	cells2colors(4, cells, rendered);
-	toggleStart(start, stop, running);
-	toggleStop(start, stop, running);
-	goodConfig(start, stop, running);
-	golLogic(4, 4, cells, 1, rendered);
+	golLogic(4, 4, cells, 3, rendered);
 }

@@ -339,11 +339,11 @@ simplArrAccess e = worker (e, [])
         
 -- I could just use eval, but I'm not sure how the monads work, and we shouldn't
 -- get any free variables in these expressions anyway (because it's a thunk)
-eval' :: BST.BareExpression -> BST.Value
-eval' (BST.Literal v) = v
-eval' (BST.Logical ty val) = error "logical in eval'"
-eval' (BST.Var v) = error "var in eval'"
-eval' _ = error "inconceivable"
+eval' :: BST.BareExpression -> Maybe BST.Value
+eval' (BST.Literal v) = Just v
+eval' (BST.Logical ty val) = Nothing --error "logical in eval'"
+eval' (BST.Var v) = Nothing --error "var in eval'"
+eval' _ = Nothing --error "inconceivable"
 
 unvalue :: BST.Value -> BST.Expression
 unvalue v@BST.IntValue{} = Pos.gen $ BST.Literal v

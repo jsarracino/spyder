@@ -18,16 +18,14 @@ Component Main {
   data x: int[];
   data y: int[];
 
-  data z: bool;
+  data z: int[];
 
   using EqArrs(x, y);
+  using EqArrs(y, z);
 
   procedure incrX() {
-    for (l:int, r: int) in (x, y) {
-      l = 2 * r;
+    for (l:int) in (x) {
+      l = l + 1;
     }
-    
-    
-    
   }
 }

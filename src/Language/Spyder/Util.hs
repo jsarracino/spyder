@@ -2,10 +2,12 @@ module Language.Spyder.Util (
     strip
   , prefix
   , incSpan
+  , incBreak
   , breadthFirst
   , allocFreshLocal
   , preservePos
   , allocInBlock
+  , front
 ) where
 
 -- import Data.List
@@ -35,7 +37,12 @@ incSpan f inp = (pre ++ l, post)
           (x:xs) -> ([x], xs)
           [] -> ([], [])
 
+incBreak :: (a -> Bool) -> [a] -> ([a], [a])
+incBreak f = incSpan (not . f)
 
+front :: [a] -> [a]
+front xs = take (length xs - 1) xs
+ 
 -- take a list of lists and collect the elements in breadth-first order
 -- e.g. [[1,2,3], [5,6]] => [[1,5], [2,5], [3,5], [1,6], [2,6], [3,6]]
 breadthFirst :: [[a]] -> [[a]]
@@ -51,8 +58,7 @@ allocInBlock pref ty (itws, b) = (vname, ([vdec] : itws, b))
   where
     vname = fst $ allocFreshLocal pref ty $ concat itws
     vdec  = IdTypeWhere vname ty $ Pos.gen tt
-
-
+ 
 -- given a overall scope, a prefix, and a list of variables, allocate a new variable (of int type)
 -- return the name of the variable and the new list of variables
 allocFreshLocal :: String -> Type -> [IdTypeWhere] -> (String, [IdTypeWhere])
@@ -67,3 +73,10 @@ allocFreshLocal prefix ty itws  = (mk prefix suffix, vdec:itws)
     -- check name clashes with other variables and constants
     worker :: Int -> Set.Set String -> Int
     worker suf names = if mk prefix suf `Set.member` names then worker (suf+1) names else suf
+
+
+-- inclusiveSpan :: (a -> Bool) -> [a] -> ([a], [a])
+-- inclusiveSpan pred l = worker ([], l)
+--   where
+--     worker (x, []) = (reverse x, [])
+--     worker (xs, n:r) = if pred n then worker (n:xs, r) else (reverse $ n:xs, r)

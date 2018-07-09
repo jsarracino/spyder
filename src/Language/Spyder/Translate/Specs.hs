@@ -36,7 +36,7 @@ inlineApps decs = recur
     recur x@RelVar{} = x
     recur x@RelInt{} = x
     recur x@RelBool{} = x
-    recur _ = error "TODO"
+    recur x@RelIndex{} = x
       
 
 prefixApps :: String -> RelExpr -> RelExpr
@@ -68,6 +68,7 @@ specBop = \case
   Neq -> BST.Neq
   Imp -> BST.Implies
   Iff -> BST.Equiv
+  Mod -> BST.Mod
 
 specUnop :: RelUop -> BST.UnOp
 specUnop = \case
@@ -115,7 +116,7 @@ specToBoogie = recur
     recur _ (RelVar x) = Pos.gen $ BST.Var x
     recur _ (RelInt x) = Pos.gen $ BST.Literal $ BST.IntValue $ fromIntegral x
     recur _ (RelBool x) = Pos.gen $ BST.Literal $ BST.BoolValue x
-    recur _ _ = error "TODO"
+    recur ds (RelIndex l r) = Pos.gen $ BST.MapSelection (recur ds l) [recur ds r]
 
     -- data BareExpression = 
     --   Literal Value |

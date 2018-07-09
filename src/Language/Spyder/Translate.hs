@@ -56,9 +56,9 @@ toBoogie prog@(comps, MainComp decls) = outProg
 
     repProc :: BST.Program -> BST.BareDecl -> IO BST.Program
     repProc p (BST.ProcedureDecl nme tyargs formals rets contr (Just bod@(oldvars, fixme))) = do {
-      putStrLn $ "repairing: " ++ nme;
+      putStrLn $ "COMPLETING: " ++ nme;
       let !ret = optimize $! BST.Program $! decs ++ [newProc] in do {
-        putStrLn "done!";
+        putStrLn "Done!";
         return ret;
       }
     }

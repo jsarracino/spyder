@@ -77,32 +77,48 @@ addITW env (BST.IdTypeWhere v bt _) = Map.insert v (dimBT bt) env
 addITWs :: DimEnv -> [[BST.IdTypeWhere]] -> DimEnv
 addITWs env itws = foldl addITW env $ concat itws
 
+allocFreshSpy :: String -> Imp.Type -> DimEnv -> (String, DimEnv)
+allocFreshSpy name ty env = (name', Map.insert name' (dim ty) env)
+  where
+    name' = mk name suffix
+    mk pref suf = if suf == 0 then pref else pref ++ show suf
+    suffix = worker 0 $ Map.keys env
+    worker :: Int -> [String] -> Int
+    worker s names = if mk name s `elem` names then worker (s+1) names else s
 
 completeLoop :: [Set.Set String] -> DimEnv -> MainDecl -> MainDecl
 completeLoop rels dims (ProcDecl nme formals (Imp.Seq ss)) = ProcDecl nme formals $ Imp.Seq ss'
   where
-    ss' = map (worker dims) ss
-    worker :: DimEnv -> Imp.Statement -> Imp.Statement
-    worker dims (Imp.For vs idx arrs (Imp.Seq bod)) = Imp.For vs' idx arrs' $ Imp.Seq bod'
+    (ss', _) = foldl worker ([], dims) ss
+    worker :: ([Imp.Statement], DimEnv) -> Imp.Statement -> ([Imp.Statement], DimEnv)
+    worker (acc, dims) (Imp.For vs idx arrs (Imp.Seq bod)) = (acc ++ [Imp.For vs' idx arrs' $ Imp.Seq bod'], finalDims)
       where
         names' = map fst vs'
         arrNames = map takeName arrs
         neededArrs = filter (eqDims dims $ head arrNames) $ computeRels arrNames rels \\ arrNames
-        neededVars = map buildIter neededArrs
+        (neededVars, dims'') = foldl buildIter ([], dims') neededArrs
         vs' = vs ++ neededVars
         arrs' = arrs ++ map Imp.VConst neededArrs
-        bod' = map (worker dims') bod
-        dims' = addDims dims vs'
+        dims' = addDims dims vs
 
-        buildIter :: String -> Imp.VDecl
-        buildIter arrName = ("loop_var", buildTy (arrDim - 1))
+        (bod', finalDims) = foldl worker ([], dims'') bod
+
+        buildIter :: ([Imp.VDecl], DimEnv) -> String -> ([Imp.VDecl], DimEnv)
+        buildIter (vs, env) arrName = ((vname, vty):vs, env')
           where
-            arrDim = (Map.!) dims arrName
+            arrDim = (Map.!) env arrName
+            vty = buildTy $ arrDim - 1
+            (vname, env') = allocFreshSpy "loop_var" vty env
 
 
-    worker dims (Imp.Cond c (Imp.Seq l) (Imp.Seq r)) = Imp.Cond c (Imp.Seq $ map (worker dims) l) (Imp.Seq $ map (worker dims) r)
-    worker dims (Imp.While c (Imp.Seq ss)) = Imp.While c $ Imp.Seq (map (worker dims) ss)
-    worker _ x = x
+    worker (acc, dims) (Imp.Cond c (Imp.Seq l) (Imp.Seq r)) = 
+      let (tr, dims') = foldl worker ([], dims) l 
+          (fl, dims'') = foldl worker ([], dims') r in
+      (acc ++ [Imp.Cond c (Imp.Seq tr) (Imp.Seq fl)], dims'')
+    worker (acc, dims) (Imp.While c (Imp.Seq ss)) = 
+      let (ss', dims') = foldl worker ([], dims) ss in 
+        (acc ++ [Imp.While c $ Imp.Seq ss'], dims')
+    worker (acc, d) x = (acc ++ [x], d)
         
     takeName (Imp.VConst v) = fromMaybe v $ stripPrefix "Main$" v 
     eqDims ds s t = (Map.!) ds s == (Map.!) ds t

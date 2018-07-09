@@ -72,14 +72,6 @@ alphaDDecl env (RelDecl nme formals body) = RelDecl nme formals body'
     deleteAll = foldl (flip Map.delete)
     body' = alphaRel env' body
 
-
-    -- RelVar String       -- Variables
-    -- | RelInt Int      -- Integers
-    -- | RelBool Bool         -- Booleans
-    -- | RelBinop RelBop RelExpr RelExpr -- Binary operations
-    -- | RelUnop RelUop RelExpr       -- Unary operations
-    -- | RelApp RelExpr [RelExpr]       -- function calls (not procedure calls)
-    -- | Foreach [String] [String] RelExpr  -- foreach (x,y,z) in (p, q,s) {<expr>}
 alphaRel :: Map.Map String RelExpr -> RelExpr -> RelExpr
 alphaRel mp = recur 
   where 
@@ -87,7 +79,7 @@ alphaRel mp = recur
     recur v@RelInt{} = v
     recur v@RelBool{} = v
     recur v@(RelVar x) = Map.findWithDefault v x mp
-    -- recur (RelIndex l r) = RelIndex (recur l) (recur r)
+    recur (RelIndex l r) = RelIndex (recur l) (recur r)
     recur (RelUnop op i) = RelUnop op $ recur i
     recur (RelBinop op l r) = RelBinop op (recur l) (recur r)
     recur (RelApp v args) = RelApp (subVar v) $ map recur args

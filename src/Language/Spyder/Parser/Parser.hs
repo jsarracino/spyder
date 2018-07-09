@@ -94,15 +94,15 @@ specTerm  =  parens relexpr
   <|> try (liftM Spec.RelBool bools)
   <|> try relApp
   <|> try relForeach
-  -- <|> try relIndex
+  <|> try relIndex
   <|> try (liftM Spec.RelVar ident)
   <?> "spec expr"
 
--- relIndex = do {
---   pref <- liftM Spec.RelVar ident;
---   rhs <- many1 $ brackets relexpr;
---   return $ foldl Spec.RelIndex pref rhs
--- }
+relIndex = do {
+  pref <- liftM Spec.RelVar ident;
+  rhs <- many1 $ brackets relexpr;
+  return $ foldl Spec.RelIndex pref rhs
+}
 
 expr :: Parser Imp.Expr
 expr = buildExpressionParser exprTable exprTerm <?> "expression"
@@ -114,6 +114,7 @@ exprTable   = [
       [unary "!" (Imp.UnOp Imp.Not), unary "-" (Imp.UnOp Imp.Neg)]
   ,   [binary "*" (Imp.BinOp Imp.Mul) AssocLeft, binary "/" (Imp.BinOp Imp.Div) AssocLeft ]
   ,   [binary "+" (Imp.BinOp Imp.Plus) AssocLeft, binary "-" (Imp.BinOp Imp.Minus) AssocLeft ]
+  ,   [binary "%" (Imp.BinOp Imp.Mod) AssocLeft]
   ,   [
         binary "<" (Imp.BinOp Imp.Lt) AssocLeft, binary "<=" (Imp.BinOp Imp.Le) AssocLeft
       , binary ">" (Imp.BinOp Imp.Gt) AssocLeft, binary ">=" (Imp.BinOp Imp.Ge) AssocLeft
@@ -125,6 +126,7 @@ exprTable   = [
 relTable   = [
       [unary "!" (Spec.RelUnop Spec.Not), unary "-" (Spec.RelUnop Spec.Neg)]
   ,   [binary "*" (Spec.RelBinop Spec.Mul) AssocLeft, binary "/" (Spec.RelBinop Spec.Div) AssocLeft ]
+  ,   [binary "%" (Spec.RelBinop Spec.Mod) AssocLeft]
   ,   [binary "+" (Spec.RelBinop Spec.Plus) AssocLeft, binary "-" (Spec.RelBinop Spec.Minus) AssocLeft ]
   ,   [
         binary "<" (Spec.RelBinop Spec.Lt) AssocLeft, binary "<=" (Spec.RelBinop Spec.Le) AssocLeft

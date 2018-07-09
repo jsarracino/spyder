@@ -16,6 +16,7 @@ module Language.Spyder.Synth.Cegis (
 
 import Language.Boogie.AST            
 import Language.Boogie.Interpreter
+import Language.Spyder.Synth.Template 
 import Language.Boogie.TypeChecker
 import Language.Boogie.Solver
 import Language.Boogie.Environment
@@ -37,7 +38,7 @@ import Control.Monad
 import Control.Monad.Logic
 import Control.Monad.Stream
 import Control.Lens hiding (Context, at)
-import Language.Spyder.Util                       (allocFreshLocal)
+import Language.Spyder.Util                       (allocFreshLocal, front)
 import Data.Ord                                   (comparing)
 
 import Language.Spyder.Config                     (concretSize)
@@ -72,6 +73,13 @@ allocCegisLocal prog (itws, blk)  = (var, ([itws'], blk), prog)
     (var, itws') = allocFreshLocal "__cegis__local" IntType (join itws)
 
 
+buildSwitch :: String -> [Expression] -> Program -> (String, Block, Program)
+buildSwitch lhs es prog = (switchVar, finalBlock, finalProg)
+  where
+    (switchVar, finalBlock, prog') = generateSwitch es lhs prog
+    finalProg = case prog' of 
+      (Program decs) -> Program $ decs ++ (map (Pos.gen . AxiomDecl) $ buildBounds 0 (length es) switchVar)
+
 -- given a list of rhs expressions and a lhs assignment, generate a switch for lhs := rhs_0 | rhs_1 | ... | rhs_n. return the name of the control variable
 -- for choosing the expression, as well as the switch in block form.
 generateSwitch :: [Expression] -> String -> Program -> (String, Block, Program)
@@ -94,12 +102,7 @@ generateFix 0 cands lhs prog scope = (finalProg, scope, newBlock)
   where
     (constVar, withConst) = allocFreshConst prog
     rhsEs = map (Pos.gen . Var) (constVar:cands)
-    (switchVar, newBlock, withSwitch) = generateSwitch rhsEs lhs withConst
-    finalProg = addBounds withSwitch
-    addBounds (Program decs) = Program $ decs ++ configBounds 
-      where 
-        configBounds = map (Pos.gen . AxiomDecl) $ buildBounds 0 (length rhsEs) switchVar
-
+    (switchVar, newBlock, finalProg) = buildSwitch lhs rhsEs withConst
 -- TODO: error in num-cond2.spy with depth=1 (i think)
 
 -- at depth n, allocate two variables for n-1 depths, and build binops/unops from the smaller vars
@@ -125,7 +128,7 @@ generateFix n cands lhs prog scope = (finalProg, newScope, lBlock ++ rBlock ++ n
     
     lv = Pos.gen $ Var lvar
     rv = Pos.gen $ Var rvar
-    binops = [Pos.gen $ BinaryExpression op lv rv | op <- [Plus, Minus]]
+    binops = [Pos.gen $ BinaryExpression op lv rv | op <- [Plus, Minus, Times]]
     unops = [Pos.gen $ UnaryExpression Neg rv]
     
 buildBounds :: Int -> Int -> String -> [Expression]
@@ -165,38 +168,45 @@ type IOExamples = [Map.Map String Value] -- list of states, where each state is 
 -- find a repair for a single lhs expr
 -- params: invariants, program preamble, global variables, rhs expression seeds, lhs expressions to fix, enclosing function scope, and a basic block for repair.
 -- returns: the repaired block, a new program, and a new function scope
-repairBlock :: [Expression] -> Program -> [String] -> [String] -> [String] -> Body -> Block -> (Block -> Block) -> (Map.Map String Block, Program, Body)
-repairBlock invs prog globals lhsVars rhsVars scope blk builder =  (fixedBlock, optimize newProg, newScope)
+repairBlock :: [Expression] -> Program -> [String] -> [String] -> [String] -> Body -> Block -> Block -> (Block, Program, Body)
+repairBlock invs prog globals lhsVars rhsVars scope blk templ =  (fixedBlock, optimize finalProg, newScope)
   where
     initConfig = Map.fromList []
+    (filledBlk, withTemps, newVals) = fillHoles scope templ 
 
-    firstEx = case checkConfig invs prog globals initConfig scope (blk ++ builder []) of 
+    (newProg, newBlk) = Map.foldlWithKey worker (prog, filledBlk) $ Map.map (map (Pos.gen . Var)) newVals
+
+    worker (p', blk') lvar rvars = let (_, newBlock, p'') = buildSwitch lvar rvars p' in
+      (p'', deleteEnd lvar blk' ++ newBlock ++ [genEnd lvar])
+
+    lVars' = concat $ Map.elems newVals
+
+    firstEx = case checkConfig invs prog globals initConfig withTemps blk of 
       Left _ -> error "inconceivable"
       Right io -> io
     initIO = [firstEx]
-    initCandDepths = [Map.fromList $ lhsVars `zip` (repeat 0)]
+    initCandDepths = [Map.fromList $ lVars' `zip` (repeat 0)]
 
-    (newProg, newScope, fixedBlock) = searchAllConfigs invs prog globals scope blk builder lhsVars rhsVars initCandDepths initConfig initIO
+    (finalProg, newScope, fixedBlock) = searchAllConfigs invs newProg globals withTemps blk newBlk lVars' rhsVars initCandDepths initConfig initIO
     
 -- given a set of invariants, a preamble, global variables, a block to fix, a set of base values, and a variable to add an edit, use cegis to
 -- search for a configuration that correctly edits the variable. return a map from the lhs values to their RHS blocks.
 
 -- assumes at least one IO example
-searchAllConfigs :: [Expression] -> Program -> [String] -> Body -> Block -> (Block -> Block) -> [String] -> [String] -> [Candidate] -> Config -> IOExamples -> (Program, Body, Map.Map String Block)
-    
-searchAllConfigs invs prog globals scope blk builder lhses rhses (cand:cands) conf examples = result
+searchAllConfigs :: [Expression] -> Program -> [String] -> Body -> Block -> Block -> [String] -> [String] -> [Candidate] -> Config -> IOExamples -> (Program, Body, Block)
+searchAllConfigs invs prog globals scope blk fillme lhses rhses (cand:cands) conf examples = result
   where
     -- (cname, configResult) = conf
     -- foreach lhs -> depth, look for a fix using depth. link all together.
-    (searchProg, searchScope, newFixMap) = Map.foldlWithKey genFix (prog, scope, Map.empty) cand
-    newFixBlock = concat $ Map.elems newFixMap
+    (searchProg, searchScope, newFixBlock) = Map.foldlWithKey genFix (prog, scope, fillme) cand
+    -- newFixBlock = fillHoles newFixMap templ
 
-    genFix :: (Program, Body, Map.Map String Block) -> String -> Int -> (Program, Body, Map.Map String Block)
+    genFix :: (Program, Body, Block) -> String -> Int -> (Program, Body, Block)
     genFix (p, scop, acc) lhs depth = 
       let (p', s', nxt) = generateFix depth rhses lhs p scop in
-        (p', s', Map.insert lhs nxt acc)
+        (p', s', substInHole acc lhs nxt)
 
-    searchBlock = blk ++ builder newFixBlock
+    searchBlock = blk ++ newFixBlock
 
     searchBody = case searchScope of (vars, _) -> (vars, searchBlock)
         
@@ -219,8 +229,8 @@ searchAllConfigs invs prog globals scope blk builder lhses rhses (cand:cands) co
   
     checkMe = debugProg "cegis-search-debug.bpl" $ optimize $ buildMainSearch globals procNames $ case searchProg of Program x -> Program $ x ++ procs
 
-    buildAns :: Config -> (Program, Body, Map.Map String Block)
-    buildAns cs = (finalProg, searchBody, newFixMap )
+    buildAns :: Config -> (Program, Body, Block)
+    buildAns cs = (finalProg, searchBody, newFixBlock )
       where
         synthDecs = case searchProg of Program decs -> decs
         finalProg = Program $ synthDecs ++ buildConfVal cs
@@ -233,10 +243,10 @@ searchAllConfigs invs prog globals scope blk builder lhses rhses (cand:cands) co
           Left c    -> 
             if checkProg $ case searchProg of (Program decs) -> optimize $ Program $ decs ++ buildConfVal c ++ [buildMain invs globals searchBody] --the candidate seems to work...use expensive check. if that fails, get more expressions
             then buildAns c  -- we have a winner!
-            else searchAllConfigs invs prog globals scope blk builder lhses rhses (cands ++ newCands) newConfig examples -- get more exprs
-          Right io  -> searchAllConfigs invs prog globals scope blk builder lhses rhses (cand:cands) newConfig (io:examples) -- retry current exprs
+            else searchAllConfigs invs prog globals scope blk fillme lhses rhses (cands ++ newCands) newConfig examples -- get more exprs
+          Right io  -> searchAllConfigs invs prog globals scope blk fillme lhses rhses (cand:cands) newConfig (io:examples) -- retry current exprs
       
-      []   -> searchAllConfigs invs prog globals scope blk builder lhses rhses (cands ++ newCands) conf examples -- can't find a new candidate...O.O
+      []   -> searchAllConfigs invs prog globals scope blk fillme lhses rhses (cands ++ newCands) conf examples -- can't find a new candidate...O.O
 
 
 
@@ -343,7 +353,7 @@ boogTest p pname = case typeCheckProgram p of
     rec_max = Nothing -- Just (-1)
     loop_max = Nothing -- (-1)
     minimize = True
-    concretize = False
+    concretize = True
     maybeTake = \case
       Nothing -> id
       Just n -> take n
@@ -355,7 +365,7 @@ takeConsts tc@(TestCase _ mem conMem _) = buildMap $ mem'^.memConstants
     mem' :: Memory
     mem' = userMemory conMem mem
     buildMap :: Map.Map String Expression -> Map.Map String Value
-    buildMap = Map.map (\case (Pos.Pos _ e) -> eval' e)
+    buildMap = Map.mapMaybe (\case (Pos.Pos _ e) -> eval' e)
 
 
 -- TODO: mem doesn't actually have local values because...assert violated, i think.
@@ -380,7 +390,7 @@ buildIO tc@(TestCase _ mem conMem (Just rtf)) = buildMap ((mem'^.memOld) `Map.un
     -- takeBaseVal t@Logical{} = Nothing
     -- takeBaseVal 
     buildMap :: Map.Map String Expression -> Map.Map String Value
-    buildMap mp = Map.map eval' $ Map.mapMaybe worker mp
+    buildMap mp = Map.mapMaybe eval' $ Map.mapMaybe worker mp
     worker x@(Pos.Pos _ e@(Literal (IntValue _))) = Just e
     worker _ = Nothing -- filter out unconstrained, irrelevant values; i.e. variables with logical RHS in which logical hasn't been instantiated
 

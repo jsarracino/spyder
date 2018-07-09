@@ -17,15 +17,8 @@ Component Main {
   data y: int;
 
   using Impl(x, y);
-  
-
   procedure incX() {
     x = x + 1;
-
-    // should gen 
-    // if (x == 0) { y = 1;}
-
-    
   }
 
   

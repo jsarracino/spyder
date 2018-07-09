@@ -12,7 +12,7 @@ module Language.Spyder.AST.Imp (
   
 data Bop =
     Plus | Minus | Mul | Div
-  | Lt | Gt | Le | Ge  | And | Or | Eq | Neq
+  | Lt | Gt | Le | Ge  | And | Or | Eq | Neq | Mod
   deriving (Eq, Show, Ord)
 
 -- Numeric negation and boolean negation

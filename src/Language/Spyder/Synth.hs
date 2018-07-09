@@ -1,7 +1,4 @@
 module Language.Spyder.Synth (
-  --   generateProgs
-  -- , buildContext
-  -- , 
     fixProc
   , fixBlock
   , fixStmt
@@ -9,9 +6,11 @@ module Language.Spyder.Synth (
   , parseLoopInfo
   , findEdited
   , findUnedited
-  , rebuildLoops
+  , rebuildBlock
+  , parseFixes
   , dimzero
   , insertIntoLoop
+  , buildConds
 ) where
 
 import Prelude hiding (foldl, all, concat, any)
@@ -19,6 +18,7 @@ import Data.Foldable
 
 
 import Language.Spyder.Synth.Verify
+import Language.Spyder.Synth.Template 
 import Language.Spyder.Synth.Enum
 import Language.Spyder.Synth.Cegis            (repairBlock, buildMain)
 import qualified Language.Spyder.AST as SAST
@@ -73,34 +73,19 @@ fixForInvs invs dims = foldl worker Indet $ map neededSynth invs
       otherwise -> Loop
 
 
-rebuildLoops :: Map.Map String Block -> Block -> Block
-rebuildLoops assigns = map worker
-  where
-    worker :: LStatement -> LStatement
-    worker (Pos x (xs, Pos t (While c spec bod))) = Pos x (xs, Pos t $ While c spec bod')
-      where
-        (idx, vs, _) = parseLoopInfo $ head bod
-        (pref, mid, suf) = parseLoop bod
-        bod' = pref ++ recur mid ++ updates ++ suf
-        updates = concat $ mapMaybe (`Map.lookup` assigns) $ idx:vs
-    worker (Pos x (xs, Pos t (If c l r))) = Pos x (xs, Pos t $ If c l' r)
-      where
-        l' = recur l
-        -- r' = fmap recur r
-    worker s = s
-
-    recur = rebuildLoops assigns
 
 
-insertIntoLoop :: Block -> LStatement -> Block
-insertIntoLoop ins (Pos p (x, Pos q (While c s bod))) = [Pos p (x, Pos q $ While c s bod')]
+insertIntoLoop :: Block -> Maybe LStatement -> Block
+insertIntoLoop ins (Just (Pos p (x, Pos q (While c s bod)))) = [Pos p (x, Pos q $ While c s bod')]
   where
     (pre, mid, suf) = parseLoop bod
     (midp, midl) = (init mid, last mid)
     newMid = case midl of 
-      (s@(Pos _ (_, Pos _ While{}))) -> insertIntoLoop ins s
+      (s@(Pos _ (_, Pos _ While{}))) -> insertIntoLoop ins (Just s)
       _ -> ins 
     bod' = pre ++ mid ++ newMid ++ suf
+insertIntoLoop ins (Just s@Pos{}) = s : ins
+insertIntoLoop ins _ = ins
 
 dimzero :: DimEnv -> String -> Bool
 dimzero d s = (Map.!) d s == 0
@@ -108,6 +93,7 @@ dimzero d s = (Map.!) d s == 0
 fixBlock :: DimEnv -> [Spec.RelExpr] -> [Set.Set String] -> Program -> [String] -> [String] -> Body -> Block -> Block -> (Block, Program, Body)
 fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult inner
   where
+    genSkel s = [genStart s, genHole s, genEnd s]
     inner = foldl wrapFixStmt initState fixme
     fixResult :: (Block, Block, Program, Body) -> (Block, Program, Body)
     fixResult (_, blk, prog@(Program decs), scope'@(vs, _)) = if not isRepaired then fixed else (blk, prog, scope')
@@ -152,9 +138,9 @@ fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult
     buildLS s = gen ([], gen s)
 
     createFix :: DimEnv -> [Spec.RelExpr] -> Program -> [String] -> [String] -> [String] -> Body -> Block -> (Block, Program, Body)
-    createFix dims invs prog globals lvars rvars scope oldblk = (concat (Map.elems baseFixes) ++ rebuildLoops arrFixes skeleton, finalProg, finalScope)
+    createFix dims invs prog globals lvars rvars scope oldblk = ( rebuildBlock skeleton fixes, finalProg, finalScope)
       where
-        initState = (dims, invs, scope, [], Set.fromList lvars, Set.fromList rvars)
+        initState = (dims, invs, scope, templ, Set.fromList lvars, Set.fromList rvars)
         canSynth (ds, _, _, _, lvs, _) = all (dimzero ds) lvs
 
         worker (odims, oinvs, oscope, blk, lvs, rvs) = (dims', invs', scope', blk', lvs', rvs')
@@ -180,11 +166,13 @@ fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult
 
   
 
-            blk' = if null blk then loopBLK else oldPre ++ insertIntoLoop loopBLK oldLoop
+            blk' = if null blk then loopBLK else oldPre ++ insertIntoLoop loopBLK (Just oldLoop)
 
             (newLoopPre, While c spec bod) = (init loopSS, last loopSS)
             loopSS' = newLoopPre ++ [While c spec' bod']
-            loopBLK = map (\s -> gen ([], gen s)) loopSS'
+            loopBLK = map (\s -> gen ([], gen s)) loopSS' ++ holes
+
+            holes = filter (dimzero odims) loopVars >>= genSkel
 
             (idx, loopVars, arrVs) = parseLoopInfo $ head bod
             (pref, mid, suf) = parseLoop bod
@@ -199,11 +187,13 @@ fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult
 
 
         (finalDims, finalInvs, synthScope, skeleton, lvs, rvs) = until canSynth worker initState
-        (finalInvs', builder) = transRels finalInvs
+        templ = buildConds (concat [[genStart s, genHole s, genEnd s] | s <- Set.toList lvs]) finalInvs
+        
 
-        (fixes, finalProg, finalScope) = repairBlock (map (specToBoogie []) finalInvs') prog globals (Set.toList lvs) (Set.toList rvs) synthScope oldblk id
+        (fixed, finalProg, finalScope) = repairBlock (map (specToBoogie []) finalInvs) prog globals (Set.toList lvs) (Set.toList rvs) synthScope oldblk templ
 
-        (baseFixes, arrFixes) = Map.partitionWithKey (\s _ -> dimzero finalDims s) fixes
+        fixes = parseFixes fixed
+  
       
         
       
@@ -242,32 +232,26 @@ fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult
 
       --   (loopFix, finalProg, finalScope) = createFix dims' invs'' prog globals loopVars (rvars ++ loopVars) scope' blk
 
-  
-            
-        
-    
+buildConds :: Block -> [Spec.RelExpr] -> Block
+buildConds assigns specs = if any isImp canon then foldl worker [] canon else assigns
+  where
+    canon = until allBase splitAnds specs
+    allBase = all (not . isAnd)
 
-    transRels :: [Spec.RelExpr] -> ([Spec.RelExpr], Block -> Block)
-    -- transRels rels = snd $ until done step init
-    --   where 
-    --     nxt :: ([Spec.RelExpr], Block -> Block)
-    --     nxt = let (rs', fs') = unzip $ map simplSpec rels in (rs', foldl (.) id fs')
-    --     init :: (([Spec.RelExpr], Block -> Block), ([Spec.RelExpr], Block -> Block))
-    --     init = ((rels, id), nxt)
-    --     step :: (([Spec.RelExpr], Block -> Block), ([Spec.RelExpr], Block -> Block)) -> (([Spec.RelExpr], Block -> Block), ([Spec.RelExpr], Block -> Block))
-    --     step (_, x@(rs, f)) = (x, (rs', f'))
-    --       where 
-    --         (rs', fs) = unzip $ map simplSpec rs
-    --         f' = foldl (.) f fs
+    splitAnds ss = ss >>= f
+      where 
+        f (Spec.RelBinop Spec.And l r) = [l, r]
+        f s = [s]
 
-    --     done :: (([Spec.RelExpr], Block -> Block), ([Spec.RelExpr], Block -> Block)) -> Bool
-    --     done ((rs, _), (rs', _)) = all (uncurry (==)) $ rs `zip` rs'
-    transRels rels = (rels, foldl (.) id $ map simplSpec rels)
+    worker acc (Spec.RelBinop Spec.Imp l _) = acc ++ singletonBlock (gen $ If (Expr $ specToBoogie [] l) assigns Nothing)
+    worker acc _ = acc
 
-    simplSpec :: Spec.RelExpr -> Block -> Block
-    simplSpec (Spec.RelBinop Spec.Imp l r) b = singletonBlock $ gen $ If (Expr $ specToBoogie [] l) b Nothing
-    simplSpec x b = b
--- specialize ForEach vs arrs bod[vs] to bod[x/v | x <- xs, v <- vs, v <= arr, arrs ~ xs by arr = xs_i]
+    isImp (Spec.RelBinop Spec.Imp _ _) = True
+    isImp _ = False
+    isAnd (Spec.RelBinop Spec.And _ _) = True
+    isAnd _ = False
+
+-- specialize ForEach vs arrs idx bod[vs] to bod[x/v | x <- xs, v <- vs, v <= arr, arrs ~ xs by arr = xs_i]
 -- loopArrs should be strictly bigger than arrs. loopArrs is all arrays that might be related to the source
 -- array, which includes arrs. 
 specializeSpec :: [String] -> [String] -> String -> Spec.RelExpr -> Spec.RelExpr
@@ -378,10 +362,8 @@ parseLoopInfo (Pos _ (_, Pos _ (Predicate [Attribute "forInfo" (SAttr x:args)] _
 
 -- parses block with {:forBegin} and {:forEnd} separators into three blocks, one for the prefix, one for suffix, and one for body
 parseLoop :: Block -> (Block, Block, Block)
-parseLoop ls = (pref, bod, suf)
+parseLoop = splitBlock (takePred "forBegin") (takePred "forEnd")
   where
-    (pref, rst) = break (takePred "forBegin") ls
-    (bod, suf) = break (takePred "forEnd") rst
     takePred :: String -> LStatement -> Bool
     takePred s (Pos _ (_, Pos _ (Predicate [Attribute s' _] _ ))) = s == s'
     takePred _ _ = False

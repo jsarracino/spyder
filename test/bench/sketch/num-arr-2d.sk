@@ -33,10 +33,24 @@ generator int expr(int y, int bnd) {
 	else { return mult() + expr(y, bnd-1); }
 }
 
-harness void sketch (int a, int b, int c, int d) {
-	int[2][2] x = {{a,b},{c,d}};
-	int[2][2] y = {{a,b},{c,d}};
-	int[2][2] x1 = incr_x(2,2,x,y);
-	int[2][2] y1 = incr_y(2,2,y,1);
-	equal_arrays(2, 2, x1, y1);
+
+int[m][n] buildGol(int m, int n){
+    int[m][n] out;
+	for(int i=0; i<m; ++i){
+		for(int j=0; j<n; j++) {
+			if(i%2==0) {out[i][j] = 1;}
+			else {out[i][j] = 1;}
+        }
+    }
+    return out;
+}
+
+harness void sketch (int m, int n) {
+	m = 6;
+	n = 6;
+	int[m][n] x = buildGol(m,n);
+	int[m][n] y = x;
+	int[m][n] x1 = incr_x(m,n,x,y);
+	int[m][n] y1 = incr_y(m,n,y,1);
+	equal_arrays(m, n, x1, y1);
 }

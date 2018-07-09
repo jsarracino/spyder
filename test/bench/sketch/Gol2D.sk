@@ -20,12 +20,20 @@ generator int[m][n] arrexpr(int m, int n, int[m][n] p, int[m][n] q) {
 }
 
 generator int expr(int a, int b, int c, int d) {
-    return {| a | b | c| d|} * {| a | b | c| d| ?? |};
+    generator int sum(){
+        return {| a | b | c | d |} * {| a | b | c | d | ?? |};
+    }
+    if(??) { return sum(); }
+    else { return sum() + expr(a,b,c); } 
 }
 
-generator int texpr(int x, int y, int z) {
-    return {| x | y | z|} * {| x | y | z| ?? |};
-}
+generator int texpr(int a, int b, int c) {
+    generator int sum(){
+        return {| a | b | c | } * {| a | b | c | ?? |};
+    }
+    if(??) { return sum(); }
+    else { return sum() + texpr(a,b,c); } 
+} 
 
 generator void toggleStart(int start, int stop, int run){
     if(start == 0){
@@ -147,11 +155,26 @@ generator void golLogic(int iBound, int jBound, int m, int n, int[m][n] cells, i
     }
 }
 
-harness void sketch (int start, int stop, int run) {
-    int[4][4] rendered = {{0,0,1,0}, {1,1,0,1}, {1,0,0,1},{1,0,0,0}};
-    int[4][4] cells = {{0,0,1,0}, {1,1,0,1}, {1,0,0,1},{1,0,0,0}};
+
+int[m][n] buildGol(int m, int n){
+    int[m][n] out;
+    for(int i=0; i<m; ++i){
+        for(int j=0; j<n; j++) {
+            if(i%2==0) {out[i][j] = 1;}
+            else {out[i][j] = 1;}
+        }
+    }
+    return out;
+}
+
+harness void sketch (int start, int stop, int run, int m, int n) {
+    m = 6;
+    n = 6;
+    int[m][n] rendered = buildGol(m,n);
+    int[m][n] cells = rendered;
     toggleStart(0, stop, run);
     toggleStop(start, 0, run);
-    colorOnClick(4, 4, rendered, cells, 1, 1);
-    golLogic(4, 4, 4, 4, cells, 1, 2, rendered);
+    colorOnClick(m, n, rendered, cells, 1, 1);
+    golLogic(m, n, m, n, cells, 1, 2, rendered);
+
 }

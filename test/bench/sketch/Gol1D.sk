@@ -15,9 +15,14 @@ generator int[n] arrexpr(int n, ref int[n] p, int[n] q) {
 	return p;
 }
 
-generator int expr(int x, int y, int z) {
-	return {| x | y | z|} * {| x | y | z| ?? |};
+generator int expr(int a, int b, int c) {
+    generator int sum(){
+        return {| a | b | c |} * {| a | b | c | ?? |};
+    }
+    if(??) { return sum(); }
+    else { return sum() + expr(a,b,c); }
 }
+
 
 generator void toggleStart(int start, int stop, int run){
 	if(start == 0){
@@ -122,11 +127,21 @@ generator void golLogic(int uBound, int n, int[n] cells, int idx, int[n] rendere
   	}
 }
 
-harness void sketch (int start, int stop, int run) {
-	int[4] rendered = {0, 0, 1, 1};
-	int[4] cells = {0, 0, 1, 1};
+int[n] buildGol(int n){
+	int[n] out;
+    for(int i = 0; i < n; ++i){
+        if(i%2==0) {out[i] = 1;}
+        else {out[i] = 1;}
+    }
+    return out;
+}
+
+harness void sketch (int start, int stop, int run, int n) {
+	n = 10;
+	int[n] rendered = buildGol(n);
+	int[n] cells = rendered;
 	toggleStart(0, stop, run);
 	toggleStop(start, 0, run);
-	colorOnClick(4, rendered, cells, 1);
-	golLogic(4, 4, cells, 1, rendered);
+	colorOnClick(n, rendered, cells, 1);
+	golLogic(n, n, cells, 1, rendered);
 }

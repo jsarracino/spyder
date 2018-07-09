@@ -1,66 +1,79 @@
 void cells2colors(int m, int n, int[m][n] p, int[m][n] q){
-	for(int i=0; i<m; ++i){
-		for(int j=0; j<n; j++) {
-			assert p[i][j] == q[i][j];
-		}
-	}
+    for(int i=0; i<m; ++i){
+        for(int j=0; j<n; j++) {
+            assert p[i][j] == q[i][j];
+        }
+    }
 }
 
 void goodConfig(int start, int stop, int run){
-	assert ((0 <= run && run <= 1) && (0 <= start && start <= 1) && (0 <= stop && stop <= 1) && start != stop && run == start);
+    assert ((0 <= run && run <= 1) && (0 <= start && start <= 1) && (0 <= stop && stop <= 1) && start != stop && run == start);
 }
 
-generator int expr(int x, int y, int z) {
-	return {| x | y | z|} * {| x | y | z| ?? |};
+generator int[m][n] arrexpr(int m, int n, int[m][n] p, int[m][n] q) {
+    for(int i=0; i<m; ++i){
+        for(int j=0; j<n; j++) {
+            p[i][j] = expr(p[i][j],q[i][j],i,j);
+        }
+    }
+    return p;
+}
+
+generator int expr(int a, int b, int c, int d) {
+    return {| a | b | c| d|} * {| a | b | c| d| ?? |};
+}
+
+generator int texpr(int x, int y, int z) {
+    return {| x | y | z|} * {| x | y | z| ?? |};
 }
 
 generator void toggleStart(int start, int stop, int run){
-	if(start == 0){
-		start = 1;
-		stop = expr(start,stop,run);
-		run = expr(start,stop,run);
-		goodConfig(start,stop,run);
+    if(start == 0){
+        start = 1;
+        stop = texpr(start,stop,run);
+        run = texpr(start,stop,run);
+        goodConfig(start,stop,run);
     }
     else if(start == 1){
-		start = 0;
-		stop = expr(start,stop,run);
-		run = expr(start,stop,run);
-		goodConfig(start,stop,run);
+        start = 0;
+        stop = texpr(start,stop,run);
+        run = texpr(start,stop,run);
+        goodConfig(start,stop,run);
     }
 }
 
 generator void toggleStop(int start, int stop, int run){
-	if(stop == 0){
-		stop = 1;
-		start = expr(start,stop,run);
-		run = expr(start,stop,run);
-		goodConfig(start,stop,run);
+    if(stop == 0){
+        stop = 1;
+        start = texpr(start,stop,run);
+        run = texpr(start,stop,run);
+        goodConfig(start,stop,run);
     }
     else if(stop == 1){
-		stop = 0;
-		start = expr(start,stop,run);
-		run = expr(start,stop,run);
-		goodConfig(start,stop,run);
+        stop = 0;
+        start = texpr(start,stop,run);
+        run = texpr(start,stop,run);
+        goodConfig(start,stop,run);
     }
 }
 
 generator void colorOnClick(int m, int n, int[m][n] rendered, int[m][n] cells, int loci, int locj){
-	for(int i=0; i<m; ++i){
-		for(int j=0; j<n; j++) {
-			if(i == loci && locj == j){
-				if(rendered[i][j] == 0) {
-					rendered[i][j] = 1;
-					cells[i][j] = expr(cells[i][j],rendered[i][j],i);
-					cells2colors(m, n, cells, rendered);
-				}
-				else if(rendered[i][j] == 1){
-					rendered[i][j] = 0;
-					cells[i][j] = expr(cells[i][j],rendered[i][j],i);
-					cells2colors(m, n, cells, rendered);
-				}
-			}
-		}
-	}
+    for(int i=0; i<m; ++i){
+        for(int j=0; j<n; j++) {
+            if(i == loci && locj == j){
+                if(rendered[i][j] == 0) {
+                    rendered[i][j] = 1;
+                    int[m][n] ncells = arrexpr(m,n,cells,rendered);
+                    cells2colors(m, n, ncells, rendered);
+                }
+                else if(rendered[i][j] == 1){
+                    rendered[i][j] = 0;
+                    int[m][n] ncells = arrexpr(m,n,cells,rendered);
+                    cells2colors(m, n, ncells, rendered);
+                }
+            }
+        }
+    }
 }
 
 generator void golLogic(int iBound, int jBound, int m, int n, int[m][n] cells, int loci, int locj, int[m][n] rendered){
@@ -68,15 +81,15 @@ generator void golLogic(int iBound, int jBound, int m, int n, int[m][n] cells, i
     int[m][n] oldCells;
 
     for(int i=0; i<m; ++i){
-		for(int j=0; j<n; j++) {
-        	oldCells[i][j] = cells[i][j];
+        for(int j=0; j<n; j++) {
+            oldCells[i][j] = cells[i][j];
         }
     }
 
     for(int i=0; i<m; ++i){
-		for(int j=0; j<n; j++) {
-        	if(loci == 0){
-            	if (locj == 0) { 
+        for(int j=0; j<n; j++) {
+            if(loci == 0){
+                if (locj == 0) {
                     count = oldCells[loci][locj+1] + oldCells[loci+1][locj] + oldCells[loci+1][locj+1];
                 } 
 
@@ -92,7 +105,7 @@ generator void golLogic(int iBound, int jBound, int m, int n, int[m][n] cells, i
             else if(loci + 1 == iBound){
                 if (locj == 0) { 
                     count = oldCells[loci][locj+1] + oldCells[loci-1][locj+1] + oldCells[loci-1][locj];
-               	}
+                }
 
                 else if(locj + 1 == jBound){
                     count = oldCells[loci][locj-1] + oldCells[loci-1][locj-1] + oldCells[loci-1][locj];
@@ -101,7 +114,7 @@ generator void golLogic(int iBound, int jBound, int m, int n, int[m][n] cells, i
                 else {
                     count = oldCells[loci][locj-1] + oldCells[loci][locj+1] + oldCells[loci-1][locj-1] + oldCells[loci-1][locj] + oldCells[loci-1][locj+1];
                 }
-        	}
+            }
 
             else {
                 if (locj == 0){
@@ -117,28 +130,28 @@ generator void golLogic(int iBound, int jBound, int m, int n, int[m][n] cells, i
                 }
             }
 
-            if (oldCells[loci][locj] == 0) {
-                if (count == 2 || count == 3) {
-                    cells[i][j] = 1;
-                    rendered[i][j] = expr(cells[i][j],rendered[i][j],count);
-                    cells2colors(m, n, cells, rendered);
+        if (oldCells[loci][locj] == 0) {
+            if (count == 2 || count == 3) {
+                cells[i][j] = 1;
+                int[m][n] nrendered = arrexpr(m,n,rendered,cells);
+                cells2colors(m, n, nrendered, cells);
                 }
-            } else {
-                if (count != 2 && count != 4) {
-                    cells[i][j] = 0;
-                    rendered[i][j] = expr(cells[i][j],rendered[i][j],count);
-                    cells2colors(m, n, cells, rendered);
-                }
+        } else {
+            if (count != 2 && count != 4) {
+                cells[i][j] = 0;
+                int[m][n] nrendered = arrexpr(m,n,rendered,cells);
+                cells2colors(m, n, nrendered, cells);
+               }
             }
         }
     }
 }
 
 harness void sketch (int start, int stop, int run) {
-	int[4][4] rendered = {{0,0,1,0}, {1,1,0,1}, {1,0,0,1},{1,0,0,0}};
-	int[4][4] cells = {{0,0,1,0}, {1,1,0,1}, {1,0,0,1},{1,0,0,0}};
-	toggleStart(0, stop, run);
-	toggleStop(start, 0, run);
-	colorOnClick(4, 4, rendered, cells, 1, 1);
-	golLogic(4, 4, 4, 4, cells, 1, 2, rendered);
+    int[4][4] rendered = {{0,0,1,0}, {1,1,0,1}, {1,0,0,1},{1,0,0,0}};
+    int[4][4] cells = {{0,0,1,0}, {1,1,0,1}, {1,0,0,1},{1,0,0,0}};
+    toggleStart(0, stop, run);
+    toggleStop(start, 0, run);
+    colorOnClick(4, 4, rendered, cells, 1, 1);
+    golLogic(4, 4, 4, 4, cells, 1, 2, rendered);
 }

@@ -14,12 +14,19 @@ extra-source-files:  README.md
 cabal-version:       >=1.10
 
 library
-  hs-source-dirs:      src
+  hs-source-dirs:      Language
   exposed-modules:
     Language.Spyder.AST,
     Language.Spyder.AST.Imp,
     Language.Spyder.AST.Spec,
     Language.Spyder.AST.Component,
+    Language.Spyder.Config,
+    Language.Spyder.Opt,
+    Language.Spyder.Synth.Template,
+    Language.Spyder.Translate.Direct,
+    Language.Spyder.Translate.Expr,
+    Language.Spyder.Translate.Related,
+    Language.Spyder.Translate.Specs,
     Language.Spyder.Parser,
     Language.Spyder.Parser.Lexer,
     Language.Spyder.Parser.Parser,
@@ -51,11 +58,18 @@ library
   default-language:    Haskell2010
 
 executable spyder
-  hs-source-dirs:      src
+  hs-source-dirs:      Language
   main-is:             Spyder.hs
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N -main-is Spyder.hs -W -fno-warn-missing-signatures -fno-warn-dodgy-exports -fno-warn-unused-do-bind
   other-modules:
     Language.Spyder.AST
+    Language.Spyder.Config
+    Language.Spyder.Opt
+    Language.Spyder.Synth.Template
+    Language.Spyder.Translate.Direct
+    Language.Spyder.Translate.Expr
+    Language.Spyder.Translate.Related
+    Language.Spyder.Translate.Specs
     Language.Spyder.AST.Component
     Language.Spyder.AST.Imp
     Language.Spyder.AST.Spec

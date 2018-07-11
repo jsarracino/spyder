@@ -42,20 +42,21 @@ Component AltColor {
   data rows : int[];
 
   relation Alternating(e: int, o: int, cs: int[]) {
-    foreach (b) with idx in (cs){
-      ((idx % 2) = 0 ==> b = e) && 
-      ((idx % 2) = 1 ==> b = o)
+    foreach (c) with idx in (cs){
+      //((idx % 2) = 0 ==> c = e) && 
+      //((idx % 2) = 1 ==> c = o)
+      c = 3
     }
   }
 
   relation Backgrounds(e: int, o: int, cs: int[]) {
-    foreach (b) in (cs){
-      (b = e || b = o)
+    foreach (c) in (cs){
+      (c = e || c = o)
     }
   }
 
   always Alternating(evenColor, oddColor, rows);
-  always Backgrounds(evenColor, oddColor, rows);
+  //always Backgrounds(evenColor, oddColor, rows);
 }
 
 
@@ -79,7 +80,7 @@ Component Main {
 
 
   
-  procedure editWeekly(i: int, val: int) {
+  procedure editWeekly() {
     let i: int;
     let val: int;
     for (w: int) with idx in (weeks) {
@@ -93,7 +94,7 @@ Component Main {
   
 
   
-  procedure editMonthly(i: int, val: int) {
+  procedure editMonthly() {
     let i: int;
     let val: int;
     for (w: int, m: int, y: int) with idx in (weeks, months, years) {

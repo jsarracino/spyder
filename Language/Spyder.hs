@@ -13,11 +13,19 @@ import qualified Language.Spyder.Parser as Parser
 import Language.Boogie.Pretty (pretty)
 import Language.Boogie.PrettyAST ()
 import System.Environment (getArgs)
-import Control.Monad                        (liftM, liftM2)
+import Control.Monad                        (liftM, liftM2, void)
 import Data.IORef
 import Language.Spyder.Config
 
+import Language.Spyder.Bench
+
 import Options.Applicative
+import Options.Applicative.Types
+
+-- maybeReader :: (String -> Maybe a) -> ReadM a
+-- maybeReader f = do
+--   arg  <- readerAsk
+--   maybe (readerError $ "cannot parse value `" ++ arg ++ "'") return . f $ arg
 
 file2Boogie :: FilePath -> IO BST.Program
 file2Boogie inp = liftM Translate.toBoogie (Parser.fromFile inp)
@@ -29,18 +37,45 @@ file2Boogiefile inp outp = do {
   return boog
 }
 
-data SpyOptions = SpyOpts { 
-    inFile     :: FilePath  -- path to input file
-  , outFile    :: FilePath  -- path to output file
-  } deriving (Eq, Show, Ord)
+maybeReader :: (String -> Maybe a) -> ReadM a
+maybeReader f = eitherReader $ \arg ->
+  maybe (Left $ "cannot parse value `" ++ arg ++ "'") pure . f $ arg
 
-runOpts :: SpyOptions -> IO BST.Program
-runOpts opts = file2Boogiefile (inFile opts) (outFile opts)
+data BenchMode = Boog | Spy | Invs
+  deriving (Eq, Show, Ord)
+
+data SpyOptions = SpyOpts { 
+        inFile       :: FilePath   -- path to input file
+      , outFile      :: FilePath   -- path to output file
+    } 
+  | Benches {
+      ty              :: BenchMode
+    , inp             :: FilePath
+  }
+  deriving (Eq, Show, Ord)
+
+runOpts :: SpyOptions -> IO ()
+runOpts (SpyOpts inf outf) = void $ file2Boogiefile inf outf
+runOpts (Benches mode inf) = do {
+    i <- worker mode;
+    putStrLn $ "result : " ++ show i
+  }
+  where
+    boog = file2Boogie inf
+    spy = Parser.fromFile inf
+
+    worker :: BenchMode -> IO Int
+    worker Boog   = liftM boogSize boog
+    worker Spy    = liftM spySize spy
+    worker Invs  = liftM invSize spy
 
 
 parseOpts :: Parser SpyOptions
-parseOpts = SpyOpts <$> inp <*> outp
+parseOpts = normal <|> benches
   where
+    benches :: Parser SpyOptions
+    benches = Benches <$> bmode <*> inp
+    normal = SpyOpts <$> inp <*> outp
     inp = strOption ( 
             long "input"
         <>  short 'i'
@@ -55,6 +90,19 @@ parseOpts = SpyOpts <$> inp <*> outp
         <> value "out.bpl"
         <> help "Output file location" 
       )
+
+      
+    bmode :: Parser BenchMode
+    bmode = option (maybeReader makeBench) (long "bench"
+        <>  short 'b'
+        <>  metavar "BENCH"
+        <> help "Benchmark switch, followed by `Boog` or `Spy` or `Inv`." 
+      )
+
+    makeBench "Boog" = Just Boog
+    makeBench "Spy" = Just Spy
+    makeBench "Inv" = Just Invs
+    makeBench _ = Nothing
       
 
 

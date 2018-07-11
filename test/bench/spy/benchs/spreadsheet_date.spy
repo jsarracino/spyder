@@ -1,0 +1,50 @@
+Component DateConv {
+  data ws: int[];
+  data ms: int[];
+  data ys: int[];
+
+  relation Months(ws: int[], ms: int[]) {
+    foreach (w, m) in (ws, ms) {
+      m = 4 * w
+    }
+  }
+
+  relation Years(ms: int[], ys: int[]) {
+    foreach (m, y) in (ms, ys) {
+      y = 12 * m
+    }
+  }
+
+  always Months(ws, ms);
+  always Years(ms, ys);
+}
+
+Component Main {
+  data weeks: int[];
+  data months: int[];
+  data years: int[];
+
+  using DateConv(weeks, months, years);
+
+  procedure editWeekly(i: int, val: int) {
+    let i: int;
+    let val: int;
+    for (w: int) with idx in (weeks) {
+      if (idx == i) {
+        w = val;
+      }
+    }
+
+  }
+
+  procedure editMonthly(i: int, val: int) {
+    let i: int;
+    let val: int;
+    for (w: int, m: int, y: int) with idx in (weeks, months, years) {
+      if (idx == i) {
+        m = val;
+      }
+    }
+
+  }
+}

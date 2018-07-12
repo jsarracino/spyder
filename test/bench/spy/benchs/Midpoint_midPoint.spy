@@ -1,0 +1,41 @@
+Component Midpoint {
+  data lhs : int;
+  data rhs: int;
+  data mid: int;
+
+  relation midPoint(x: int, y: int, m: int) {
+    x + y = 2 * m
+  }
+  
+  always midPoint(lhs, rhs, mid);
+  
+}
+
+Component NotEq {
+  data l: int;
+  data r: int;
+
+  relation notEq(x: int, y: int) {
+    x != y
+  }
+
+  always notEq(l, r);
+}
+
+
+Component Main {
+  
+  data x: int;
+  data y: int;
+  data m: int;
+
+  using Midpoint(x, y, m);
+  using NotEq(x, y);
+  
+
+  procedure incM() {
+    m = m + 1;
+  }
+
+  
+}

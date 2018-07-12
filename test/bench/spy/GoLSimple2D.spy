@@ -74,8 +74,8 @@ Component Main {
   }
 
   function golLogic(){
-    for (row, i) in enumerate cells:
-      for (cell, j) in enumerate row:
-        ... blah using i, j...
+    for (row, i) in  cells:
+      for (cell, j) in  row:
+        //... blah using i, j...
   }
 }

@@ -11,6 +11,7 @@ module Language.Spyder.Synth (
   , dimzero
   , insertIntoLoop
   , buildConds
+  , log
 ) where
 
 import Prelude hiding (foldl, all, concat, any)
@@ -45,6 +46,9 @@ import Language.Spyder.Translate.Rename
 
 import Language.Spyder.Util
 
+import Text.Printf
+import System.IO.Unsafe
+
 -- given a program and a basic block *to fix*, run cegis to search for the fix.
 fixProc :: DimEnv -> [Spec.RelExpr] -> [Set.Set String] -> Program -> Body -> [String] -> SAST.Program -> Block -> (Block, Program, Body)
 fixProc dims invs relVars header body globals p@(comps, MainComp decs) broken = fixed
@@ -72,8 +76,9 @@ fixForInvs invs dims = foldl worker Indet $ map neededSynth invs
       0         -> Base
       otherwise -> Loop
 
-
-
+{-# NOINLINE logme #-}
+logme :: [String] -> [String]
+logme vs = unsafePerformIO (printf "holes: %d" (length vs) >> putStrLn "") `seq` vs
 
 insertIntoLoop :: Block -> Maybe LStatement -> Block
 insertIntoLoop ins (Just (Pos p (x, Pos q (While c s bod)))) = [Pos p (x, Pos q $ While c s bod')]
@@ -105,11 +110,12 @@ fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult
 
         staleInvs = useVars invs $ Set.fromList $ findEdited blk
         staleVars = findUnedited relVars rhsVars blk
+        staleVars' = logme staleVars
         -- (invs', builder) = transRels staleInvs
 
         
 
-        (suffix, prog', bod') = createFix dims invs prog globals staleVars (filter (dimzero dims) rhsVars) scope' blk 
+        (suffix, prog', bod') = createFix dims invs prog globals staleVars' (filter (dimzero dims) rhsVars) scope' blk 
 
         fixed = (blk ++ suffix, prog', bod')
 

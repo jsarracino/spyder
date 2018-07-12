@@ -40,7 +40,7 @@ Component Main {
   data start : int; // button
   data stop : int; // button
 
-  //using Startable(running, start, stop);
+  using Startable(running, start, stop);
   using OneDGoL(cells, rendered);
 
   procedure colorOnClick() {

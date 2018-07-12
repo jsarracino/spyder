@@ -20,6 +20,7 @@ library
     Language.Spyder.AST.Imp,
     Language.Spyder.AST.Spec,
     Language.Spyder.AST.Component,
+    Language.Spyder.Bench,
     Language.Spyder.Config,
     Language.Spyder.Opt,
     Language.Spyder.Synth.Template,
@@ -63,6 +64,7 @@ executable spyder
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N -main-is Spyder.hs -W -fno-warn-missing-signatures -fno-warn-dodgy-exports -fno-warn-unused-do-bind
   other-modules:
     Language.Spyder.AST
+    Language.Spyder.Bench
     Language.Spyder.Config
     Language.Spyder.Opt
     Language.Spyder.Synth.Template

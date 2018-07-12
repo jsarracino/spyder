@@ -1,0 +1,135 @@
+generator int[n] months_weeks(int n, int[n] w, int[n] m){
+	for(int i=0; i<n; i++){
+		assert m[i] == 4 * w[i];
+	}
+	return m;
+}
+
+generator int[n] years_months(int n, int[n] y, int[n] m){
+	for(int i=0; i<n; ++i){
+		assert y[i] == 12 * m[i];
+	}
+	return y;
+}
+
+void altcolor(int evencolor, int oddcolor, int n, int[n] rows){
+	for(int i=0; i<n; ++i){
+		if(i%2==0) 
+			assert rows[i] == evencolor;
+		else if(i%2==1) 
+			assert rows[i] == oddcolor;
+	}
+}
+
+void colored(int pos, int neg, int n, int[n] vals, int[n] colors){
+	for(int i=0; i<n; ++i){
+		if(vals[i]>=0)
+			assert colors[i] == pos;
+		else if(vals[i]<0)
+			assert colors[i] == neg;
+	}
+}
+
+void backgroud(int evencolor, int oddcolor, int n, int[n] rows){
+	for(int i=0; i<n; ++i){
+		assert rows[i] == evencolor || rows[i] == oddcolor;
+	}
+}
+
+generator int[n] aexpr(int n, int[n] p, int[n] q, int[n] r) {
+	for(int i=0; i<n; i++){
+		p[i] = expr(p[i], q[i], r[i]);
+	}
+	return p;
+}
+
+generator int[n] arrexpr(int l, int m, int n, ref int[n] p) {
+	for(int i=0; i<n; i++){
+		p[i] = expr(i, l, m);
+	}
+	return p;
+}
+
+generator int expr(int x, int y, int z) {
+	return {| x | y | z|} * {| x | y | z| ?? |};
+}
+
+generator void editWeekly(int val, int idx, int n, int[n] weeks, int[n] months, int[n] years, int pos, int neg, int[n] colors){
+	for(int i=0; i<n; ++i){
+		if(idx == i){
+			weeks[i] = val;
+			if(weeks[i] > 0){
+				months[i] = expr(months[i],weeks[i],years[i]);
+				years[i] = expr(months[i], years[i],weeks[i]);
+				months_weeks(n, weeks, months);
+				years_months(n, years, months);
+				colors[i] = expr(pos,neg,n);
+				colored(pos, neg, n, weeks,colors);
+			} else if(weeks[i] < 0){
+				months[i] = expr(months[i],weeks[i],years[i]);
+				years[i] = expr(months[i], years[i],weeks[i]);
+				months_weeks(n, weeks, months);
+				years_months(n, years, months);
+				colors[i] = expr(pos,neg,n);
+				colored(pos, neg, n, weeks, colors);
+			}
+		}
+	}
+}
+
+generator void editMonthly(int val, int idx, int n, int[n] months, int[n] years){
+	for(int i=0; i<n; ++i){
+		if(idx == i){
+			months[i] = val;
+			years[i] = expr(val,months[i],years[i]);
+			years_months(n, years, months);
+		}
+	}
+}
+
+int[n] wbuildGol(int n){
+	int[n] out;
+    for(int i = 0; i < n; ++i){
+        if(i%2==0) {out[i] = -1;}
+        else {out[i] = 1;}
+    }
+    return out;
+}
+
+int[n] mbuildGol(int n){
+	int[n] out;
+    for(int i = 0; i < n; ++i){
+        if(i%2==0) {out[i] = -4;}
+        else {out[i] = 4;}
+    }
+    return out;
+}
+
+int[n] ybuildGol(int n){
+	int[n] out;
+    for(int i = 0; i < n; ++i){
+        if(i%2==0) {out[i] = -48;}
+        else {out[i] = 48;}
+    }
+    return out;
+}
+
+int[n] cbuildGol(int n, int pos, int neg){
+	int[n] out;
+    for(int i = 0; i < n; ++i){
+        if(i%2==0) {out[i] = neg;}
+        else {out[i] = pos;}
+    }
+    return out;
+}
+
+
+harness void sketch (int pos, int neg, int n) {
+	n = 5;
+	int[n] weeks = wbuildGol(n);
+	int[n] months = mbuildGol(n);
+	int[n] years = ybuildGol(n);
+	int[n] colors = cbuildGol(n, pos, neg);
+	editWeekly(4, 1, n, weeks, months, years, pos, neg, colors);
+	editMonthly(4, 2, n, months, years);
+}

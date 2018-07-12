@@ -1,0 +1,46 @@
+void goodConfig(int start, int stop, int run){
+    assert ((0 <= run && run <= 1) && (0 <= start && start <= 1) && (0 <= stop && stop <= 1) && start != stop && run == start);
+}
+
+generator int texpr(int a, int b, int c) {
+    generator int sum(){
+        return {| a | b | c | } * {| a | b | c | ?? |};
+    }
+    if(??) { return sum(); }
+    else { return sum() + texpr(a,b,c); } 
+} 
+
+generator void toggleStart(int start, int stop, int run){
+    if(start == 0){
+        start = 1;
+        stop = texpr(start,stop,run);
+        run = texpr(start,stop,run);
+        goodConfig(start,stop,run);
+    }
+    else if(start == 1){
+        start = 0;
+        stop = texpr(start,stop,run);
+        run = texpr(start,stop,run);
+        goodConfig(start,stop,run);
+    }
+}
+
+generator void toggleStop(int start, int stop, int run){
+    if(stop == 0){
+        stop = 1;
+        start = texpr(start,stop,run);
+        run = texpr(start,stop,run);
+        goodConfig(start,stop,run);
+    }
+    else if(stop == 1){
+        stop = 0;
+        start = texpr(start,stop,run);
+        run = texpr(start,stop,run);
+        goodConfig(start,stop,run);
+    }
+}
+
+harness void sketch (int start, int stop, int run) {
+    toggleStart(0, stop, run);
+    toggleStop(start, 0, run);
+}

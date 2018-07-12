@@ -89,9 +89,9 @@ allocFreshSpy name ty env = (name', Map.insert name' (dim ty) env)
 completeLoop :: [Set.Set String] -> DimEnv -> MainDecl -> MainDecl
 completeLoop rels dims (ProcDecl nme formals (Imp.Seq ss)) = ProcDecl nme formals $ Imp.Seq ss'
   where
-    (ss', _) = foldl worker ([], dims) ss
-    worker :: ([Imp.Statement], DimEnv) -> Imp.Statement -> ([Imp.Statement], DimEnv)
-    worker (acc, dims) (Imp.For vs idx arrs (Imp.Seq bod)) = (acc ++ [Imp.For vs' idx arrs' $ Imp.Seq bod'], finalDims)
+    (ss', _, _) = foldl worker ([], dims, rels) ss
+    worker :: ([Imp.Statement], DimEnv, [Set.Set String]) -> Imp.Statement -> ([Imp.Statement], DimEnv, [Set.Set String])
+    worker (acc, dims, rels) (Imp.For vs idx arrs (Imp.Seq bod)) = (acc ++ [Imp.For vs' idx arrs' $ Imp.Seq bod'], finalDims, rels)
       where
         names' = map fst vs'
         arrNames = map takeName arrs
@@ -101,7 +101,9 @@ completeLoop rels dims (ProcDecl nme formals (Imp.Seq ss)) = ProcDecl nme formal
         arrs' = arrs ++ map Imp.VConst neededArrs
         dims' = addDims dims vs
 
-        (bod', finalDims) = foldl worker ([], dims'') bod
+        rels' = rels ++ [Set.fromList names']
+
+        (bod', finalDims, _) = foldl worker ([], dims'', rels') bod
 
         buildIter :: ([Imp.VDecl], DimEnv) -> String -> ([Imp.VDecl], DimEnv)
         buildIter (vs, env) arrName = ((vname, vty):vs, env')
@@ -111,14 +113,14 @@ completeLoop rels dims (ProcDecl nme formals (Imp.Seq ss)) = ProcDecl nme formal
             (vname, env') = allocFreshSpy "loop_var" vty env
 
 
-    worker (acc, dims) (Imp.Cond c (Imp.Seq l) (Imp.Seq r)) = 
-      let (tr, dims') = foldl worker ([], dims) l 
-          (fl, dims'') = foldl worker ([], dims') r in
-      (acc ++ [Imp.Cond c (Imp.Seq tr) (Imp.Seq fl)], dims'')
-    worker (acc, dims) (Imp.While c (Imp.Seq ss)) = 
-      let (ss', dims') = foldl worker ([], dims) ss in 
-        (acc ++ [Imp.While c $ Imp.Seq ss'], dims')
-    worker (acc, d) x = (acc ++ [x], d)
+    worker (acc, dims, rels) (Imp.Cond c (Imp.Seq l) (Imp.Seq r)) = 
+      let (tr, dims', _) = foldl worker ([], dims, rels) l 
+          (fl, dims'', _) = foldl worker ([], dims', rels) r in
+      (acc ++ [Imp.Cond c (Imp.Seq tr) (Imp.Seq fl)], dims'', rels)
+    worker (acc, dims, rels) (Imp.While c (Imp.Seq ss)) = 
+      let (ss', dims', _) = foldl worker ([], dims, rels) ss in 
+        (acc ++ [Imp.While c $ Imp.Seq ss'], dims', rels)
+    worker (acc, d, r) x = (acc ++ [x], d, r)
         
     takeName (Imp.VConst v) = fromMaybe v $ stripPrefix "Main$" v 
     eqDims ds s t = (Map.!) ds s == (Map.!) ds t

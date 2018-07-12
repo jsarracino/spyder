@@ -28,8 +28,8 @@ Component CondFormat {
 
   relation Colored(p: int, n: int, vs: int[], cs: int[]) {
     foreach (v, c) in (vs, cs) {
-      (v >= 0 <=> c = p) &&
-      (v <  0 <=> c = n)
+      (v >= 0 ==> c = p) &&
+      (v <  0 ==> c = n)
     }
   }
 
@@ -75,7 +75,7 @@ Component Main {
 
   using DateConv(weeks, months, years);
   using CondFormat(positiveColor, negativeColor, weeks, fontColors);
-  using AltColor(evenColor, oddColor, bkgColors);
+  //using AltColor(evenColor, oddColor, bkgColors);
 
 
 
@@ -92,7 +92,7 @@ Component Main {
   }
 
   
-
+  /*
   
   procedure editMonthly() {
     let i: int;
@@ -104,8 +104,7 @@ Component Main {
     }
 
   }
-  
-
+  */
   
   procedure setEven() {
     let to: int;

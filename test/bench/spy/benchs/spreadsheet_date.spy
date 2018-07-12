@@ -26,7 +26,7 @@ Component Main {
 
   using DateConv(weeks, months, years);
 
-  procedure editWeekly(i: int, val: int) {
+  procedure editWeekly() {
     let i: int;
     let val: int;
     for (w: int) with idx in (weeks) {
@@ -37,10 +37,10 @@ Component Main {
 
   }
 
-  procedure editMonthly(i: int, val: int) {
+  procedure editMonthly() {
     let i: int;
     let val: int;
-    for (w: int, m: int, y: int) with idx in (weeks, months, years) {
+    for (m:int) with idx in (months) {
       if (idx == i) {
         m = val;
       }

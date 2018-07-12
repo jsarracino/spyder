@@ -1,0 +1,30 @@
+void incr_mid ( ref int out ) {
+	out = out + 1;
+}
+
+generator int expr(int x, int y, int z, int bnd){
+	assert bnd > 0;
+	generator int sum(){
+		return {| x | y | z|} + {| x | y | z | ?? |};
+	}
+	if(??) { return sum(); }
+	else { return sum() * expr(x,y,z,bnd-1); }
+}
+
+void midPoint(int x, int y, int mid) {
+	assert x + y == 2 * mid;
+}
+ 
+void update(int ox, int nx, int oy, int ny) {
+	assert ox != nx;
+	assert oy != ny;
+}
+
+harness void sketch (int x, int y, int mid) {
+	assume x + y == 2 * mid;
+	incr_mid (mid);
+	int x1 = expr(x,y,mid,1);
+	int y1 = expr(x,y,mid,1);
+	update(x, x1, y, y1);
+	midPoint(x1, y1, mid);
+}

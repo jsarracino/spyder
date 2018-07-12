@@ -196,9 +196,9 @@ fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult
         templ = buildConds (concat [[genStart s, genHole s, genEnd s] | s <- Set.toList lvs]) finalInvs
         
 
-        (fixed, finalProg, finalScope) = repairBlock (map (specToBoogie []) finalInvs) prog globals (Set.toList lvs) (Set.toList rvs) synthScope oldblk templ
+        (fixed, finalProg, finalScope) = repairBlock (map (specToBoogie []) finalInvs) prog globals (Set.toList lvs) (Set.toList rvs) synthScope oldblk skeleton
 
-        fixes = parseFixes fixed
+        fixes = parseFixes (Set.toList lvs) fixed
   
       
         

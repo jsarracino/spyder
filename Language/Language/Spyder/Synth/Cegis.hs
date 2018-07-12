@@ -174,10 +174,13 @@ repairBlock invs prog globals lhsVars rhsVars scope blk templ =  (fixedBlock, op
     initConfig = Map.fromList []
     (filledBlk, withTemps, newVals) = fillHoles scope templ 
 
-    (newProg, newBlk) = Map.foldlWithKey worker (prog, filledBlk) $ Map.map (map (Pos.gen . Var)) newVals
+    oldBlocks = parseFixes (Map.keys newVals) filledBlk
+
+    (newProg, newBlk) = Map.foldlWithKey worker (prog, []) $ Map.map (map (Pos.gen . Var)) newVals
 
     worker (p', blk') lvar rvars = let (_, newBlock, p'') = buildSwitch lvar rvars p' in
-      (p'', deleteEnd lvar blk' ++ newBlock ++ [genEnd lvar])
+      -- (p'', deleteEnd lvar blk' ++ newBlock ++ [genEnd lvar])
+      (p'', blk' ++ deleteEnd lvar ((Map.!) oldBlocks lvar) ++ newBlock ++ [genEnd lvar])
 
     lVars' = concat $ Map.elems newVals
 

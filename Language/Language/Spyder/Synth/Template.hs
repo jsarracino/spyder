@@ -41,17 +41,27 @@ genEnd name = Pos.gen ([], Pos.gen $ buildPred "cegis_hole_end" name)
 addHole :: String -> Block -> Block
 addHole s b = b ++ [genHole s]
 
-parseFixes :: Block -> Map.Map String Block
-parseFixes b = snd $ worker (b, Map.empty) 
-  where 
-    worker :: (Block, Map.Map String Block) -> (Block, Map.Map String Block)
-    worker ([], env) = ([], env)
-    worker (b, env) = worker (b', env')
-      where
-        (nextPref, nextHole, b') = parseHole b
-        env' = case nextPref of 
-          (Pos.Pos _ (_, Pos.Pos _ (Predicate [Attribute "cegis_hole_begin" (SAttr s:_)] _)):_) -> Map.insert s nextHole env
-          _ -> env
+-- assumes all fixes are in the top level, and do not overlap
+parseFixes :: [String] -> Block -> Map.Map String Block
+parseFixes names b = Map.fromList $ zip names (map worker names)
+  where
+    worker :: String -> Block
+    worker s = let (h, md, _) = splitBlock (pref s) (suf s) b in last h : md
+    pref s (Pos.Pos _ (_, Pos.Pos _ (Predicate [Attribute i args] _ ))) = i == "cegis_hole_begin" && SAttr s `elem` args
+    pref _ _  = False
+    suf s (Pos.Pos _ (_, Pos.Pos _ (Predicate [Attribute i args] _ ))) = i == "cegis_hole_end" && SAttr s `elem` args
+    suf _ _ = False
+    
+  -- snd $ worker (b, Map.empty) 
+  -- where 
+  --   worker :: (Block, Map.Map String Block) -> (Block, Map.Map String Block)
+  --   worker ([], env) = ([], env)
+  --   worker (b, env) = worker (b', env')
+  --     where
+  --       (nextPref, nextHole, b') = parseHole b
+  --       env' = case nextPref of 
+  --         (Pos.Pos _ (_, Pos.Pos _ (Predicate [Attribute "cegis_hole_begin" (SAttr s:_)] _)):_) -> Map.insert s nextHole env
+  --         _ -> env
 
 
 rebuildBlock :: Block -> Map.Map String Block -> Block
@@ -66,16 +76,18 @@ deleteEnd it blk = worker ([], reverse blk)
         (Pos.Pos _ (_, Pos.Pos _ (Predicate [Attribute "cegis_hole_end" args] _))) -> if SAttr it `elem` args then reverse xs ++ l else worker (x:l, xs)
         _ -> worker (x:l, xs)
 substInHole :: Block -> String -> Block -> Block
-substInHole blk v subst = if null md then blk >>= substStmt else pref ++ subst ++ md ++ suf
+substInHole blk v subst = if null md then blk >>= substStmt else pref ++  genHole v:subst ++ genEnd v:suf
   where
     substStmt :: LStatement -> [LStatement]
     substStmt (Pos.Pos x (ls, Pos.Pos z (While e c b))) = [Pos.Pos x (ls, Pos.Pos z $ While e c $ recur b)]
     substStmt (Pos.Pos x (ls, Pos.Pos z (If e t f))) = [Pos.Pos x (ls, Pos.Pos z $ If e (recur t) $ fmap recur f)]
     substStmt s = [s]
     
-    (pref, md, suf) = splitBlock takePref (const True) blk
+    (pref, md, suf) = splitBlock takePref takeSuf blk
     takePref (Pos.Pos _ (_, Pos.Pos _ (Predicate [Attribute s args] _ ))) = s == "cegis_hole" && SAttr v `elem` args
     takePref s = False
+    takeSuf (Pos.Pos _ (_, Pos.Pos _ (Predicate [Attribute s args] _ ))) = s == "cegis_hole_end" && SAttr v `elem` args
+    takeSuf s = False
 
     recur b = substInHole b v subst
 
@@ -103,7 +115,7 @@ fillHoles scope template = (finalTemp, finalScope, tmps)
     
     worker :: (Block, Body, Map.Map String [String]) -> LStatement -> (Block, Body, Map.Map String [String])
     worker (acc, scp, env) (Pos.Pos o (l, Pos.Pos i (Predicate [Attribute "cegis_hole" [SAttr name]] c))) = 
-      (acc ++ [newS], scp', Map.insertWith (++) name [tmp] env)
+      (acc ++ [genStart tmp, newS, genEnd tmp], scp', Map.insertWith (++) name [tmp] env)
       where
         (tmp, scp') = allocInBlock vname IntType scp
         newS = Pos.Pos o (l, Pos.Pos i (Predicate [Attribute "cegis_hole" [SAttr name, SAttr tmp]] c))

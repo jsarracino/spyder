@@ -3,7 +3,7 @@ Component Impl {
   data lhs: int;
 
   relation maybeZero(l: int, r: int) {
-    l = 0 ==> r = 1
+    (l = 0 ==> r = 1)
   }
   
   always maybeZero(it, lhs);

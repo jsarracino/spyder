@@ -54,8 +54,23 @@ data SpyOptions = SpyOpts {
   }
   deriving (Eq, Show, Ord)
 
+  -- spyder_source_size = re.match("\(source: size (\d+)\).*$",spy_contents).group(1)
+  -- spyder_invariant_size = re.match("\(inv: size (\d+)\).*$",spy_contents).group(1)
+  -- spyder_invariant_size = re.match("\(lines: (\d+)\).*$",spy_contents).group(1)
+  -- spyder_holes = len(re.findall("\(holes: (\d+)\).*$",spy_contents))
 runOpts :: SpyOptions -> IO ()
-runOpts (SpyOpts inf outf) = void $ file2Boogiefile inf outf
+runOpts (SpyOpts inf outf) = do {
+  -- putStrLn $ "source: size " ++ show $ boogSize boog;
+  spysize <- liftM spySize spy;
+  putStrLn $ "source: size " ++ show spysize;
+  invsize <- liftM invSize spy;
+  putStrLn $ "inv: size " ++ show invsize;
+  file2Boogiefile inf outf;
+  return ()
+}
+  where
+    boog = file2Boogie inf
+    spy = Parser.fromFile inf
 runOpts (Benches mode inf) = do {
     i <- worker mode;
     putStrLn $ "result : " ++ show i

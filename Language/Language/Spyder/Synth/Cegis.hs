@@ -172,25 +172,25 @@ repairBlock :: [Expression] -> Program -> [String] -> [String] -> [String] -> Bo
 repairBlock invs prog globals lhsVars rhsVars scope blk templ =  (fixedBlock, optimize finalProg, newScope)
   where
     initConfig = Map.fromList []
-    (filledBlk, withTemps, newVals) = fillHoles scope templ 
+    -- (filledBlk, withTemps, newVals) = fillHoles scope templ 
 
-    oldBlocks = parseFixes (Map.keys newVals) filledBlk
+    -- oldBlocks = parseFixes (Map.keys newVals) filledBlk
 
-    (newProg, newBlk) = Map.foldlWithKey worker (prog, []) $ Map.map (map (Pos.gen . Var)) newVals
+    -- (newProg, newBlk) = Map.foldlWithKey worker (prog, []) $ Map.map (map (Pos.gen . Var)) newVals
 
-    worker (p', blk') lvar rvars = let (_, newBlock, p'') = buildSwitch lvar rvars p' in
-      -- (p'', deleteEnd lvar blk' ++ newBlock ++ [genEnd lvar])
-      (p'', blk' ++ deleteEnd lvar ((Map.!) oldBlocks lvar) ++ newBlock ++ [genEnd lvar])
+    -- worker (p', blk') lvar rvars = let (_, newBlock, p'') = buildSwitch lvar rvars p' in
+    --   -- (p'', deleteEnd lvar blk' ++ newBlock ++ [genEnd lvar])
+    --   (p'', blk' ++ deleteEnd lvar ((Map.!) oldBlocks lvar) ++ newBlock ++ [genEnd lvar])
 
-    lVars' = concat $ Map.elems newVals
+    -- lVars' = concat $ Map.elems newVals
 
-    firstEx = case checkConfig invs prog globals initConfig withTemps blk of 
+    firstEx = case checkConfig invs prog globals initConfig scope blk of 
       Left _ -> error "inconceivable"
       Right io -> io
     initIO = [firstEx]
-    initCandDepths = [Map.fromList $ lVars' `zip` (repeat 0)]
+    initCandDepths = [Map.fromList $ lhsVars `zip` repeat 0]
 
-    (finalProg, newScope, fixedBlock) = searchAllConfigs invs newProg globals withTemps blk newBlk lVars' rhsVars initCandDepths initConfig initIO
+    (finalProg, newScope, fixedBlock) = searchAllConfigs invs prog globals scope blk templ lhsVars rhsVars initCandDepths initConfig initIO
     
 -- given a set of invariants, a preamble, global variables, a block to fix, a set of base values, and a variable to add an edit, use cegis to
 -- search for a configuration that correctly edits the variable. return a map from the lhs values to their RHS blocks.
@@ -207,7 +207,7 @@ searchAllConfigs invs prog globals scope blk fillme lhses rhses (cand:cands) con
     genFix :: (Program, Body, Block) -> String -> Int -> (Program, Body, Block)
     genFix (p, scop, acc) lhs depth = 
       let (p', s', nxt) = generateFix depth rhses lhs p scop in
-        (p', s', substInHole acc lhs nxt)
+        (p', s', substInHole True acc lhs nxt)
 
     searchBlock = blk ++ newFixBlock
 
@@ -229,8 +229,9 @@ searchAllConfigs invs prog globals scope blk fillme lhses rhses (cand:cands) con
     buildCand (c, v) = Map.insert c (v+1) cand
     maxVal mp = maximum $ Map.elems mp 
     
+    -- debugProg "cegis-search-debug.bpl" $!
   
-    checkMe = debugProg "cegis-search-debug.bpl" $ optimize $ buildMainSearch globals procNames $ case searchProg of Program x -> Program $ x ++ procs
+    checkMe =  optimize $ buildMainSearch globals procNames $ case searchProg of Program x -> Program $ x ++ procs
 
     buildAns :: Config -> (Program, Body, Block)
     buildAns cs = (finalProg, searchBody, newFixBlock )

@@ -58,31 +58,6 @@ generator void editWeekly(int val, int idx, int n, int[n] weeks, int[n] months, 
 	for(int i=0; i<n; ++i){
 		if(idx == i){
 			weeks[i] = val;
-			if(weeks[i] > 0){
-				months[i] = expr(months[i],weeks[i],years[i]);
-				years[i] = expr(months[i], years[i],weeks[i]);
-				months_weeks(n, weeks, months);
-				years_months(n, years, months);
-				colors[i] = expr(pos,neg,n);
-				colored(pos, neg, n, weeks,colors);
-			} else if(weeks[i] < 0){
-				months[i] = expr(months[i],weeks[i],years[i]);
-				years[i] = expr(months[i], years[i],weeks[i]);
-				months_weeks(n, weeks, months);
-				years_months(n, years, months);
-				colors[i] = expr(pos,neg,n);
-				colored(pos, neg, n, weeks, colors);
-			}
-		}
-	}
-}
-
-generator void editMonthly(int val, int idx, int n, int[n] months, int[n] years){
-	for(int i=0; i<n; ++i){
-		if(idx == i){
-			months[i] = val;
-			years[i] = expr(val,months[i],years[i]);
-			years_months(n, years, months);
 		}
 	}
 }
@@ -125,11 +100,14 @@ int[n] cbuildGol(int n, int pos, int neg){
 
 
 harness void sketch (int pos, int neg, int n) {
-	n = 5;
+	n = 3;
 	int[n] weeks = wbuildGol(n);
 	int[n] months = mbuildGol(n);
 	int[n] years = ybuildGol(n);
 	int[n] colors = cbuildGol(n, pos, neg);
 	editWeekly(4, 1, n, weeks, months, years, pos, neg, colors);
-	editMonthly(4, 2, n, months, years);
+	months = aexpr(n, weeks, months, years);
+	years = aexpr(n, weeks, months, years);
+	months_weeks(n, months, weeks);
+	years_months(n, years, months);
 }

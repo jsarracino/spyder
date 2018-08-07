@@ -65,7 +65,7 @@ parseFixes names b = Map.fromList $ zip names (map worker names)
 
 
 rebuildBlock :: Block -> Map.Map String Block -> Block
-rebuildBlock = Map.foldlWithKey substInHole 
+rebuildBlock blk mp = Map.foldlWithKey (substInHole False) blk (Map.mapWithKey trimBlock mp) 
 
 deleteEnd :: String -> Block -> Block
 deleteEnd it blk = worker ([], reverse blk)
@@ -75,21 +75,35 @@ deleteEnd it blk = worker ([], reverse blk)
       case x of 
         (Pos.Pos _ (_, Pos.Pos _ (Predicate [Attribute "cegis_hole_end" args] _))) -> if SAttr it `elem` args then reverse xs ++ l else worker (x:l, xs)
         _ -> worker (x:l, xs)
-substInHole :: Block -> String -> Block -> Block
-substInHole blk v subst = if null md then blk >>= substStmt else pref ++  genHole v:subst ++ genEnd v:suf
-  where
-    substStmt :: LStatement -> [LStatement]
-    substStmt (Pos.Pos x (ls, Pos.Pos z (While e c b))) = [Pos.Pos x (ls, Pos.Pos z $ While e c $ recur b)]
-    substStmt (Pos.Pos x (ls, Pos.Pos z (If e t f))) = [Pos.Pos x (ls, Pos.Pos z $ If e (recur t) $ fmap recur f)]
-    substStmt s = [s]
-    
-    (pref, md, suf) = splitBlock takePref takeSuf blk
-    takePref (Pos.Pos _ (_, Pos.Pos _ (Predicate [Attribute s args] _ ))) = s == "cegis_hole" && SAttr v `elem` args
-    takePref s = False
-    takeSuf (Pos.Pos _ (_, Pos.Pos _ (Predicate [Attribute s args] _ ))) = s == "cegis_hole_end" && SAttr v `elem` args
-    takeSuf s = False
 
-    recur b = substInHole b v subst
+trimBlock :: String -> Block -> Block
+trimBlock v = applyFunc remPreds
+  where
+    remPreds = liftOpt worker
+    worker r@(Predicate [Attribute s args] e) = if s `elem` cegisTags && SAttr v `elem` args then Nothing else Just r
+    worker s = Just s
+
+    cegisTags = ["cegis_hole", "cegis_hole_end", "cegis_hole_begin"]
+
+-- genHole v:subst'
+substInHole :: Bool -> Block -> String -> Block -> Block
+substInHole keepHole blk v subst = snd $ foldl substStmt (False, []) blk
+  where
+    substStmt :: (Bool, Block) -> LStatement -> (Bool, Block) 
+    substStmt (finished, acc) s = if finished then (finished, acc ++ [s]) else case s of 
+      (Pos.Pos x (ls, Pos.Pos z (While e c b))) -> let (fd, b') = recur finished b in 
+        (fd, acc ++ [Pos.Pos x (ls, Pos.Pos z $ While e c b')])
+      (Pos.Pos x (ls, Pos.Pos z (If e t f)))    -> let (fd, tb)   = recur finished t 
+                                                       res        = fmap (recur fd) f
+                                                       (fd', tf)  = case res of Just (b, x) -> (b, Just x); Nothing -> (fd, Nothing) in 
+        (fd', acc ++ [Pos.Pos x (ls, Pos.Pos z $ If e tb tf)])
+      a@(Pos.Pos x (ls, Pos.Pos z (Predicate [Attribute s args] e ))) -> if s == "cegis_hole" && SAttr v `elem` args 
+        then let ins = if keepHole then a:subst else subst in (True, acc ++ ins)
+        else (finished, acc ++ [a])
+      a -> (finished, acc ++ [a])
+
+
+    recur b = foldl substStmt (b, [])
 
 splitBlock :: (LStatement -> Bool) -> (LStatement -> Bool) -> Block -> (Block, Block, Block)
 splitBlock begin end splitme = (pref, mid, suf)

@@ -8,6 +8,8 @@ module Language.Spyder.Util (
   , preservePos
   , allocInBlock
   , front
+  , applyFunc
+  , liftOpt
 ) where
 
 -- import Data.List
@@ -15,16 +17,17 @@ import Control.Monad (join)
 import Language.Boogie.AST
 import qualified Language.Boogie.Position as Pos
 import qualified Data.Set as Set
+import Data.Maybe
 
 
 --- prefix x y: is x a prefix of y?
 prefix :: String -> String -> Bool
-prefix (x:xs) (y:ys) = if (x == y) then prefix xs ys else False
+prefix (x:xs) (y:ys) = x == y && prefix xs ys
 prefix [] _ = True
 
 -- strip x y: the suffix of y w.r.t to x, i.e. y with the first x elements removed
 strip :: String -> String -> String
-strip (x:xs) (y:ys) = if (x == y) then strip xs ys else y:ys
+strip (x:xs) (y:ys) = if x == y then strip xs ys else y:ys
 strip [] r = r
 strip _ [] = []
 
@@ -74,9 +77,23 @@ allocFreshLocal prefix ty itws  = (mk prefix suffix, vdec:itws)
     worker :: Int -> Set.Set String -> Int
     worker suf names = if mk prefix suf `Set.member` names then worker (suf+1) names else suf
 
+-- basically a recursive fmap. the input function is assumed to not fmap over 
+-- conditionals or while loops.
+applyFunc :: (BareStatement -> [BareStatement]) -> Block -> Block
+applyFunc f = foldl worker []
+  where
+    recur = applyFunc f
+    worker acc (Pos.Pos o (lbls, Pos.Pos x s)) = acc ++ case s of 
+      (If c tb fb)  -> [Pos.Pos o (lbls, Pos.Pos x $ If c (recur tb) (fmap recur fb))]
+      (While e i b) -> [Pos.Pos o (lbls, Pos.Pos x $ While e i (recur b))]
+      _ -> [Pos.Pos o (lbls, Pos.Pos x s') | s' <- f s]
+    -- worker acc (Pos.Pos o (lbls, Pos.Pos x s)) = acc ++ [Pos.Pos o (lbls, Pos.Pos x $ f s)]
 
--- inclusiveSpan :: (a -> Bool) -> [a] -> ([a], [a])
--- inclusiveSpan pred l = worker ([], l)
---   where
---     worker (x, []) = (reverse x, [])
---     worker (xs, n:r) = if pred n then worker (n:xs, r) else (reverse $ n:xs, r)
+
+    -- simplLSS (Pos.Pos x (labels, s)) = Pos.Pos x (labels, simplSS s)
+    -- simplSS (Pos.Pos x (Assign lhs rhs)) = Pos.Pos x $ Assign lhs (map simplE rhs)
+    -- simplSS (Pos.Pos x (If (Expr cond) tr fls)) = Pos.Pos x (If (Expr $ simplE cond) (simplBlk tr) ( simplBlk `fmap` fls))
+    -- simplSS (Pos.Pos x (While (Expr cond) spec bod)) = Pos.Pos x $ While (Expr $ simplE cond) spec (simplBlk bod)
+    -- simplSS (Pos.Pos x (Call lhs f args)) = Pos.Pos x $ Call lhs f (map simplE args)
+liftOpt :: (BareStatement -> Maybe BareStatement) -> BareStatement -> [BareStatement]
+liftOpt f s = maybeToList $ f s

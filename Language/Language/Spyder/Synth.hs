@@ -6,11 +6,10 @@ module Language.Spyder.Synth (
   , parseLoopInfo
   , findEdited
   , findUnedited
-  , rebuildBlock
   , parseFixes
   , dimzero
   , insertIntoLoop
-  , buildConds
+  , genCegPs
   , log
 ) where
 
@@ -78,7 +77,7 @@ fixForInvs invs dims = foldl worker Indet $ map neededSynth invs
 
 {-# NOINLINE logme #-}
 logme :: [String] -> [String]
-logme vs = unsafePerformIO (printf "holes: %d" (length vs) >> putStrLn "") `seq` vs
+logme vs = vs -- unsafePerformIO (putStrLn "holes: 1") `seq` vs
 
 insertIntoLoop :: Block -> Maybe LStatement -> Block
 insertIntoLoop ins (Just (Pos p (x, Pos q (While c s bod)))) = [Pos p (x, Pos q $ While c s bod')]
@@ -144,7 +143,7 @@ fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult
     buildLS s = gen ([], gen s)
 
     createFix :: DimEnv -> [Spec.RelExpr] -> Program -> [String] -> [String] -> [String] -> Body -> Block -> (Block, Program, Body)
-    createFix dims invs prog globals lvars rvars scope oldblk = ( rebuildBlock skeleton fixes, finalProg, finalScope)
+    createFix dims invs prog globals lvars rvars scope oldblk = ret
       where
         initState = (dims, invs, scope, templ, Set.fromList lvars, Set.fromList rvars)
         canSynth (ds, _, _, _, lvs, _) = all (dimzero ds) lvs
@@ -152,7 +151,7 @@ fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult
         worker (odims, oinvs, oscope, blk, lvs, rvs) = (dims', invs', scope', blk', lvs', rvs')
           where 
             lvs' = okvs `Set.union` Set.fromList loopVars
-            rvs' = rvs `Set.union`  (Set.filter (dimzero dims') $ Set.fromList (idx : loopVars))
+            rvs' = rvs `Set.union` Set.filter (dimzero dims') (Set.fromList (idx : loopVars))
             (okvs, arrvs) = Set.partition (dimzero odims) lvs
 
             loopDecs = map genLoopV $ Set.toList arrvs
@@ -176,9 +175,9 @@ fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult
 
             (newLoopPre, While c spec bod) = (init loopSS, last loopSS)
             loopSS' = newLoopPre ++ [While c spec' bod']
-            loopBLK = map (\s -> gen ([], gen s)) loopSS' ++ holes
+            loopBLK = map (\s -> gen ([], gen s)) loopSS'
 
-            holes = filter (dimzero odims) loopVars >>= genSkel
+            holes = filter (dimzero dims') loopVars >>= genSkel
 
             (idx, loopVars, arrVs) = parseLoopInfo $ head bod
             (pref, mid, suf) = parseLoop bod
@@ -187,60 +186,36 @@ fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult
             invs' = map (specializeSpec loopVars arrVs idx) invs 
     
             spec' = spec ++ map buildLoopInv invs
-            bod' = pref ++ mid ++ suf ++ map buildLoopAssm invs'
+            bod' = pref ++ holes ++ map buildLoopAssm invs' ++ mid ++ suf
     
             dims' = addDims odims loopDecs `Map.union` Map.singleton idx 0
 
 
-        (finalDims, finalInvs, synthScope, skeleton, lvs, rvs) = until canSynth worker initState
-        templ = buildConds (concat [[genStart s, genHole s, genEnd s] | s <- Set.toList lvs]) finalInvs
-        
+        (finalDims, finalInvs, synthScope, skel, lvs, rvs) = until canSynth worker initState
+        templ = concat [[genStart s, genHole s, genEnd s] | s <- filter (dimzero dims) lvars]
 
-        (fixed, finalProg, finalScope) = repairBlock (map (specToBoogie []) finalInvs) prog globals (Set.toList lvs) (Set.toList rvs) synthScope oldblk skeleton
+        snippets = genCegPs (Set.toList lvs) finalInvs
 
-        fixes = parseFixes (Set.toList lvs) fixed
+        skeleton = let (_, res) = unzip snippets in concat res -- TODO: loops
+
+        ret = foldl buildRet (skeleton, prog, synthScope) snippets
+
+        buildRet :: (Block, Program, Body) -> ([Spec.RelExpr], Block) -> (Block, Program, Body)
+        buildRet (skel, prog, bod) (invs, snippet) = (skel', prog', bod')
+          where
+            (fixed, prog', bod') = repairBlock (map (specToBoogie []) invs) prog globals (Set.toList lvs) (Set.toList rvs) bod oldblk snippet
+            fixes = parseFixes (Set.toList lvs) fixed
+            skel' = rebuildBlock skel fixes
+
+
+        -- fixes = parseFixes (Set.toList lvs) fixed
   
       
-        
-      
-      -- case fixForInvs lvars dims of 
-      -- Base -> repairBlock (map (specToBoogie []) invs') prog globals lvars' rvars' scope blk builder
-      -- Loop -> (map buildLS $ loopPre ++ [While c spec' bod'], finalProg, finalScope) -- let specInvs = specializeSpec
-      -- Indet -> error "inconceivable"
-      -- Mixed -> error "unsatisfiable invariants in program"
-      -- where
-
-      --   lvars' = filter (\s -> (Map.!) dims s == 0) lvars
-      --   rvars' = filter (\s -> (Map.!) dims s == 0) rvars
-
-      --   (invs', builder) = transRels invs
-      --   loopDecs = map worker lvars
-
-        -- (itws, r) = scope
-
-        -- (loopSS, newItws) = translateStmt (Imp.For loopDecs (Just "cegis_loop_idx") (map Imp.VConst lvars) (Imp.Seq []), concat itws)
-        -- scope' = ([newItws], r)
-
-        -- (loopPre, While c spec loopBod) = (init loopSS, last loopSS)
-
-        -- (idx, loopVars, arrVs) = parseLoopInfo $ head loopBod
-        -- (pref, mid, suf) = parseLoop loopBod
-
-        -- --(relInvs, unrelInvs) = partition (isRelated relVars rhsVars) invs
-        -- invs'' = map (specializeSpec loopVars arrVs idx) invs' 
-
-        -- spec' = spec ++ map buildLoopInv invs
-        -- bod' = pref ++ loopFix ++ suf ++ map buildLoopAssm invs''
-
-        -- (_, builder') = transRels invs''
-
-        -- dims' = addDims dims loopDecs
-
-      --   (loopFix, finalProg, finalScope) = createFix dims' invs'' prog globals loopVars (rvars ++ loopVars) scope' blk
-
-buildConds :: Block -> [Spec.RelExpr] -> Block
-buildConds assigns specs = if any isImp canon then foldl worker [] canon else assigns
+   
+genCegPs :: [String] -> [Spec.RelExpr] -> [([Spec.RelExpr], Block)]
+genCegPs vs specs = if any isImp canon then foldl worker [] canon else [(specs, assigns)]
   where
+    assigns = concat [[genStart s, genHole s, genEnd s] | s <- vs]
     canon = until allBase splitAnds specs
     allBase = all (not . isAnd)
 
@@ -249,8 +224,12 @@ buildConds assigns specs = if any isImp canon then foldl worker [] canon else as
         f (Spec.RelBinop Spec.And l r) = [l, r]
         f s = [s]
 
-    worker acc (Spec.RelBinop Spec.Imp l _) = acc ++ singletonBlock (gen $ If (Expr $ specToBoogie [] l) assigns Nothing)
+    worker acc x@(Spec.RelBinop Spec.Imp l _) = acc ++ [(x:filter (unrelated l) canon, singletonBlock (gen $ If (Expr $ specToBoogie [] l) assigns Nothing))]
     worker acc _ = acc
+
+    unrelated :: Spec.RelExpr -> Spec.RelExpr -> Bool
+    unrelated l (Spec.RelBinop Spec.Imp l' _) = null $ gatherVars [l] `intersect` gatherVars [l']
+    unrelated _ _ = True 
 
     isImp (Spec.RelBinop Spec.Imp _ _) = True
     isImp _ = False
@@ -308,7 +287,7 @@ fixStmt dims invs relVars globals rhsVars (prefix, prog, scope) = worker
       --     Just i  -> let (r, p, b) = recur prog' bod' i in (Just r, p, b)
       --     Nothing -> (Nothing, prog', bod')
     worker s = (s, prog, scope)
-    recur p b s = fixBlock dims invs relVars p globals rhsVars b prefix s
+    recur p b = fixBlock dims invs relVars p globals rhsVars b prefix
 
 
 buildLoopInv :: Spec.RelExpr -> SpecClause
@@ -334,7 +313,7 @@ findEdited = foldl recurLS [] -- blk
 
 
 findUnedited :: [Set.Set String] -> [String] -> Block -> [String]
-findUnedited rels globals blk = (computeRels used rels) \\ used
+findUnedited rels globals blk = computeRels used rels \\ used
   where
     used = findEdited blk
 

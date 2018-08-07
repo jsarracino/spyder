@@ -28,11 +28,9 @@ Component Main {
 
   procedure incrX() {
 
-    for (l : int[], r : int[]) in (x, y) {
-      for (s : int, t : int) in (l, r) {
+    for (l : int[]) in (x) {
+      for (s : int) in (l) {
         s = 2 * t;
-        // t = ??
-        // z = ??
       }
     }
   }

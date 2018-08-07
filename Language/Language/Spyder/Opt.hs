@@ -37,7 +37,7 @@ constFolding :: Map.Map String BareExpression -> Program -> Program
 constFolding vals (Program decs) = Program $ map simpl decs 
   where
     simpl :: Decl -> Decl
-    simpl (Pos.Pos x (ProcedureDecl nme tys args rets con (Just bod))) = Pos.Pos x (ProcedureDecl nme tys args rets con (Just $ bod'))
+    simpl (Pos.Pos x (ProcedureDecl nme tys args rets con (Just bod))) = Pos.Pos x (ProcedureDecl nme tys args rets con (Just bod'))
       where
         bod' = (fst bod, simplBlk $ snd bod)
     simpl x = x
@@ -78,5 +78,7 @@ deadCodeElim _ (Program decs) = Program $ map simpl decs
       where
         tr' = simplBlk tr
         fls' =  simplBlk `fmap` fls
+
+    simplSS (Pos.Pos x (While e i b)) = [Pos.Pos x (While e i $ simplBlk b)]
     simplSS x = [x]
 

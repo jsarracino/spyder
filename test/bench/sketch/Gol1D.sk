@@ -115,13 +115,11 @@ generator void golLogic(int uBound, int n, int[n] cells, int idx, int[n] rendere
         	if (count == 2 || count == 3) {
 				cells[idx] = 1;
 				int[n] nrendered = arrexpr(n, rendered, cells);
-				cells2colors(n, cells, nrendered);
         		}
     	} else {
        		if (count != 2 && count != 4) {
 				cells[idx] = 0;
 				int[n] nrendered = arrexpr(n, rendered, cells);
-				cells2colors(n, cells, nrendered);
         	}
     	}
   	}
@@ -131,17 +129,15 @@ int[n] buildGol(int n){
 	int[n] out;
     for(int i = 0; i < n; ++i){
         if(i%2==0) {out[i] = 1;}
-        else {out[i] = 1;}
+        else {out[i] = 0;}
     }
     return out;
 }
 
 harness void sketch (int start, int stop, int run, int n) {
-	n = 10;
+	n = 50;
 	int[n] rendered = buildGol(n);
 	int[n] cells = rendered;
-	toggleStart(0, stop, run);
-	toggleStop(start, 0, run);
-	colorOnClick(n, rendered, cells, 1);
 	golLogic(n, n, cells, 1, rendered);
+	cells2colors(n, cells, rendered);
 }

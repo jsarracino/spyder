@@ -16,13 +16,11 @@ generator void toggleStart(int start, int stop, int run){
 		start = 1;
 		stop = expr(start,stop,run);
 		run = expr(start,stop,run);
-		goodConfig(start,stop,run);
     }
     else if(start == 1){
 		start = 0;
 		stop = expr(start,stop,run);
 		run = expr(start,stop,run);
-		goodConfig(start,stop,run);
     }
 }
 
@@ -31,17 +29,19 @@ generator void toggleStop(int start, int stop, int run){
 		stop = 1;
 		start = expr(start,stop,run);
 		run = expr(start,stop,run);
-		goodConfig(start,stop,run);
     }
     else if(stop == 1){
 		stop = 0;
 		start = expr(start,stop,run);
 		run = expr(start,stop,run);
-		goodConfig(start,stop,run);
     }
 }
 
 harness void sketch (int start, int stop, int run) {
 	toggleStart(0, stop, run);
+
+	goodConfig(start,stop,run);
 	toggleStop(start, 0, run);
+
+	goodConfig(start,stop,run);
 }

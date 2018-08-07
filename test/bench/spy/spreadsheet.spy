@@ -43,9 +43,8 @@ Component AltColor {
 
   relation Alternating(e: int, o: int, cs: int[]) {
     foreach (c) with idx in (cs){
-      //((idx % 2) = 0 ==> c = e) && 
-      //((idx % 2) = 1 ==> c = o)
-      c = 3
+      ((idx % 2) = 0 ==> c = e) && 
+      ((idx % 2) = 1 ==> c = o)
     }
   }
 
@@ -56,7 +55,7 @@ Component AltColor {
   }
 
   always Alternating(evenColor, oddColor, rows);
-  //always Backgrounds(evenColor, oddColor, rows);
+  always Backgrounds(evenColor, oddColor, rows);
 }
 
 
@@ -75,7 +74,7 @@ Component Main {
 
   using DateConv(weeks, months, years);
   using CondFormat(positiveColor, negativeColor, weeks, fontColors);
-  //using AltColor(evenColor, oddColor, bkgColors);
+  using AltColor(evenColor, oddColor, bkgColors);
 
 
 
@@ -90,21 +89,6 @@ Component Main {
     }
 
   }
-
-  
-  /*
-  
-  procedure editMonthly() {
-    let i: int;
-    let val: int;
-    for (w: int, m: int, y: int) with idx in (weeks, months, years) {
-      if (idx == i) {
-        m = val;
-      }
-    }
-
-  }
-  */
   
   procedure setEven() {
     let to: int;

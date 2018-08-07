@@ -36,15 +36,4 @@ Component Main {
     }
 
   }
-
-  procedure editMonthly() {
-    let i: int;
-    let val: int;
-    for (m:int) with idx in (months) {
-      if (idx == i) {
-        m = val;
-      }
-    }
-
-  }
 }

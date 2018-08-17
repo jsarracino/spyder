@@ -196,24 +196,34 @@ fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult
 
         snippets = genCegPs (Set.toList lvs) finalInvs
 
-        skeleton = let (_, res) = unzip snippets in concat res -- TODO: loops
+        ret = foldl' buildRet (skel, prog, synthScope) snippets
 
-        ret = foldl buildRet (skeleton, prog, synthScope) snippets
-
-        buildRet :: (Block, Program, Body) -> ([Spec.RelExpr], Block) -> (Block, Program, Body)
-        buildRet (skel, prog, bod) (invs, snippet) = (skel', prog', bod')
+        buildRet :: (Block, Program, Body) -> ([Spec.RelExpr], Maybe Spec.RelExpr, Block) -> (Block, Program, Body)
+        buildRet (skel, prog, bod) nxt = (skel', prog', bod')
           where
+
             (fixed, prog', bod') = repairBlock (map (specToBoogie []) invs) prog globals (Set.toList lvs) (Set.toList rvs) bod oldblk snippet
-            fixes = parseFixes (Set.toList lvs) fixed
+            (invs, _, snippet) = fromMaybe nxt $ specializeCond nxt
+
+            fixed' = case specializeCond nxt of 
+              Just (_, Just c, _) -> singletonBlock $ gen (If (Expr $ specToBoogie [] c) fixed Nothing)
+              Nothing -> fixed
+
+            fixes = parseFixes (Set.toList lvs) fixed'
             skel' = rebuildBlock skel fixes
 
 
         -- fixes = parseFixes (Set.toList lvs) fixed
   
-      
+specializeCond :: ([Spec.RelExpr], Maybe Spec.RelExpr, Block) -> Maybe ([Spec.RelExpr], Maybe Spec.RelExpr, Block)
+specializeCond (invs, Just c, [Pos _ (_, Pos _ (If _ t _))]) = Just (invs', Just c, t)
+  where invs' = map worker invs
+        worker e@(Spec.RelBinop Spec.Imp l r) = if l == c then r else e
+        worker x = x
+specializeCond _ = Nothing
    
-genCegPs :: [String] -> [Spec.RelExpr] -> [([Spec.RelExpr], Block)]
-genCegPs vs specs = if any isImp canon then foldl worker [] canon else [(specs, assigns)]
+genCegPs :: [String] -> [Spec.RelExpr] -> [([Spec.RelExpr], Maybe Spec.RelExpr, Block)]
+genCegPs vs specs = if any isImp canon then foldl worker [] canon else [(specs, Nothing, assigns)]
   where
     assigns = concat [[genStart s, genHole s, genEnd s] | s <- vs]
     canon = until allBase splitAnds specs
@@ -224,7 +234,7 @@ genCegPs vs specs = if any isImp canon then foldl worker [] canon else [(specs, 
         f (Spec.RelBinop Spec.And l r) = [l, r]
         f s = [s]
 
-    worker acc x@(Spec.RelBinop Spec.Imp l _) = acc ++ [(x:filter (unrelated l) canon, singletonBlock (gen $ If (Expr $ specToBoogie [] l) assigns Nothing))]
+    worker acc x@(Spec.RelBinop Spec.Imp l _) = acc ++ [(x:filter (unrelated l) canon, Just l, singletonBlock (gen $ If (Expr $ specToBoogie [] l) assigns Nothing))]
     worker acc _ = acc
 
     unrelated :: Spec.RelExpr -> Spec.RelExpr -> Bool
@@ -235,6 +245,19 @@ genCegPs vs specs = if any isImp canon then foldl worker [] canon else [(specs, 
     isImp _ = False
     isAnd (Spec.RelBinop Spec.And _ _) = True
     isAnd _ = False
+
+completeCond :: Block -> Block
+completeCond b = b >>= bs2lss worker
+  where
+    worker (If c t _) = [If c t $ Just f]
+      where f = [stmt $ Predicate [] (SpecClause Inline True (gen ff))]
+    worker s = [s]
+
+trimCond :: Block -> Block
+trimCond b = b >>= bs2lss worker
+  where
+    worker (If c t _) = [If c t Nothing]
+    worker s = [s]
 
 -- specialize ForEach vs arrs idx bod[vs] to bod[x/v | x <- xs, v <- vs, v <= arr, arrs ~ xs by arr = xs_i]
 -- loopArrs should be strictly bigger than arrs. loopArrs is all arrays that might be related to the source

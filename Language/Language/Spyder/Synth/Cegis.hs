@@ -12,6 +12,7 @@ module Language.Spyder.Synth.Cegis (
   , generateSwitch
   , buildBounds
   , buildIO
+  , buildMainSearch
 ) where
 
 import Language.Boogie.AST            
@@ -38,7 +39,7 @@ import Control.Monad
 import Control.Monad.Logic
 import Control.Monad.Stream
 import Control.Lens hiding (Context, at)
-import Language.Spyder.Util                       (allocFreshLocal, front)
+import Language.Spyder.Util                       (allocFreshLocal, front, stmt)
 import Data.Ord                                   (comparing)
 
 import Language.Spyder.Config                     (concretSize)
@@ -169,29 +170,16 @@ type IOExamples = [Map.Map String Value] -- list of states, where each state is 
 -- params: invariants, program preamble, global variables, rhs expression seeds, lhs expressions to fix, enclosing function scope, and a basic block for repair.
 -- returns: the repaired block, a new program, and a new function scope
 repairBlock :: [Expression] -> Program -> [String] -> [String] -> [String] -> Body -> Block -> Block -> (Block, Program, Body)
-repairBlock invs prog globals lhsVars rhsVars scope blk templ =  (fixedBlock, optimize finalProg, newScope)
+repairBlock invs prog globals lhsVars rhsVars scope blk templ = ret
   where
     initConfig = Map.fromList []
-    -- (filledBlk, withTemps, newVals) = fillHoles scope templ 
-
-    -- oldBlocks = parseFixes (Map.keys newVals) filledBlk
-
-    -- (newProg, newBlk) = Map.foldlWithKey worker (prog, []) $ Map.map (map (Pos.gen . Var)) newVals
-
-    -- worker (p', blk') lvar rvars = let (_, newBlock, p'') = buildSwitch lvar rvars p' in
-    --   -- (p'', deleteEnd lvar blk' ++ newBlock ++ [genEnd lvar])
-    --   (p'', blk' ++ deleteEnd lvar ((Map.!) oldBlocks lvar) ++ newBlock ++ [genEnd lvar])
-
-    -- lVars' = concat $ Map.elems newVals
-
-    firstEx = case checkConfig invs prog globals initConfig scope blk of 
-      Left _ -> error "inconceivable"
-      Right io -> io
-    initIO = [firstEx]
+    ret =  case checkConfig invs prog globals initConfig scope blk of 
+      Left _ -> (blk, prog, scope)
+      Right io -> let (finalProg, newScope, fixedBlock) = searchAllConfigs invs prog globals scope blk templ lhsVars rhsVars initCandDepths initConfig [io] in
+        (fixedBlock, optimize finalProg, newScope)
+        
     initCandDepths = [Map.fromList $ lhsVars `zip` repeat 0]
 
-    (finalProg, newScope, fixedBlock) = searchAllConfigs invs prog globals scope blk templ lhsVars rhsVars initCandDepths initConfig initIO
-    
 -- given a set of invariants, a preamble, global variables, a block to fix, a set of base values, and a variable to add an edit, use cegis to
 -- search for a configuration that correctly edits the variable. return a map from the lhs values to their RHS blocks.
 
@@ -231,7 +219,7 @@ searchAllConfigs invs prog globals scope blk fillme lhses rhses (cand:cands) con
     
     -- debugProg "cegis-search-debug.bpl" $!
   
-    checkMe =  optimize $ buildMainSearch globals procNames $ case searchProg of Program x -> Program $ x ++ procs
+    checkMe = optimize $ buildMainSearch globals procNames $ case searchProg of Program x -> Program $ x ++ procs
 
     buildAns :: Config -> (Program, Body, Block)
     buildAns cs = (finalProg, searchBody, newFixBlock )
@@ -274,7 +262,7 @@ checkConfig invs (Program header) globals config (vs, _) blk = result
 
 -- given invs and a set of io, add assumes to the begin/end of the block to specialize to the IO.
 addAssumes :: [Expression] -> Map.Map String Value -> Block -> Block
-addAssumes invs io block = map buildIO (Map.toList io) ++ invStmts ++ block ++ invStmts
+addAssumes invs io block = map buildIO (Map.toList io) ++ invStmts ++ block'
   where
     --Predicate attrs (SpecClause _ isAssume e)
     invStmts = map buildInv invs
@@ -285,7 +273,12 @@ addAssumes invs io block = map buildIO (Map.toList io) ++ invStmts ++ block ++ i
     buildExpr :: (String, Value) -> Expression
     buildExpr (l, r@IntValue{}) = eq (Var l) (Literal r)
     buildExpr (l, r@BoolValue{}) = eq (Var l) (Literal r)
-    
+
+    block' = if null block then block ++ invStmts else
+      case last block of 
+        (Pos.Pos o (ls, Pos.Pos i (If c t f))) -> init block ++ [Pos.Pos o (ls, Pos.Pos i (If c (t ++ invStmts) Nothing))]
+        _ -> block ++ invStmts
+
 eq :: BareExpression -> BareExpression -> Expression
 eq l r = Pos.gen $ BinaryExpression Eq (Pos.gen l) (Pos.gen r)
 
@@ -317,9 +310,6 @@ buildMain invs globals (vs, bod) = Pos.gen $ ProcedureDecl "Main" [] [] [] modif
 
 --     buildAssgn l r = stmt $ Assign [(l, [])] [r]
 --     buildIT (a, cond) = stmt $ If (Expr $ eq (Var control) (Literal $ IntValue cond)) [a] Nothing
-
-stmt :: BareStatement -> LStatement
-stmt s = Pos.gen ([], Pos.gen s)
 
 -- run in exec mode, searching for a valid configuration.
 boogExec :: Program -> String -> [TestCase]

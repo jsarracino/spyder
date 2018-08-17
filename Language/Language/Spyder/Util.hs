@@ -10,6 +10,9 @@ module Language.Spyder.Util (
   , front
   , applyFunc
   , liftOpt
+  , bs2ls
+  , bs2lss
+  , stmt
 ) where
 
 -- import Data.List
@@ -97,3 +100,12 @@ applyFunc f = foldl worker []
     -- simplSS (Pos.Pos x (Call lhs f args)) = Pos.Pos x $ Call lhs f (map simplE args)
 liftOpt :: (BareStatement -> Maybe BareStatement) -> BareStatement -> [BareStatement]
 liftOpt f s = maybeToList $ f s
+
+bs2ls :: (BareStatement -> BareStatement) -> LStatement -> LStatement
+bs2ls f (Pos.Pos o (lbls, Pos.Pos x s)) = Pos.Pos o (lbls, Pos.Pos x $ f s)
+
+bs2lss :: (BareStatement -> [BareStatement]) -> LStatement -> [LStatement]
+bs2lss f (Pos.Pos o (lbls, Pos.Pos x s)) = [Pos.Pos o (lbls, Pos.Pos x s') | s' <- f s]
+
+stmt :: BareStatement -> LStatement
+stmt s = Pos.gen ([], Pos.gen s)

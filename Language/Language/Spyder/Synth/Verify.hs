@@ -34,7 +34,9 @@ checkProgFile f = do {
 
 
 debugProg :: FilePath -> Program -> Program
-debugProg f !p = unsafePerformIO $! compileProg f p >> return p
+debugProg f !p = seq out p
+  where
+    out = unsafePerformIO $! compileProg f p >> return p
 
 debugBoogie :: [Decl] -> [Decl]
 debugBoogie !p = unsafePerformIO $! compileProg "debug.bpl"  (Program p) >> return p

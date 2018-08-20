@@ -65,7 +65,7 @@ parseFixes names b = Map.fromList $ zip names (map worker names)
 
 
 rebuildBlock :: Block -> Map.Map String Block -> Block
-rebuildBlock blk mp = Map.foldlWithKey (substInHole False) blk (Map.mapWithKey trimBlock mp) 
+rebuildBlock blk mp = Map.foldlWithKey (substInHole True) blk (Map.mapWithKey trimBlock mp) 
 
 deleteEnd :: String -> Block -> Block
 deleteEnd it blk = worker ([], reverse blk)
@@ -98,7 +98,7 @@ substInHole keepHole blk v subst = snd $ foldl substStmt (False, []) blk
                                                        (fd', tf)  = case res of Just (b, x) -> (b, Just x); Nothing -> (fd, Nothing) in 
         (fd', acc ++ [Pos.Pos x (ls, Pos.Pos z $ If e tb tf)])
       a@(Pos.Pos x (ls, Pos.Pos z (Predicate [Attribute s args] e ))) -> if s == "cegis_hole" && SAttr v `elem` args 
-        then let ins = if keepHole then a:subst else subst in (True, acc ++ ins)
+        then let ins = if keepHole then subst ++ [a] else subst in (True, acc ++ ins)
         else (finished, acc ++ [a])
       a -> (finished, acc ++ [a])
 

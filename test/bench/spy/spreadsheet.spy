@@ -72,9 +72,9 @@ Component Main {
   data positiveColor: int;
   data negativeColor: int;
 
-  using DateConv(weeks, months, years);
+  //using DateConv(weeks, months, years);
   using CondFormat(positiveColor, negativeColor, weeks, fontColors);
-  using AltColor(evenColor, oddColor, bkgColors);
+  //using AltColor(evenColor, oddColor, bkgColors);
 
 
 
@@ -90,10 +90,7 @@ Component Main {
 
   }
   
-  procedure setEven() {
-    let to: int;
-    evenColor = to;
-  }
+  
   
 
 }

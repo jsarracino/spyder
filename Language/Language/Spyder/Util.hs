@@ -13,6 +13,7 @@ module Language.Spyder.Util (
   , bs2ls
   , bs2lss
   , stmt
+  , uncons
 ) where
 
 -- import Data.List
@@ -109,3 +110,7 @@ bs2lss f (Pos.Pos o (lbls, Pos.Pos x s)) = [Pos.Pos o (lbls, Pos.Pos x s') | s' 
 
 stmt :: BareStatement -> LStatement
 stmt s = Pos.gen ([], Pos.gen s)
+
+uncons :: [a] -> Maybe (a, [a])
+uncons [] = Nothing
+uncons (x:xs) = Just (x, xs)

@@ -169,13 +169,13 @@ type IOExamples = [Map.Map String Value] -- list of states, where each state is 
 -- find a repair for a single lhs expr
 -- params: invariants, program preamble, global variables, rhs expression seeds, lhs expressions to fix, enclosing function scope, and a basic block for repair.
 -- returns: the repaired block, a new program, and a new function scope
-repairBlock :: [Expression] -> Program -> [String] -> [String] -> [String] -> Body -> Block -> Block -> (Block, Program, Body)
-repairBlock invs prog globals lhsVars rhsVars scope blk templ = ret
+repairBlock :: [Expression] -> Program -> [String] -> [String] -> [String] -> Body -> Block -> Block -> Block -> (Block, Program, Body)
+repairBlock invs prog globals lhsVars rhsVars scope blk templ assumpts = ret
   where
     initConfig = Map.fromList []
-    ret =  case checkConfig invs prog globals initConfig scope blk of 
-      Left _ -> (blk, prog, scope)
-      Right io -> let (finalProg, newScope, fixedBlock) = searchAllConfigs invs prog globals scope blk templ lhsVars rhsVars initCandDepths initConfig [io] in
+    ret =  case checkConfig invs prog globals initConfig scope (blk ++ assumpts) of 
+      Left _ -> (templ, prog, scope)
+      Right io -> let (finalProg, newScope, fixedBlock) = searchAllConfigs invs prog globals scope (blk ++ assumpts) templ lhsVars rhsVars initCandDepths initConfig [io] in
         (fixedBlock, optimize finalProg, newScope)
         
     initCandDepths = [Map.fromList $ lhsVars `zip` repeat 0]

@@ -202,12 +202,15 @@ fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult
         buildRet (skel, prog, bod) nxt = (skel', prog', bod')
           where
 
-            (fixed, prog', bod') = repairBlock (map (specToBoogie []) invs) prog globals (Set.toList lvs) (Set.toList rvs) bod oldblk snippet
-            (invs, _, snippet) = fromMaybe nxt $ specializeCond nxt
+            (fixed, prog', bod') = repairBlock (map (specToBoogie []) invs) prog globals (Set.toList lvs) (Set.toList rvs) bod oldblk snippet' assumpts
+            -- (invs, _, snippet) = fromMaybe nxt $ specializeCond nxt
+            (invs, _, snippet) = nxt
+            (assumpts, snippet') = completeCond (Set.toList lvs, invs) snippet
 
-            fixed' = case specializeCond nxt of 
-              Just (_, Just c, _) -> singletonBlock $ gen (If (Expr $ specToBoogie [] c) fixed Nothing)
-              Nothing -> fixed
+            -- fixed' = case specializeCond nxt of 
+            --   Just (_, Just c, _) -> singletonBlock $ gen (If (Expr $ specToBoogie [] c) fixed Nothing)
+            --   Nothing -> fixed
+            fixed' = trimCond fixed
 
             fixes = parseFixes (Set.toList lvs) fixed'
             skel' = rebuildBlock skel fixes
@@ -246,11 +249,17 @@ genCegPs vs specs = if any isImp canon then foldl worker [] canon else [(specs, 
     isAnd (Spec.RelBinop Spec.And _ _) = True
     isAnd _ = False
 
-completeCond :: Block -> Block
-completeCond b = b >>= bs2lss worker
+completeCond :: ([String], [Spec.RelExpr]) -> Block -> (Block, Block)
+completeCond (vs, invs) b = case uncons $ b >>= bs2lss worker of 
+                              Just (assumpt, x@(Pos _ ([], Pos _ If{})):xs) -> ([assumpt], x:xs)
+                              Just (_, y) -> ([], y)
+                              Nothing -> ([], [])
+
   where
-    worker (If c t _) = [If c t $ Just f]
-      where f = [stmt $ Predicate [] (SpecClause Inline True (gen ff))]
+    worker (If c t _) = [pref, If c t $ Just f]
+      where 
+        f = [] --(stmt $ Havoc vs) : [stmt $ Predicate [] (SpecClause Inline True $ specToBoogie [] i) | i <- invs]
+        pref = case c of (Expr c') -> Predicate [] (SpecClause Inline True c')
     worker s = [s]
 
 trimCond :: Block -> Block

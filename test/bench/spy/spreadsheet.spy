@@ -48,14 +48,21 @@ Component AltColor {
     }
   }
 
-  relation Backgrounds(e: int, o: int, cs: int[]) {
+  always Alternating(evenColor, oddColor, rows);
+}
+
+Component Either {
+  data a : int;
+  data b: int;
+  data vals : int[];
+
+  relation allEither(l: int, r: int, cs: int[]) {
     foreach (c) in (cs){
-      (c = e || c = o)
+      (c = l || c = r)
     }
   }
 
-  always Alternating(evenColor, oddColor, rows);
-  always Backgrounds(evenColor, oddColor, rows);
+  always allEither(a, b, vals);
 }
 
 
@@ -72,9 +79,11 @@ Component Main {
   data positiveColor: int;
   data negativeColor: int;
 
-  //using DateConv(weeks, months, years);
+  using DateConv(weeks, months, years);
   using CondFormat(positiveColor, negativeColor, weeks, fontColors);
-  //using AltColor(evenColor, oddColor, bkgColors);
+  using Either(positiveColor, negativeColor, fontColors);
+  using AltColor(evenColor, oddColor, bkgColors);
+  using Either(oddColor, evenColor, bkgColors);
 
 
 
@@ -88,6 +97,12 @@ Component Main {
       }
     }
 
+  }
+
+  procedure evenBkg() {
+    let x : int;
+    evenColor = x;
+    oddColor = oddColor;
   }
   
   

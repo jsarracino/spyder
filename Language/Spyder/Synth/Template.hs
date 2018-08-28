@@ -7,7 +7,6 @@ module Language.Spyder.Synth.Template (
   , splitBlock
   , parseHole
   , parseFixes
-  , genHole
   , genStart
   , genEnd
   , rebuildBlock

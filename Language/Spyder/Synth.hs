@@ -11,6 +11,7 @@ module Language.Spyder.Synth (
   , insertIntoLoop
   , genCegPs
   , log
+  , trimCond
 ) where
 
 import Prelude hiding (foldl, all, concat, any)
@@ -198,21 +199,25 @@ fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult
 
         ret = foldl' buildRet (skel, prog, synthScope) snippets
 
+        -- realRs = filter (dimzero finalDims) (Map.keys finalDims)
+
         buildRet :: (Block, Program, Body) -> ([Spec.RelExpr], Maybe Spec.RelExpr, Block) -> (Block, Program, Body)
         buildRet (skel, prog, bod) nxt = (skel', prog', bod')
           where
 
-            (fixed, prog', bod') = repairBlock (map (specToBoogie []) invs) prog globals (Set.toList lvs) (Set.toList rvs) bod oldblk snippet' assumpts
+            (fixed, prog', bod') = repairBlock (map (specToBoogie []) invs) prog globals (Set.toList lvs) rhsVars bod oldblk snippet' assumpts
             -- (invs, _, snippet) = fromMaybe nxt $ specializeCond nxt
             (invs, _, snippet) = nxt
             (assumpts, snippet') = completeCond (Set.toList lvs, invs) snippet
 
+            rhsVars = gatherVars invs
+
             -- fixed' = case specializeCond nxt of 
             --   Just (_, Just c, _) -> singletonBlock $ gen (If (Expr $ specToBoogie [] c) fixed Nothing)
             --   Nothing -> fixed
-            fixed' = trimCond fixed
+            -- fixed' = trimCond fixed
 
-            fixes = parseFixes (Set.toList lvs) fixed'
+            fixes = parseFixes (Set.toList lvs) (trimCond fixed)
             skel' = rebuildBlock skel fixes
 
 
@@ -251,8 +256,8 @@ genCegPs vs specs = if any isImp canon then foldl worker [] canon else [(specs, 
 
 completeCond :: ([String], [Spec.RelExpr]) -> Block -> (Block, Block)
 completeCond (vs, invs) b = case uncons $ b >>= bs2lss worker of 
-                              Just (assumpt, x@(Pos _ ([], Pos _ If{})):xs) -> ([assumpt], x:xs)
-                              Just (_, y) -> ([], y)
+                              Just (assumpt@(Pos _ ([], Pos _ (Predicate [] (SpecClause Inline True _)))), x@(Pos _ ([], Pos _ If{})):xs) -> ([assumpt], x:xs)
+                              Just (x, y) -> ([], x:y)
                               Nothing -> ([], [])
 
   where
@@ -307,7 +312,7 @@ fixStmt dims invs relVars globals rhsVars (prefix, prog, scope) = worker
 
         --(relInvs, unrelInvs) = partition (isRelated relVars rhsVars) invs
         invs' = map (specializeSpec vs arrs idx) invs -- relInvs ++ unrelInvs
-        globals' = []
+        globals' = globals --[]
         rhsVars' = vs
 
         spec' = spec ++ map buildLoopInv invs

@@ -12,6 +12,9 @@ module Language.Spyder.Synth (
   , genCegPs
   , log
   , trimCond
+  , specializeSpec
+  , gatherVars
+  , isRelated
 ) where
 
 import Prelude hiding (foldl, all, concat, any)
@@ -111,11 +114,12 @@ fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult
         staleInvs = useVars invs $ Set.fromList $ findEdited blk
         staleVars = findUnedited relVars rhsVars blk
         staleVars' = logme staleVars
+
         -- (invs', builder) = transRels staleInvs
 
         
 
-        (suffix, prog', bod') = createFix dims invs prog globals staleVars' (filter (dimzero dims) rhsVars) scope' blk 
+        (suffix, prog', bod') = createFix dims staleInvs prog globals staleVars' (filter (dimzero dims) rhsVars) scope' blk 
 
         fixed = (blk ++ suffix, prog', bod')
 
@@ -310,8 +314,8 @@ fixStmt dims invs relVars globals rhsVars (prefix, prog, scope) = worker
         relVars' = relVars ++ [Set.fromList vs]
         (fixed, prog', scope') = fixBlock dims invs' relVars' prog globals' rhsVars' scope prefix mid
 
-        --(relInvs, unrelInvs) = partition (isRelated relVars rhsVars) invs
-        invs' = map (specializeSpec vs arrs idx) invs -- relInvs ++ unrelInvs
+        (relInvs, unrelInvs) = partition (isRelated arrs) invs
+        invs' = map (specializeSpec vs arrs idx) relInvs ++ unrelInvs
         globals' = globals --[]
         rhsVars' = vs
 
@@ -332,9 +336,9 @@ buildLoopInv re = SpecClause LoopInvariant False $ specToBoogie [] re
 buildLoopAssm :: Spec.RelExpr -> LStatement
 buildLoopAssm re = gen ([], gen $ Predicate [] $ SpecClause Inline True $ specToBoogie [] re)
 
-isRelated :: [Set.Set String] -> [String] -> Spec.RelExpr -> Bool
-isRelated rels vars e = null intersection
-  where intersection = gatherVars [e] `intersect` computeRels vars rels 
+isRelated :: [String] -> Spec.RelExpr -> Bool
+isRelated vars e = not $ null intersection
+  where intersection = gatherVars [e] `intersect` vars
 
 findEdited :: Block -> [String]
 findEdited = foldl recurLS [] -- blk

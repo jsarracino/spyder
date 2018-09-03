@@ -2,7 +2,7 @@
 extra-package-dbs: []
 packages:
 - .
-- ./boogaloo
+# - ./boogaloo
 # - ./haskell-z3
 extra-deps:
 - lens-4.13
@@ -30,7 +30,7 @@ extra-deps:
 # - optparse-applicative-0.12.0.0
 - intero-0.1.24
 # - stack-run-0.1.1.0
-# - ./boogaloo
+- ./boogaloo
 # - ghc-mod-4.1.6
 
 resolver: lts-2.0

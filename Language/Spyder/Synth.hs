@@ -52,6 +52,8 @@ import Language.Spyder.Util
 import Text.Printf
 import System.IO.Unsafe
 
+import Control.Monad (join)
+
 -- given a program and a basic block *to fix*, run cegis to search for the fix.
 fixProc :: DimEnv -> [Spec.RelExpr] -> [Set.Set String] -> Program -> Body -> [String] -> SAST.Program -> Block -> (Block, Program, Body)
 fixProc dims invs relVars header body globals p@(comps, MainComp decs) broken = fixed
@@ -111,7 +113,7 @@ fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult
         isRepaired = checkProg $ optimize $ Program $ decs ++ [buildMain compInvs globals (vs, blk)]
         
 
-        staleInvs = useVars invs $ Set.fromList $ findEdited blk
+        staleInvs = filter (isRelated (findEdited blk) relVars) invs
         staleVars = findUnedited relVars rhsVars blk
         staleVars' = logme staleVars
 
@@ -182,7 +184,8 @@ fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult
             loopSS' = newLoopPre ++ [While c spec' bod']
             loopBLK = map (\s -> gen ([], gen s)) loopSS'
 
-            holes = filter (dimzero dims') loopVars >>= genSkel
+            -- holes = filter (dimzero dims') loopVars >>= genSkel
+            holes = []
 
             (idx, loopVars, arrVs) = parseLoopInfo $ head bod
             (pref, mid, suf) = parseLoop bod
@@ -201,7 +204,13 @@ fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult
 
         snippets = genCegPs (Set.toList lvs) finalInvs
 
-        ret = foldl' buildRet (skel, prog, synthScope) snippets
+        skel' = if null skel 
+          then insertIntoLoop (buildCond snippets) Nothing
+          else front skel ++ insertIntoLoop (buildCond snippets) (Just $ last skel)
+
+
+        (rblk, rprog, rbod) = foldl' buildRet (skel', prog, synthScope) snippets
+        ret = (foldl (flip trimBlock) rblk (Set.toList lvs), rprog, rbod)
 
         -- realRs = filter (dimzero finalDims) (Map.keys finalDims)
 
@@ -234,6 +243,9 @@ specializeCond (invs, Just c, [Pos _ (_, Pos _ (If _ t _))]) = Just (invs', Just
         worker x = x
 specializeCond _ = Nothing
    
+buildCond :: [([Spec.RelExpr], Maybe Spec.RelExpr, Block)] -> Block
+buildCond snips = join (let (_, _, x) = unzip3 snips in x)
+
 genCegPs :: [String] -> [Spec.RelExpr] -> [([Spec.RelExpr], Maybe Spec.RelExpr, Block)]
 genCegPs vs specs = if any isImp canon then foldl worker [] canon else [(specs, Nothing, assigns)]
   where
@@ -274,8 +286,10 @@ completeCond (vs, invs) b = case uncons $ b >>= bs2lss worker of
 trimCond :: Block -> Block
 trimCond b = b >>= bs2lss worker
   where
-    worker (If c t _) = [If c t Nothing]
+    worker (If c t _) = map strip t
     worker s = [s]
+
+    strip x = let (_, r) = node x in node r
 
 -- specialize ForEach vs arrs idx bod[vs] to bod[x/v | x <- xs, v <- vs, v <= arr, arrs ~ xs by arr = xs_i]
 -- loopArrs should be strictly bigger than arrs. loopArrs is all arrays that might be related to the source
@@ -314,7 +328,7 @@ fixStmt dims invs relVars globals rhsVars (prefix, prog, scope) = worker
         relVars' = relVars ++ [Set.fromList vs]
         (fixed, prog', scope') = fixBlock dims invs' relVars' prog globals' rhsVars' scope prefix mid
 
-        (relInvs, unrelInvs) = partition (isRelated arrs) invs
+        (relInvs, unrelInvs) = partition (isRelated arrs relVars') invs
         invs' = map (specializeSpec vs arrs idx) relInvs ++ unrelInvs
         globals' = globals --[]
         rhsVars' = vs
@@ -336,9 +350,9 @@ buildLoopInv re = SpecClause LoopInvariant False $ specToBoogie [] re
 buildLoopAssm :: Spec.RelExpr -> LStatement
 buildLoopAssm re = gen ([], gen $ Predicate [] $ SpecClause Inline True $ specToBoogie [] re)
 
-isRelated :: [String] -> Spec.RelExpr -> Bool
-isRelated vars e = not $ null intersection
-  where intersection = gatherVars [e] `intersect` vars
+isRelated :: [String] -> [Set.Set String] -> Spec.RelExpr -> Bool
+isRelated vars rels e = not $ null intersection
+  where intersection = gatherVars [e] `intersect` computeRels vars rels
 
 findEdited :: Block -> [String]
 findEdited = foldl recurLS [] -- blk

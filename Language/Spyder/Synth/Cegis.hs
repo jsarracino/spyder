@@ -167,7 +167,7 @@ type Config = Map.Map String Int    -- control var to value
 type IOExamples = [Map.Map String Value] -- list of states, where each state is a map from (global) variables to values
          
 -- find a repair for a single lhs expr
--- params: invariants, program preamble, global variables, rhs expression seeds, lhs expressions to fix, enclosing function scope, and a basic block for repair.
+-- params: invariants, program preamble, global variables, lhs of variables, rhs expression seeds, enclosing function scope, basic block for repair, fix template, and assumptions.
 -- returns: the repaired block, a new program, and a new function scope
 repairBlock :: [Expression] -> Program -> [String] -> [String] -> [String] -> Body -> Block -> Block -> Block -> (Block, Program, Body)
 repairBlock invs prog globals lhsVars rhsVars scope blk templ assumpts = ret
@@ -175,19 +175,18 @@ repairBlock invs prog globals lhsVars rhsVars scope blk templ assumpts = ret
     initConfig = Map.fromList []
     ret =  case checkConfig invs prog globals initConfig scope (blk ++ assumpts) of 
       Left _ -> (templ, prog, scope)
-      Right io -> let (finalProg, newScope, fixedBlock) = searchAllConfigs invs prog globals scope (blk ++ assumpts) templ lhsVars rhsVars initCandDepths initConfig [io] in
+      Right io -> let (finalProg, newScope, fixedBlock) = searchAllConfigs invs prog globals scope (blk ++ assumpts) templ lhsVars rhsVars initCandDepths [io] in
         (fixedBlock, optimize finalProg, newScope)
         
     initCandDepths = [Map.fromList $ lhsVars `zip` repeat 0]
 
--- given a set of invariants, a preamble, global variables, a block to fix, a set of base values, and a variable to add an edit, use cegis to
--- search for a configuration that correctly edits the variable. return a map from the lhs values to their RHS blocks.
+-- given a set of invariants, a preamble, global variables, a program scope, a block to fix, lhs variables, rhs variables, a list of candidate depths (for lvariables), and a list of io examples, use cegis to
+-- search for a configuration that correctly edits the variables. returns a fixed block, extended program scope, and extended program.
 
 -- assumes at least one IO example
-searchAllConfigs :: [Expression] -> Program -> [String] -> Body -> Block -> Block -> [String] -> [String] -> [Candidate] -> Config -> IOExamples -> (Program, Body, Block)
-searchAllConfigs invs prog globals scope blk fillme lhses rhses (cand:cands) conf examples = result
+searchAllConfigs :: [Expression] -> Program -> [String] -> Body -> Block -> Block -> [String] -> [String] -> [Candidate] -> IOExamples -> (Program, Body, Block)
+searchAllConfigs invs prog globals scope blk fillme lhses rhses (cand:cands) examples = result
   where
-    -- (cname, configResult) = conf
     -- foreach lhs -> depth, look for a fix using depth. link all together.
     (searchProg, searchScope, newFixBlock) = Map.foldlWithKey genFix (prog, scope, fillme) cand
     -- newFixBlock = fillHoles newFixMap templ
@@ -235,10 +234,10 @@ searchAllConfigs invs prog globals scope blk fillme lhses rhses (cand:cands) con
           Left c    -> 
             if checkProg $ case searchProg of (Program decs) -> optimize $ Program $ decs ++ buildConfVal c ++ [buildMain invs globals searchBody] --the candidate seems to work...use expensive check. if that fails, get more expressions
             then buildAns c  -- we have a winner!
-            else searchAllConfigs invs prog globals scope blk fillme lhses rhses (cands ++ newCands) newConfig examples -- get more exprs
-          Right io  -> searchAllConfigs invs prog globals scope blk fillme lhses rhses (cand:cands) newConfig (io:examples) -- retry current exprs
+            else searchAllConfigs invs prog globals scope blk fillme lhses rhses (cands ++ newCands) examples -- get more exprs
+          Right io  -> searchAllConfigs invs prog globals scope blk fillme lhses rhses (cand:cands) (io:examples) -- retry current exprs
       
-      []   -> searchAllConfigs invs prog globals scope blk fillme lhses rhses (cands ++ newCands) conf examples -- can't find a new candidate...O.O
+      []   -> searchAllConfigs invs prog globals scope blk fillme lhses rhses (cands ++ newCands) examples -- can't find a new candidate...O.O
 
 
 

@@ -65,22 +65,6 @@ useVars :: [Spec.RelExpr] -> Set.Set String -> [Spec.RelExpr]
 useVars invs vs = filter (\v -> (`Set.member` vs) `any` gatherVars [v]) invs
 
 
-data RequiredComp = Loop | Base | Indet | Mixed deriving (Eq, Show, Ord)
-
-fixForInvs :: [String] -> DimEnv -> RequiredComp
-fixForInvs invs dims = foldl worker Indet $ map neededSynth invs
-  where
-    worker Indet x = x
-    worker Loop Loop = Loop
-    worker Base Base = Base
-    worker Loop Base = Mixed
-    worker Base Loop = Mixed
-    worker Mixed _ = Mixed
-
-    neededSynth s = case (Map.!) dims s of 
-      0         -> Base
-      otherwise -> Loop
-
 {-# NOINLINE logme #-}
 logme :: [String] -> [String]
 logme vs = vs -- unsafePerformIO (putStrLn "holes: 1") `seq` vs

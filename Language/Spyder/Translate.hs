@@ -52,7 +52,13 @@ toBoogie prog@(comps, MainComp decls) = outProg
     linkHeader :: BST.BareDecl -> BST.Program
     linkHeader pd = BST.Program $ map Pos.gen $ boogHeader ++ [pd]
 
-    outProg = unsafePerformIO $ foldM repProc (BST.Program $ map Pos.gen $ boogHeader ++ okProcs) brokenProcs
+    -- outProg = unsafePerformIO $ foldM repProc (BST.Program $ map Pos.gen $ boogHeader ++ okProcs) brokenProcs
+
+    outProg = foldl repProcGeneral (BST.Program $ map Pos.gen $ boogHeader ++ okProcs) brokenProcs
+
+    repProcGeneral :: BST.Program -> BST.BareDecl -> BST.Program
+    repProcGeneral p (BST.ProcedureDecl nme tyargs formals rets contr (Just bod@(oldvars, fixme))) = 
+      error "@Shraddha: TODO"
 
     repProc :: BST.Program -> BST.BareDecl -> IO BST.Program
     repProc p (BST.ProcedureDecl nme tyargs formals rets contr (Just bod@(oldvars, fixme))) = do {

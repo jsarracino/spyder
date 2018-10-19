@@ -1,0 +1,20 @@
+// table 1, appendix b of http://cassius.uwplse.org/pldi18-paper.pdf
+
+// Text is at least 14px tall:
+// forall text. font_size[text] >= 14
+
+Component MinTextSize {
+  data font_size : int[];
+
+  relation greater(xs: int[]) {
+    foreach (x) in (xs) {
+      x >= 14
+    }
+  }
+  
+  always greater(font_size);
+  
+}
+
+// Text can be resized by up to 200%. this is hard, not sure.
+

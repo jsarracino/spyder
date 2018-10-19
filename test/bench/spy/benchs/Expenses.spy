@@ -1,0 +1,51 @@
+Component Shared {
+  data l: int[];
+  data r: int[];
+  data m: int[];
+  data s: int[];
+
+  relation Sum(ls: int[], rs: int[], ss: int[]) {
+    foreach (a, b, c) in (ls, rs, ss) {
+      c = a + b
+    }
+  }
+
+  relation Mid(ls: int[], rs: int[], ms: int[]) {
+    foreach (a, b, c) in (ls, rs, ms) {
+      2 * c = a + b
+    }
+  }
+
+  always Sum(l, r, s);
+  always Mid(l, r, m);
+}
+
+Component Main {
+  data me: int[];
+  data them: int[];
+  data sum: int[];
+  data mid: int[];
+
+  using Shared(me, them, sum, mid);
+
+  procedure editMe() {
+    let i: int;
+    let val: int;
+    for (x: int) with idx in (me) {
+      if (idx == i) {
+        x = val;
+      }
+    }
+  }
+
+  procedure editThem() {
+    let i: int;
+    let val: int;
+    for (x: int) with idx in (them) {
+      if (idx == i) {
+        x = val;
+      }
+    }
+  }
+
+}

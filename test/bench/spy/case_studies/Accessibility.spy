@@ -4,17 +4,62 @@
 // forall text. font_size[text] >= 14
 
 Component MinTextSize {
-  data font_size : int[];
+	data font_size : int[];
 
-  relation greater(xs: int[]) {
-    foreach (x) in (xs) {
-      x >= 14
-    }
-  }
-  
-  always greater(font_size);
-  
+	relation greater(xs: int[]) {
+		foreach (x) in (xs) {
+			x >= 14
+		}
+	}
+
+	always greater(font_size);
 }
 
 // Text can be resized by up to 200%. this is hard, not sure.
 
+Component MinLineWidth {
+	data line_width : int[];
+	data char_width : int[];
+
+	relation linewidth(xs: int[], ys: int[]) {
+		foreach (x, y) in (xs, ys) {
+			xs =< 80 * ys
+		}
+	}
+
+	always linewidth(line_width, char_width);
+}
+
+Component Headings {
+	data header_lvl : int[]
+	data visual_imp : int[]
+
+	relation headings(hl: int[], vi: int[]) {
+		foreach (h,v) in (hl,vi) {
+		//
+		}
+	}
+}
+
+Component Mainbutton {
+	data width : int
+	data height : int
+
+	relation mainbutton(width, height) {
+		width >= 72 && height >= 24
+	}
+}
+
+Component Main{
+	data lwidth : int[]
+	data cwidth : int[]
+	data fontsize : int[]
+
+	Using MinLineWidth(lwidth, cwidth)
+
+	procedure changelinewidth() {
+		for (w: int, c: int) in (lwidth, cwidth) {
+			c = 2400;
+		}
+	}
+}

@@ -19,7 +19,7 @@ import qualified Data.Set as Set
 import Data.List                                  (find, partition)
 import Language.Spyder.Translate.Rename
 import Language.Spyder.Synth.Verify               (checkProgFile)
-import Language.Spyder.Synth                      (fixProc)
+import Language.Spyder.Synth                      (fixProc, fixProcGeneral)
 import Language.Boogie.Pretty                     (pretty)
 import System.IO.Unsafe                           (unsafePerformIO)
 
@@ -52,13 +52,8 @@ toBoogie prog@(comps, MainComp decls) = outProg
     linkHeader :: BST.BareDecl -> BST.Program
     linkHeader pd = BST.Program $ map Pos.gen $ boogHeader ++ [pd]
 
-    -- outProg = unsafePerformIO $ foldM repProc (BST.Program $ map Pos.gen $ boogHeader ++ okProcs) brokenProcs
+    outProg = unsafePerformIO $ foldM repProc (BST.Program $ map Pos.gen $ boogHeader ++ okProcs) brokenProcs
 
-    outProg = foldl repProcGeneral (BST.Program $ map Pos.gen $ boogHeader ++ okProcs) brokenProcs
-
-    repProcGeneral :: BST.Program -> BST.BareDecl -> BST.Program
-    repProcGeneral p (BST.ProcedureDecl nme tyargs formals rets contr (Just bod@(oldvars, fixme))) = 
-      error "@Shraddha: TODO"
 
     repProc :: BST.Program -> BST.BareDecl -> IO BST.Program
     repProc p (BST.ProcedureDecl nme tyargs formals rets contr (Just bod@(oldvars, fixme))) = do {
@@ -71,8 +66,11 @@ toBoogie prog@(comps, MainComp decls) = outProg
       where
         decs = case newProg of BST.Program i -> i
         dims' = dims `addITWs` oldvars
+        repairTargetted = False
         newProc = Pos.gen $! BST.ProcedureDecl nme tyargs formals rets contr (Just (newvars, fixed))
-        (fixed, newProg, (newvars, _)) = fixProc dims' invs reledVars p bod globals prog fixme  
+        (fixed, newProg, (newvars, _)) = if repairTargetted 
+          then fixProc dims' invs reledVars p bod globals fixme  
+          else fixProcGeneral dims' invs p bod globals fixme
         
         
     takeHeader = not . takeProc -- everything but procedures

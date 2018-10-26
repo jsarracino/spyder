@@ -19,42 +19,180 @@ void altcolor(int evencolor, int oddcolor, int n, int[n] rows){
 	}
 }
 
+void posneg(int poscolor, int negcolor, int n, int[n] vals, int[n] colors){
+	for(int i=0; i<n; ++i){
+		if(vals[i] >= 0)
+			assert colors[i] == poscolor;
+		else
+			assert colors[i] == negcolor;
+	}
+}
+
 void backgroud(int evencolor, int oddcolor, int n, int[n] rows){
 	for(int i=0; i<n; ++i){
 		assert rows[i] == evencolor || rows[i] == oddcolor;
 	}
 }
 
-generator int expr(int x, int y, int z) {
-	return {| x | y | z|} * {| x | y | z| ?? |};
+struct State {
+	int n;
+	int[n] weeks;
+	int[n] months;
+	int[n] years;
+	int evenColor;
+	int oddColor;
+	int[n] bkgColors;
+	int posColor;
+	int negColor;
+	int[n] fontColors;
 }
 
-generator void editWeekly(int val, int idx, int n, int[n] weeks, int[n] months, int[n] years){
-	for(int i=0; i<n; ++i){
-		if(idx == i){
-			weeks[i] = val;
-			months[i] = expr(weeks[i],months[i],years[i]);
-			years[i] = expr(weeks[i],months[i],years[i]);
-			months_weeks(3, weeks, months);
-			years_months(3, years, months);
+void all(State state) {
+	int n = state.n;
+	months_weeks(n, state.weeks, state.months);
+	years_months(n, state.years, state.months);
+	altcolor(state.evenColor, state.oddColor, n, state.bkgColors);
+	posneg(state.posColor, state.negColor, n, state.weeks, state.fontColors);
+}
+
+
+generator int expr_w(int w, int m, int y, int i, int ix, int pc, int nc, int bnd) {
+	assert bnd > 0;
+	generator int mult(){
+		return {| w | m | y | i | ix | pc | nc | ?? |} * ??;
+	}
+	if(??) { return mult(); }
+	else { return mult() + expr_w(w, m, y, i, ix, pc, nc, bnd-1); }
+}
+
+generator int expr_b(int ec, int oc, int i, int bnd) {
+	assert bnd > 0;
+	generator int mult(){
+		return {| ec | oc | i | ?? |} * ??;
+	}
+	if(??) { return mult(); }
+	else { return mult() + expr_b(ec, oc, i, bnd-1); }
+}
+
+generator void weeklySketch(int idx, int n, State state) {
+	
+	for (int i = 0; i < n; ++i) {
+		//if (i == idx) {
+			state.months[i] = expr_w(state.weeks[i], state.months[i], state.years[i], i, idx, state.posColor, state.negColor, 3);
+			state.years[i] = expr_w(state.weeks[i], state.months[i], state.years[i], i, idx, state.posColor, state.negColor, 3);
+			state.fontColors[i] = expr_w(state.weeks[i], state.months[i], state.years[i], i, idx, state.posColor, state.negColor, 3);
+		//}
+	}
+
+}
+
+generator void bkgSketch(int n, State state) {
+	for (int i = 0; i < n; ++i) {
+		if (i % 2 == 0) {
+			state.bkgColors[i] = expr_b(state.evenColor, state.oddColor, i, 3);
+		}
+		if (i % 2 == 1) {
+			state.bkgColors[i] = expr_b(state.evenColor, state.oddColor, i, 3);
 		}
 	}
 }
 
-generator void editMonthly(int val, int idx, int n, int[n] months, int[n] years){
-	for(int i=0; i<n; ++i){
-		if(idx == i){
-			months[i] = val;
-			years[i] = expr(val,months[i],years[i]);
-			years_months(3, years, months);
-		}
+
+
+void editWeekly(int val, int idx, State state) {
+	for(int i=0; i<state.n; ++i){
+		state.weeks[i] += val;
 	}
 }
 
-harness void sketch (int a, int b, int c, int d) {
-	int[3] weeks = {a,b,c};
-	int[3] months = {4*a,4*b,4*c};
-	int[3] years = {48*a,48*b,48*c};
-	editWeekly(d, 2, 3, weeks, months, years);
-	editMonthly(d, 2, 3, months, years);
+void editEvenColor(int val, State state) {
+	state.evenColor = val;
 }
+
+
+
+
+int[n] buildWeeks(int n) {
+	int[n] out;
+	for (int i = 0; i < n; ++i) {
+		out[i] = i;
+	}
+	return out;
+}
+
+int[n] buildFColors(int n, int[n] vals, int posColor, int negColor) {
+	int[n] out;
+	for (int i = 0; i < n; ++i) {
+		if (vals[i] >= 0) {
+			out[i] = posColor;
+		} else {
+			out[i] = negColor;
+		}
+	}
+	return out;
+}
+
+int[n] buildBkgColors(int n, int evenColor, int oddColor) {
+	int[n] out;
+	for (int i = 0; i < n; ++i) {
+		if (i%2 == 0) {
+			out[i] = evenColor;
+		} else {
+			out[i] = oddColor;
+		}
+	}
+	return out;
+}
+
+int[n] buildWithFactor(int n, int[n] inp, int factor) {
+	int[n] out;
+	for (int i = 0; i < n; ++i) {
+		out[i] = factor*inp[i];
+	}
+	return out;
+}
+
+int[n] buildMonths(int n, int[n] weeks) {
+	return buildWithFactor(n, weeks, 4);
+}
+
+int[n] buildYears(int n, int[n] months) {
+	return buildWithFactor(n, months, 12);
+}
+
+
+harness void sketch () {
+	int n = 3;
+	int idx0 = n/2 + 1;
+	int idx1 = n/2;
+	int val0 = -20; // must be negative for the pos/neg to trigger
+	int val1 = 13;
+	State state;
+	int[n] weeks = buildWeeks(n);
+	int[n] months = buildMonths(n, weeks);
+	int[n] years = buildYears(n, months);
+
+	int pos = 0;
+	int neg = 1;
+	int even = 0;
+	int odd = 1;
+	
+	int[n] fontColors = buildFColors(n, weeks, pos, neg);
+	int[n] bkgColors = buildBkgColors(n, even, odd);
+	state = new State(n=n, weeks=weeks, months=months, years=years, evenColor=even, oddColor=odd, bkgColors=bkgColors, posColor=pos, negColor=neg, fontColors=fontColors);
+	all(state);
+	editWeekly(val0, idx0, state);
+	editWeekly(val1, idx1, state);
+
+	weeklySketch(idx0, n, state);
+	weeklySketch(idx1, n, state);
+	all(state);
+
+	//int newEven = 2;
+	//editEvenColor(newEven, state);
+	//bkgSketch(n, state);
+	//all(state);
+
+
+}
+

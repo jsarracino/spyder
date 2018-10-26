@@ -15,6 +15,7 @@ module Language.Spyder.Synth (
   , specializeSpec
   , gatherVars
   , isRelated
+  , fixProcGeneral
 ) where
 
 import Prelude hiding (foldl, all, concat, any)
@@ -54,9 +55,33 @@ import System.IO.Unsafe
 
 import Control.Monad (join)
 
+-- given a procedure, fix with general synthesis by searching for a repair at the end
+fixProcGeneral :: DimEnv -> [Spec.RelExpr] -> Program -> Body -> [String] -> Block -> (Block, Program, Body)
+fixProcGeneral dims invs program scope globals broken = ret
+  where
+    header = case program of (Program x) -> x
+    ret = (broken, Program $ header ++ [generalFunc], scope)
+    -- ^ 'ProcedureDecl' @name type_args formals rets contract body@
+    generalFunc = gen $ ProcedureDecl "__general_syn" [] [] [] contr $ Just ([], [])
+    contr = reqs ++ ensures ++ mods
+    compInvs = map (specToBoogie []) invs 
+    buildClause :: Bool -> Expression -> LStatement
+    buildClause b e = gen ([], gen $ Predicate [] $ SpecClause Inline b e)
+    reqs = map (Requires False) compInvs
+    ensures = map (Ensures False) compInvs ++ olds
+    mods = [Modifies False globals]
+
+    needSaving = findEdited broken `intersect` globals
+    olds = map (Ensures False . buildOld) needSaving
+    buildOld v = gen $ BinaryExpression Eq (gen $ Old (gen $ Var v)) (gen $ Var v)
+    
+    
+
+
+
 -- given a program and a basic block *to fix*, run cegis to search for the fix.
-fixProc :: DimEnv -> [Spec.RelExpr] -> [Set.Set String] -> Program -> Body -> [String] -> SAST.Program -> Block -> (Block, Program, Body)
-fixProc dims invs relVars header body globals p@(comps, MainComp decs) broken = fixed
+fixProc :: DimEnv -> [Spec.RelExpr] -> [Set.Set String] -> Program -> Body -> [String] -> Block -> (Block, Program, Body)
+fixProc dims invs relVars header body globals broken = fixed
   where
     fixed = fixBlock dims invs relVars header globals rhsVars body [] broken
     rhsVars = findInScope header body invs

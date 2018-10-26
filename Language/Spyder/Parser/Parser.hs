@@ -88,12 +88,24 @@ relForeach = do {
   body <- braces relexpr;
   return $ Spec.Foreach vs idx arrs body
 }
+
+relAdjacent :: Parser Spec.RelExpr
+relAdjacent = do {
+  res "adjacent";
+  (hi, lo) <- parens $ do {a <- ident; comma; b <- ident; return (a,b)};
+  idx <- loopIdxP;
+  res "in";
+  arr <- ident;
+  body <- braces relexpr;
+  return $ Spec.Adjacent hi lo idx arr body
+}
 specTerm :: Parser Spec.RelExpr
 specTerm  =  parens relexpr
   <|> try (liftM Spec.RelInt ints)
   <|> try (liftM Spec.RelBool bools)
   <|> try relApp
   <|> try relForeach
+  <|> try relAdjacent
   <|> try relIndex
   <|> try (liftM Spec.RelVar ident)
   <?> "spec expr"
@@ -301,6 +313,7 @@ comp = do {
 
 prog :: Parser Program
 prog = do {
+  spaces;
   comps <- spaced comp;
   let ([it], others) = partition takeMain comps in 
     return (others, it)

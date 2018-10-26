@@ -84,6 +84,7 @@ alphaRel mp = recur
     recur (RelBinop op l r) = RelBinop op (recur l) (recur r)
     recur (RelApp v args) = RelApp (subVar v) $ map recur args
     recur (Foreach vs idx arrs bod) = Foreach (map subVar vs) (fmap subVar idx) (map subVar arrs) $ recur bod
+    recur (Adjacent l h idx arr bod) = Adjacent (subVar l) (subVar h) (fmap subVar idx) (subVar arr) $ recur bod
 
     subVar s = case Map.lookup s mp of 
       Just x@(RelVar v) -> v

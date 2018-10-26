@@ -105,10 +105,10 @@ specTerm :: Parser Spec.RelExpr
 specTerm  =  parens relexpr
   <|> try (liftM Spec.RelInt ints)
   <|> try (liftM Spec.RelBool bools)
-  <|> try relApp
   <|> try relForeach
   <|> try relAdjacent
   <|> try relIndex
+  <|> try relApp
   <|> try (liftM Spec.RelVar ident)
   <?> "spec expr"
 

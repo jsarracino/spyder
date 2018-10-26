@@ -1,0 +1,34 @@
+Component Sum {
+  data xs : int[];
+  data totals: int[];
+
+  relation recursive(vs: int[], ts: int[]) {
+    foreach (x) in (vs) {
+      adjacent (acc, nxt) in ts {
+        nxt = acc + x
+      }
+    }
+  }
+  relation base(vs : int[], ts: int[]) {
+    vs[0] = ts[0]
+  }
+
+
+  
+  always recursive(xs, totals);
+  always base(xs, totals);
+}
+
+
+Component Main {
+  data x: int[];
+  data t: int[];
+
+  using Sum(x, t);
+
+  procedure incrX() {
+    for (l:int) in (x) {
+      l = l + 1;
+    }
+  }
+}

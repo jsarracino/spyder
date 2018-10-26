@@ -14,6 +14,8 @@ module Language.Spyder.Parser.Parser (
   , loopP
   , elifP
   , condP
+  , relAdjacent
+  , specTerm
 ) where
 
 import Text.Parsec

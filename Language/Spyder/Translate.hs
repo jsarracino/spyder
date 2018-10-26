@@ -66,7 +66,7 @@ toBoogie prog@(comps, MainComp decls) = outProg
       where
         decs = case newProg of BST.Program i -> i
         dims' = dims `addITWs` oldvars
-        repairTargetted = False
+        repairTargetted = True
         newProc = Pos.gen $! BST.ProcedureDecl nme tyargs formals rets contr (Just (newvars, fixed))
         (fixed, newProg, (newvars, _)) = if repairTargetted 
           then fixProc dims' invs reledVars p bod globals fixme  

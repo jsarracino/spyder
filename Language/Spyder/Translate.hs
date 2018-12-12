@@ -89,7 +89,7 @@ getRelNames :: Component -> [String]
 getRelNames (DerivComp nme decs) = map worker relDecs
   where
     worker (RelDecl n _ _) = n
-    worker _ = undefined "inconceivable"
+    worker _ = error "inconceivable"
     relDecs = filter takeRD decs
     takeRD RelDecl{} = True
     takeRD _ = False

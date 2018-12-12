@@ -55,7 +55,7 @@ library
                , stream-monad
                , lens
                , optparse-applicative
-  ghc-options:         -threaded -rtsopts -with-rtsopts=-N -main-is Spyder.hs -W -fno-warn-missing-signatures -fno-warn-dodgy-exports -fno-warn-unused-do-bind
+  ghc-options:         -W -fno-warn-missing-signatures -fno-warn-dodgy-exports -fno-warn-unused-do-bind
   default-language:    Haskell2010
 
 executable spyder
@@ -138,4 +138,4 @@ executable spyder-tests
 
 source-repository head
   type:     git
-  location: https://github.com/jsarracino/language-typescript
+  location: https://github.com/jsarracino/spyder

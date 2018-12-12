@@ -46,6 +46,8 @@ import Language.Spyder.Config                     (concretSize)
 import Language.Spyder.Opt
 
 
+import Language.Spyder.Parser         (fromBoogUS)
+
 -- get = (Map.!)
 
 
@@ -169,13 +171,13 @@ type IOExamples = [Map.Map String Value] -- list of states, where each state is 
 -- find a repair for a single lhs expr
 -- params: invariants, program preamble, global variables, lhs of variables, rhs expression seeds, enclosing function scope, basic block for repair, fix template, and assumptions.
 -- returns: the repaired block, a new program, and a new function scope
-repairBlock :: [Expression] -> Program -> [String] -> [String] -> [String] -> Body -> Block -> Block -> Block -> (Block, Program, Body)
-repairBlock invs prog globals lhsVars rhsVars scope blk templ assumpts = ret
+repairBlock :: [Expression] -> [Expression] -> Program -> [String] -> [String] -> [String] -> Body -> Block -> Block -> Block -> (Block, Program, Body)
+repairBlock pres posts prog globals lhsVars rhsVars scope blk templ assumpts = ret
   where
     initConfig = Map.fromList []
-    ret =  case checkConfig invs prog globals initConfig scope (blk ++ assumpts) of 
+    ret =  case checkConfig pres posts prog globals initConfig scope (blk ++ assumpts) of 
       Left _ -> (templ, prog, scope)
-      Right io -> let (finalProg, newScope, fixedBlock) = searchAllConfigs invs prog globals scope (blk ++ assumpts) templ lhsVars rhsVars initCandDepths [io] in
+      Right io -> let (finalProg, newScope, fixedBlock) = searchAllConfigs pres posts prog globals scope (blk ++ assumpts) templ lhsVars rhsVars initCandDepths [io] in
         (fixedBlock, optimize finalProg, newScope)
         
     initCandDepths = [Map.fromList $ lhsVars `zip` repeat 0]
@@ -184,8 +186,8 @@ repairBlock invs prog globals lhsVars rhsVars scope blk templ assumpts = ret
 -- search for a configuration that correctly edits the variables. returns a fixed block, extended program scope, and extended program.
 
 -- assumes at least one IO example
-searchAllConfigs :: [Expression] -> Program -> [String] -> Body -> Block -> Block -> [String] -> [String] -> [Candidate] -> IOExamples -> (Program, Body, Block)
-searchAllConfigs invs prog globals scope blk fillme lhses rhses (cand:cands) examples = result
+searchAllConfigs :: [Expression] -> [Expression] -> Program -> [String] -> Body -> Block -> Block -> [String] -> [String] -> [Candidate] -> IOExamples -> (Program, Body, Block)
+searchAllConfigs pres posts prog globals scope blk fillme lhses rhses (cand:cands) examples = result
   where
     -- foreach lhs -> depth, look for a fix using depth. link all together.
     (searchProg, searchScope, newFixBlock) = Map.foldlWithKey genFix (prog, scope, fillme) cand
@@ -208,7 +210,7 @@ searchAllConfigs invs prog globals scope blk fillme lhses rhses (cand:cands) exa
       where
         nme = makeName n
         (varNames, _) = searchScope
-        bod = (varNames, addAssumes invs io searchBlock)
+        bod = (varNames, addAssumes pres io searchBlock)
     procNames = take (length examples) $ map makeName [0..]
     makeName n = "__cegis__func" ++ show n
 
@@ -229,15 +231,15 @@ searchAllConfigs invs prog globals scope blk fillme lhses rhses (cand:cands) exa
     result = case boogExec checkMe "Main" of
       x:xs -> 
         let newConfig = Map.map asInt $ takeConsts x-- a new challenger appears
-            newResult = checkConfig invs searchProg globals newConfig searchBody searchBlock in
+            newResult = checkConfig pres posts searchProg globals newConfig searchBody searchBlock in
         case newResult of 
           Left c    -> 
-            if checkProg $ case searchProg of (Program decs) -> optimize $ Program $ decs ++ buildConfVal c ++ [buildMain invs globals searchBody] --the candidate seems to work...use expensive check. if that fails, get more expressions
+            if checkProg $ case searchProg of (Program decs) -> optimize $ Program $ decs ++ buildConfVal c ++ [buildMain pres posts globals searchBody] --the candidate seems to work...use expensive check. if that fails, get more expressions
             then buildAns c  -- we have a winner!
-            else searchAllConfigs invs prog globals scope blk fillme lhses rhses (cands ++ newCands) examples -- get more exprs
-          Right io  -> searchAllConfigs invs prog globals scope blk fillme lhses rhses (cand:cands) (io:examples) -- retry current exprs
+            else searchAllConfigs pres posts prog globals scope blk fillme lhses rhses (cands ++ newCands) examples -- get more exprs
+          Right io  -> searchAllConfigs pres posts prog globals scope blk fillme lhses rhses (cand:cands) (io:examples) -- retry current exprs
       
-      []   -> searchAllConfigs invs prog globals scope blk fillme lhses rhses (cands ++ newCands) examples -- can't find a new candidate...O.O
+      []   -> searchAllConfigs pres posts prog globals scope blk fillme lhses rhses (cands ++ newCands) examples -- can't find a new candidate...O.O
 
 
 
@@ -246,15 +248,15 @@ buildConfVal :: Config -> [Decl]
 buildConfVal cs = map buildAsn $ Map.toList cs 
   where buildAsn (name, val) = Pos.gen $ AxiomDecl $ eq (Var name) (numeral $ toInteger val)
 -- given a set of invariants, a preamble, a set of globals, and a body to check, either return the body (if it passes boogie test) or return more counterexamples
-checkConfig :: [Expression] -> Program -> [String] -> Config -> Body -> Block -> Either Config (Map.Map String Value)
-checkConfig invs (Program header) globals config (vs, _) blk = result
+checkConfig :: [Expression] -> [Expression] -> Program -> [String] -> Config -> Body -> Block -> Either Config (Map.Map String Value)
+checkConfig pres posts (Program header) globals config (vs, _) blk = result
   where
     prog = debugProg "cegis-test-debug.bpl" $ optimize $ Program $ header ++ [main] ++ buildConfVal config
     bod = (vs, saveLocals:blk)
     saveLocals = Pos.gen ([], Pos.gen $ Predicate [Attribute "save" (vs >>= buildAV)] clause)
     buildAV itws = [EAttr $ Pos.gen $ Var $ itwId itw | itw <- itws]
     clause = SpecClause Inline False $ Pos.gen tt
-    main = buildMain invs globals bod 
+    main = buildMain pres posts globals bod 
     result = case boogTest prog "Main" of 
       []    -> Left config
       x:xs  -> Right $ buildIO x 
@@ -290,13 +292,13 @@ buildMainSearch globals functions (Program decs) = Program $ decs ++ [Pos.gen $ 
     havoc = stmt $ Havoc globals
 
 -- build main function for test/verify phases
-buildMain :: [Expression] -> [String] -> Body -> Decl
-buildMain invs globals (vs, bod) = Pos.gen $ ProcedureDecl "Main" [] [] [] modifies $ Just (vs, reqs ++ bod ++ ensures)
+buildMain :: [Expression] -> [Expression] -> [String] -> Body -> Decl
+buildMain pres posts globals (vs, bod) = Pos.gen $ ProcedureDecl "Main" [] [] [] modifies $ Just (vs, reqs ++ bod ++ ensures)
   where 
     buildClause :: Bool -> Expression -> LStatement
     buildClause b e = Pos.gen ([], Pos.gen $ Predicate [] $ SpecClause Inline b e)
-    reqs = map (buildClause True) invs
-    ensures = map (buildClause False) invs
+    reqs = map (buildClause True) pres 
+    ensures = map (buildClause False) posts
     modifies = [Modifies False globals]
 
 -- given a list of expressions, a control variable, and a lhs for assignment, add (at the end)
@@ -312,10 +314,12 @@ buildMain invs globals (vs, bod) = Pos.gen $ ProcedureDecl "Main" [] [] [] modif
 
 -- run in exec mode, searching for a valid configuration.
 boogExec :: Program -> String -> [TestCase]
-boogExec p pname = case typeCheckProgram p of
-              Left typeErrs -> error "inconceivable"
+boogExec p pname = case typeCheckProgram p' of
+              Left typeErrs -> error $ "exec program has typeerrors: " ++ show p'
               Right context -> runInt context
   where 
+    p' :: Program
+    p' = case (fromBoogUS "lib.bpl", p) of (Program l, Program r) -> Program $ l ++ r
     runInt ctx = take 1 $ filter keep . maybeTake exec_max $ int p ctx pname
 
     int = interpreter branch_max rec_max loop_max minimize concretize True
@@ -333,18 +337,19 @@ boogExec p pname = case typeCheckProgram p of
 
 -- run in test mode, searching for an invalid configuration.
 boogTest :: Program -> String -> [TestCase]
-boogTest p pname = case typeCheckProgram p of
-              Left typeErrs -> error "inconceivable"
+boogTest p pname = case typeCheckProgram p' of
+              Left typeErrs -> error $ "test program has typeerrors: " ++ show p'
               Right context -> runInt context
   where 
+    p' = case (fromBoogUS "lib.bpl", p) of (Program l, Program r) -> Program $ l ++ r
     runInt ctx = take 1 $ filter keep . maybeTake exec_max $ int p ctx pname
 
     int = interpreter branch_max rec_max loop_max minimize concretize True
 
     branch_max = Just 128
     exec_max = Just 2048
-    rec_max = Nothing -- Just (-1)
-    loop_max = Nothing -- (-1)
+    rec_max = Nothing 
+    loop_max = Nothing 
     minimize = True
     concretize = True
     maybeTake = \case
@@ -375,7 +380,7 @@ buildIO tc@(TestCase _ mem conMem (Just rtf)) = buildMap ((mem'^.memOld) `Map.un
     evalLogicals logic local var (Pos.Pos x (Logical _ v)) 
       | Map.member v logic    = Just $ Pos.Pos x $ Literal $ (Map.!) logic v 
       | Map.member var local  = Just $ (Map.!) local var 
-      | otherwise             = error $ "inconceivable" ++ var
+      | otherwise             = error $ "bad logical mapping, can't find " ++ var
     evalLogicals _ _ _ _ = Nothing -- filter out maps... not sure if smart
 
 

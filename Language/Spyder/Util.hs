@@ -7,6 +7,7 @@ module Language.Spyder.Util (
   , allocFreshLocal
   , preservePos
   , allocInBlock
+  , allocIfMissing
   , front
   , applyFunc
   , liftOpt
@@ -66,6 +67,17 @@ allocInBlock pref ty (itws, b) = (vname, ([vdec] : itws, b))
     vname = fst $ allocFreshLocal pref ty $ concat itws
     vdec  = IdTypeWhere vname ty $ Pos.gen tt
  
+
+allocIfMissing :: String -> Type -> Body -> (String, Body)
+allocIfMissing name ty (itws, b) = (vname, ([itws'], b))
+  where
+    names = Set.fromList $ map itwId (concat itws)
+    (vname, itws') = if name `Set.member` names 
+      then (name, concat itws)
+      else allocFreshLocal name ty $ concat itws
+
+
+
 -- given a overall scope, a prefix, and a list of variables, allocate a new variable (of int type)
 -- return the name of the variable and the new list of variables
 allocFreshLocal :: String -> Type -> [IdTypeWhere] -> (String, [IdTypeWhere])

@@ -2,10 +2,12 @@
 
 module Language.Spyder.Translate.Specs (
     prefixApps
-  , saturateApps
   , specToBoogie
   , dimVars
   , inlineApps
+  , fillForeach
+  , renamePrev
+  , updatePrevs
 ) where
 
 import qualified Language.Boogie.AST as BST
@@ -14,12 +16,8 @@ import Language.Spyder.AST.Spec
 import Language.Spyder.Translate.Rename             (alphaRel)
 import qualified Data.Map.Strict as Map
 
-saturateApps :: RelExpr -> RelExpr
-saturateApps = id --recur
-  where
-    recur :: RelExpr -> RelExpr
-    recur (RelApp f (v@(RelVar x):vs)) = RelApp f $ v:vs ++ [RelVar $ x ++ "$dim0"]
-    recur _ = error "TODO"
+import Data.Maybe
+
 
 
 
@@ -36,7 +34,9 @@ inlineApps decs = recur
     recur x@RelVar{} = x
     recur x@RelInt{} = x
     recur x@RelBool{} = x
-    recur x@RelIndex{} = x
+    recur (RelCond c t f) = RelCond (recur c) (recur t) (recur f)
+    recur (Prev v i) = Prev v (recur i)
+    -- recur x@RelIndex{} = x
       
 
 prefixApps :: String -> RelExpr -> RelExpr
@@ -44,9 +44,11 @@ prefixApps pref = recur
   where 
     recur :: RelExpr -> RelExpr
     recur (RelApp f args) = RelApp (pref ++ f) $ map recur args
+    recur (Prev f i) = Prev f $ recur i
     recur (RelBinop o l r) = RelBinop o (recur l) (recur r)
     recur (RelUnop o i) = RelUnop o (recur i)
     recur (Foreach vs idx arrs bod) = Foreach vs idx arrs $ recur bod
+    recur (RelCond c t f) = RelCond (recur c) (recur t) (recur f)
     recur x@RelVar{} = x
     recur x@RelInt{} = x
     recur x@RelBool{} = x
@@ -88,10 +90,64 @@ quantDepth (Foreach _ _ _ bod) = 1 + quantDepth bod
 quantDepth _ = 0 -- App, Var, Int, Bool
 
 
+-- similar to renamePrev, but in this case, we're updating a (possibly bare) prev to the variable version
+-- e.g. updatePrev prev(foo,0) => prev_var(prev_foo,0,idx)
+-- vs  renamePrev prev(foo,0) => prev(foos,0,idx)
+updatePrevs :: Map.Map String String -> RelExpr -> RelExpr
+updatePrevs iters = recur
+  where
+    inIters v = Map.member v iters
+    recur (RelApp f args) = RelApp f $ map recur args
+    recur (RelBinop o l r) = RelBinop o (recur l) (recur r)
+    recur (RelUnop o i) = RelUnop o $ recur i
+    recur (Foreach vs i ars b) = Foreach vs i ars $ if any inIters ars then b else recur b
+    recur (Prev v i) = case Map.lookup v iters of 
+      Just idx -> RelApp "prev_var" [RelVar ("prev_" ++ v), i, RelVar idx]
+      Nothing -> Prev v i
+    recur x@RelVar{} = x
+    recur x@RelInt{} = x
+    recur x@RelBool{} = x
+
+
+-- if x is bound in a foreach like foreach (x: xs), map
+-- prev(x, base) => prev(xs, base, idx(x))
+-- to do this, save the parent and index of each bound variable in a map
+-- assumes that fillForeach has introduces variables for Foreach bindings.
+renamePrev :: Map.Map String (String,String) -> RelExpr -> RelExpr
+renamePrev = recur
+  where
+    recur iters (RelApp f args) = RelApp f $ map (recur iters) args
+    recur iters (RelCond c t f) = RelCond (recur iters c) (recur iters t) (recur iters f)
+    recur iters (RelBinop o l r) = RelBinop o (recur iters l) (recur iters r)
+    recur iters (RelUnop o i) = RelUnop o $ recur iters i
+    recur iters (Foreach vs (Just v) ars i) = Foreach vs (Just v) ars $ recur (iters `Map.union` Map.fromList (vs `zip` (ars `zip` repeat v))) i
+    recur iters (Prev v i) = RelApp "prev" [RelVar parent, RelVar idx, base]
+      where 
+        (parent, idx) = fromMaybe (error ("missing variable in prev " ++ v)) $ Map.lookup v iters
+        base = recur iters i
+    recur _ x@RelVar{} = x
+    recur _ x@RelInt{} = x
+    recur _ x@RelBool{} = x
+
+
+
+
+fillForeach :: RelExpr -> RelExpr
+fillForeach (Foreach xs Nothing vs b) = fillForeach (Foreach xs (Just v) vs $  fillForeach b)
+  where v = "foreach$" ++ show (quantDepth b)
+fillForeach (Foreach xs v@Just{} vs b) = Foreach xs v vs $ fillForeach b
+fillForeach (RelApp s args) = RelApp s $ map fillForeach args
+fillForeach (RelBinop o l r) = RelBinop o (fillForeach l) (fillForeach r)
+fillForeach (RelUnop o i) = RelUnop o (fillForeach i)
+fillForeach (RelCond c t f) = RelCond (fillForeach c) (fillForeach t) (fillForeach f)
+fillForeach x@RelVar{} = x
+fillForeach x@RelInt{} = x
+fillForeach x@RelBool{} = x
+fillForeach x@Prev{} = x
 
 
 specToBoogie :: [String] -> RelExpr -> BST.Expression
-specToBoogie = recur
+specToBoogie dims e = recur dims $ renamePrev Map.empty $ fillForeach e
   where
     recur :: [String] -> RelExpr -> BST.Expression
     recur dims (RelApp f args) = Pos.gen $ BST.Application f $ map (recur dims) args
@@ -108,15 +164,19 @@ specToBoogie = recur
         idxBind :: Map.Map String RelExpr
         idxBind = case idx of 
           Just v  -> Map.singleton v (RelVar qv)
-          Nothing -> Map.empty
+          Nothing -> error "Expected filled foreach"
         inner' = Pos.gen $ BST.BinaryExpression BST.Implies validIdx (alphaIdx (vs `zip` arrs) qv inner)
         validIdx = Pos.gen $ BST.BinaryExpression BST.And lo hi
         lo = Pos.gen $ BST.BinaryExpression BST.Geq (Pos.gen $ BST.Var qv) (Pos.gen $ BST.numeral 0)
         hi = Pos.gen $ BST.BinaryExpression BST.Gt (Pos.gen $ BST.Var d) (Pos.gen $ BST.Var qv)
+    
+    recur (d:dims) (Prev v i) = recur (d:dims) $ RelApp "prev" [RelVar v,i,RelVar d]
+    recur dims (RelCond c t f) = Pos.gen $ BST.IfExpr (recur dims c) (recur dims t) (recur dims f)
     recur _ (RelVar x) = Pos.gen $ BST.Var x
     recur _ (RelInt x) = Pos.gen $ BST.Literal $ BST.IntValue $ fromIntegral x
     recur _ (RelBool x) = Pos.gen $ BST.Literal $ BST.BoolValue x
-    recur ds (RelIndex l r) = Pos.gen $ BST.MapSelection (recur ds l) [recur ds r]
+    
+    -- recur ds (RelIndex l r) = Pos.gen $ BST.MapSelection (recur ds l) [recur ds r]
 
     -- data BareExpression = 
     --   Literal Value |

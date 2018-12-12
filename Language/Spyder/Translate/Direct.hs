@@ -259,7 +259,7 @@ buildInvs funcs (DerivComp nme decs, x) = exprs `zip` dims
 
     prefix = mangleFunc nme x
 
-    buildExpr = inlineApps funcs . saturateApps 
+    buildExpr = inlineApps funcs
     extractDims (Spec.RelApp f args) = map (\s -> topRV ++ "$" ++ s) $ dimVars bod
       where 
         (formals, bod) = (Map.!) funcs f
@@ -341,9 +341,9 @@ simplArrAccess e = worker (e, [])
 -- get any free variables in these expressions anyway (because it's a thunk)
 eval' :: BST.BareExpression -> Maybe BST.Value
 eval' (BST.Literal v) = Just v
-eval' (BST.Logical ty val) = Nothing --error "logical in eval'"
-eval' (BST.Var v) = Nothing --error "var in eval'"
-eval' _ = Nothing --error "inconceivable"
+eval' (BST.Logical ty val) = Nothing 
+eval' (BST.Var v) = Nothing 
+eval' _ = Nothing
 
 unvalue :: BST.Value -> BST.Expression
 unvalue v@BST.IntValue{} = Pos.gen $ BST.Literal v
@@ -351,7 +351,7 @@ unvalue _ = undefined "TODO"
 
 asInt :: BST.Value -> Int 
 asInt (BST.IntValue v) = fromIntegral v
-asInt _ = error "inconceivable"
+asInt v = error $ "Expected int, got: " ++ show v
 
 gatherDDecls :: [MainDecl] -> [Imp.VDecl]
 gatherDDecls decs = map unwrap $ filter takeDD decs

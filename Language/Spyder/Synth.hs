@@ -16,6 +16,7 @@ module Language.Spyder.Synth (
   , gatherVars
   , isRelated
   , fixProcGeneral
+  , generatePrevs
 ) where
 
 import Prelude hiding (foldl, all, concat, any)
@@ -24,7 +25,6 @@ import Data.Foldable
 
 import Language.Spyder.Synth.Verify
 import Language.Spyder.Synth.Template 
-import Language.Spyder.Synth.Enum
 import Language.Spyder.Synth.Cegis            (repairBlock, buildMain)
 import qualified Language.Spyder.AST as SAST
 import qualified Language.Spyder.AST.Spec as Spec               
@@ -107,7 +107,12 @@ insertIntoLoop ins (Just s@Pos{}) = s : ins
 insertIntoLoop ins _ = ins
 
 dimzero :: DimEnv -> String -> Bool
-dimzero d s = (Map.!) d s == 0
+dimzero d s = case Map.lookup s d of 
+  Just v -> v == 0
+  Nothing -> error $ "missing dim variables " ++ s
+
+compSpecs t = map (specToBoogie [] . Spec.inlinePrev . t)
+
 
 fixBlock :: DimEnv -> [Spec.RelExpr] -> [Set.Set String] -> Program -> [String] -> [String] -> Body -> Block -> Block -> (Block, Program, Body)
 fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult inner
@@ -117,9 +122,9 @@ fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult
     fixResult :: (Block, Block, Program, Body) -> (Block, Program, Body)
     fixResult (_, blk, prog@(Program decs), scope'@(vs, _)) = if not isRepaired then fixed else (blk, prog, scope')
       where
-        
-        compInvs = map (specToBoogie []) invs -- (filter (isRelated relVars rhsVars) invs)
-        isRepaired = checkProg $ optimize $ Program $ decs ++ [buildMain compInvs globals (vs, blk)]
+
+        (pres, posts) = (compSpecs Spec.weakenPrev invs, compSpecs id invs)
+        isRepaired = checkProg $ optimize $ Program $ decs ++ [buildMain pres posts globals (vs, blk)]
         
 
         staleInvs = filter (isRelated (findEdited blk) relVars) invs
@@ -176,7 +181,7 @@ fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult
               where
                 lty = case buildTy $ (Map.!) odims arrV of 
                   (Imp.ArrTy i) -> i
-                  _         -> error "inconceivable"
+                  _         -> error $ "expected array variable in arrVs, instead found " ++ arrV
 
             (itws, r) = oscope
 
@@ -226,18 +231,17 @@ fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult
         buildRet :: (Block, Program, Body) -> ([Spec.RelExpr], Maybe Spec.RelExpr, Block) -> (Block, Program, Body)
         buildRet (skel, prog, bod) nxt = (skel', prog', bod')
           where
-
-            (fixed, prog', bod') = repairBlock (map (specToBoogie []) invs) prog globals (Set.toList lvs) rhsVars bod oldblk snippet' assumpts
-            -- (invs, _, snippet) = fromMaybe nxt $ specializeCond nxt
             (invs, _, snippet) = nxt
+
+            (pres, posts) = (compSpecs Spec.weakenPrev invs, compSpecs id invs)
+
             (assumpts, snippet') = completeCond (Set.toList lvs, invs) snippet
 
             rhsVars = gatherVars invs
 
-            -- fixed' = case specializeCond nxt of 
-            --   Just (_, Just c, _) -> singletonBlock $ gen (If (Expr $ specToBoogie [] c) fixed Nothing)
-            --   Nothing -> fixed
-            -- fixed' = trimCond fixed
+            (fixed, prog', bod') = repairBlock pres posts prog globals (Set.toList lvs) rhsVars bod oldblk snippet' assumpts
+            
+            
 
             fixes = parseFixes (Set.toList lvs) (trimCond fixed)
             skel' = rebuildBlock skel fixes
@@ -261,6 +265,8 @@ genCegPs vs specs = if any isImp canon then foldl worker [] canon else [(specs, 
     assigns = concat [[genStart s, genHole s, genEnd s] | s <- vs]
     canon = until allBase splitAnds specs
     allBase = all (not . isAnd)
+
+    
 
     splitAnds ss = ss >>= f
       where 
@@ -316,10 +322,22 @@ specializeSpec loopVars loopArrs loopIdx (Spec.Foreach vs relIdx arrs bod) = bod
     buildTup :: Map.Map String Spec.RelExpr -> String -> String -> Map.Map String Spec.RelExpr
     buildTup mp arr arrv = case Map.lookup arr loopBinds of
       Just loopv -> Map.insert arrv (Spec.RelVar loopv) mp
-      Nothing -> mp -- error "inconceivable"?
+      Nothing -> mp
 
     
 specializeSpec _ _ _ x = x
+
+-- allocate a bunch of previous variables if necessary
+-- assumes it is only called for integer iterators
+generatePrevs :: [String] -> Body -> ([String], Body)
+generatePrevs vs scope = foldl worker ([], scope) vs
+  where
+    worker :: ([String], Body) -> String -> ([String], Body)
+    worker (accV, accScope) nxt = 
+      let (newV, newScope) = allocIfMissing nxt IntType accScope in 
+        (newV:accV, newScope)
+
+
 
 fixStmt :: DimEnv -> [Spec.RelExpr] -> [Set.Set String] -> [String] -> [String] -> (Block, Program, Body) -> BareStatement -> (BareStatement, Program, Body)
 fixStmt dims invs relVars globals rhsVars (prefix, prog, scope) = worker
@@ -335,10 +353,16 @@ fixStmt dims invs relVars globals rhsVars (prefix, prog, scope) = worker
         (idx, vs, arrs) = parseLoopInfo $ head bod
         (pref, mid, suf) = parseLoop bod
         relVars' = relVars ++ [Set.fromList vs]
-        (fixed, prog', scope') = fixBlock dims invs' relVars' prog globals' rhsVars' scope prefix mid
+        (fixed, prog', scope') = fixBlock dims invs'' relVars' prog globals' rhsVars' prevScope prefix mid
 
         (relInvs, unrelInvs) = partition (isRelated arrs relVars') invs
         invs' = map (specializeSpec vs arrs idx) relInvs ++ unrelInvs
+        -- in addition, introduce new variables for the prevs as necessary and updatePrevs on the invs.
+        baseVs = filter (dimzero dims) vs
+        (pVars, prevScope) = generatePrevs (map ("prev_" ++) baseVs) scope
+        invs'' = map (updatePrevs (Map.fromList $ baseVs `zip` repeat idx)) invs'
+
+
         globals' = globals --[]
         rhsVars' = vs
 

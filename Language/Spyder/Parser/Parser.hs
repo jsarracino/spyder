@@ -14,7 +14,7 @@ module Language.Spyder.Parser.Parser (
   , loopP
   , elifP
   , condP
-  , relAdjacent
+  , relPrev
   , specTerm
 ) where
 
@@ -74,6 +74,19 @@ exprTerm    =  parens expr
   <?> "simple expr"
 
 
+relPrev :: Parser Spec.RelExpr
+relPrev = do {
+  res "prev";
+  (v, ifFls) <- parens prevPair;
+  return $ Spec.Prev v ifFls
+} where
+  prevPair = do {
+    nme <- ident;
+    comma;
+    tl <- relexpr;
+    return (nme, tl)
+  }
+
 relApp :: Parser Spec.RelExpr
 relApp = do {
   nme <- ident;
@@ -91,32 +104,22 @@ relForeach = do {
   return $ Spec.Foreach vs idx arrs body
 }
 
-relAdjacent :: Parser Spec.RelExpr
-relAdjacent = do {
-  res "adjacent";
-  (hi, lo) <- parens $ do {a <- ident; comma; b <- ident; return (a,b)};
-  idx <- loopIdxP;
-  res "in";
-  arr <- ident;
-  body <- braces relexpr;
-  return $ Spec.Adjacent hi lo idx arr body
-}
 specTerm :: Parser Spec.RelExpr
 specTerm  =  parens relexpr
   <|> try (liftM Spec.RelInt ints)
   <|> try (liftM Spec.RelBool bools)
   <|> try relForeach
-  <|> try relAdjacent
-  <|> try relIndex
+  <|> try relPrev
+  -- <|> try relIndex
   <|> try relApp
   <|> try (liftM Spec.RelVar ident)
   <?> "spec expr"
 
-relIndex = do {
-  pref <- liftM Spec.RelVar ident;
-  rhs <- many1 $ brackets relexpr;
-  return $ foldl Spec.RelIndex pref rhs
-}
+-- relIndex = do {
+--   pref <- liftM Spec.RelVar ident;
+--   rhs <- many1 $ brackets relexpr;
+--   return $ foldl Spec.RelIndex pref rhs
+-- }
 
 expr :: Parser Imp.Expr
 expr = buildExpressionParser exprTable exprTerm <?> "expression"

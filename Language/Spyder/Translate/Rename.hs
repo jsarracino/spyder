@@ -8,10 +8,10 @@ module Language.Spyder.Translate.Rename (
   , alphaBlock
 ) where
 
+  
 import Language.Spyder.AST.Component
 import Language.Spyder.AST.Imp            (Expr(..), VDecl, stripTy, Statement(..), Block(..))
-import Language.Boogie.AST                (BareExpression(..), Expression)
-import Language.Spyder.AST.Spec           (RelExpr(..))
+import Language.Spyder.AST.Spec
 import Language.Boogie.Position           (Pos(..), attachPos)
 
 import qualified Data.Map.Strict as Map
@@ -79,12 +79,14 @@ alphaRel mp = recur
     recur v@RelInt{} = v
     recur v@RelBool{} = v
     recur v@(RelVar x) = Map.findWithDefault v x mp
-    recur (RelIndex l r) = RelIndex (recur l) (recur r)
+    -- recur (RelIndex l r) = RelIndex (recur l) (recur r)
     recur (RelUnop op i) = RelUnop op $ recur i
     recur (RelBinop op l r) = RelBinop op (recur l) (recur r)
+    recur (RelApp "prev" (x:args)) = RelApp "prev" $ x : map recur args
     recur (RelApp v args) = RelApp (subVar v) $ map recur args
     recur (Foreach vs idx arrs bod) = Foreach (map subVar vs) (fmap subVar idx) (map subVar arrs) $ recur bod
-    recur (Adjacent l h idx arr bod) = Adjacent (subVar l) (subVar h) (fmap subVar idx) (subVar arr) $ recur bod
+    recur (Prev v i) = Prev (subVar v) $ recur i
+    recur (RelCond c t f) = RelCond (recur c) (recur t) (recur f)
 
     subVar s = case Map.lookup s mp of 
       Just x@(RelVar v) -> v

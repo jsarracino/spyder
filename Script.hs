@@ -1,7 +1,9 @@
 #!/usr/bin/env stack
 {- stack
   --resolver lts-2.0
-  runghc
+  --stack-yaml stack.yaml
+  exec ghci
+  --package .
 -}
 
 import qualified Language.Spyder as Spy

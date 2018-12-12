@@ -9,6 +9,8 @@ module Language.Spyder.Parser (
   , str2Rel
   , str2Comp
   , fromFile
+  , fromBoogieFile
+  , fromBoogUS
 ) where
 import Language.Spyder.AST                                    (Program)
 import Language.Spyder.AST.Spec
@@ -17,6 +19,10 @@ import qualified Language.Spyder.Parser.Parser as Parser
 import Text.Parsec
 import Control.Monad (liftM)
 
+import qualified Language.Boogie.AST as BST
+import qualified Language.Boogie.Parser as BP
+
+import System.IO.Unsafe                                         (unsafePerformIO)
 
 -- TODO: there's a parse error when atoms are preceeded by a newline
 
@@ -36,4 +42,8 @@ str2Comp = str2A Parser.comp
 fromFile :: FilePath -> IO Program
 fromFile inp = liftM str2Prog (readFile inp)
 
+fromBoogieFile :: FilePath -> IO BST.Program
+fromBoogieFile inp = liftM (str2A BP.program) (readFile inp)
 
+-- TODO: unsafe perform IO this ;)
+fromBoogUS inp = unsafePerformIO $ fromBoogieFile inp

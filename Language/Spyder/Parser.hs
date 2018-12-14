@@ -9,7 +9,7 @@ module Language.Spyder.Parser (
   , str2Rel
   , str2Comp
   , fromFile
-  , fromBoogieFile
+  -- , fromBoogieFile
   , fromBoogUS
 ) where
 import Language.Spyder.AST                                    (Program)
@@ -19,7 +19,6 @@ import qualified Language.Spyder.Parser.Parser as Parser
 import Text.Parsec
 import Control.Monad (liftM)
 
-import qualified Language.Boogie.AST as BST
 import qualified Language.Boogie.Parser as BP
 
 import System.IO.Unsafe                                         (unsafePerformIO)
@@ -42,7 +41,4 @@ str2Comp = str2A Parser.comp
 fromFile :: FilePath -> IO Program
 fromFile inp = liftM str2Prog (readFile inp)
 
-fromBoogieFile :: FilePath -> IO BST.Program
-fromBoogieFile inp = liftM (str2A BP.program) (readFile inp)
-
-fromBoogUS inp = unsafePerformIO $ fromBoogieFile inp
+fromBoogUS = BP.fromBoogUS

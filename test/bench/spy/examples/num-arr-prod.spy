@@ -1,0 +1,30 @@
+Component ProdArr {
+  data prod : int[];
+  data xs : int[];
+
+  relation Prod(ss: int[], xs: int[]) {
+    foreach (s, b) in (ss, xs) {
+      s = prev(s, 1) * b
+    }
+  }
+
+
+  
+  always Prod(prod, xs);
+}
+
+
+Component Main {
+  data x: int[];
+  data y: int[];
+
+  using ProdArr(x, y);
+
+  
+  procedure incrX() {
+    for (l:int) in (y) {
+      l = l + 1;
+    }
+  }
+  
+}

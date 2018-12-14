@@ -5,6 +5,9 @@ module Language.Spyder.AST.Spec (
   , weakenPrev
   , containsPrev
   , inlinePrev
+  , hasCond
+  , desugConds
+  , gatherConds
 ) where
 
 
@@ -66,5 +69,32 @@ inlinePrev x@(Foreach vs i ars b) = x -- Foreach vs i ars $ inlinePrev b
 inlinePrev (RelApp "prev" [v, base, idx]) = RelCond (RelBinop Eq idx (RelInt 0)) base v 
 inlinePrev (RelApp "prev_var" [v, base, idx]) = RelCond (RelBinop Eq idx (RelInt 0)) base v 
 inlinePrev x = x
+
+hasCond :: RelExpr -> Bool
+hasCond x@RelCond{} = True
+hasCond (RelBinop _ l r) = hasCond l || hasCond r
+hasCond (RelUnop _ i) = hasCond i
+hasCond (Foreach _ _ _ b) = hasCond b
+hasCond (RelApp s i) = any hasCond i
+hasCond _ = False
+
+gatherConds :: RelExpr -> [RelExpr]
+gatherConds (RelCond c t f) = [c, RelUnop Not c]
+gatherConds (RelApp "prev_var" [_, _, idx]) = [test, RelUnop Not test]
+  where
+    test = RelBinop Eq idx (RelInt 0)
+gatherConds (RelBinop _ l r) = gatherConds l ++ gatherConds r
+gatherConds (RelUnop _ i) = gatherConds i
+gatherConds (Foreach _ _ _ b) = gatherConds b
+gatherConds _ = []
+
+desugConds :: RelExpr -> [RelExpr]
+desugConds (RelCond c t f) = 
+  [RelBinop Imp cc tt | cc <- desugConds c, tt <- desugConds t] ++ [RelBinop Imp (RelUnop Not cc) ff | cc <- desugConds c, ff <- desugConds f]
+desugConds (RelBinop o l r) = [RelBinop o l' r' | l' <- desugConds l, r' <- desugConds r]
+desugConds (RelUnop o i) = map (RelUnop o) $ desugConds i
+desugConds (Foreach vs i ars b) = map (Foreach vs i ars) $ desugConds b
+-- desugConds (RelApp s i) = RelApp s $ map desugConds i TODO
+desugConds x = [x]
 
 -- RelApp "prev_var" [RelVar ("prev_" ++ v), i, RelVar idx]

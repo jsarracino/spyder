@@ -1,0 +1,35 @@
+Component SumArr {
+  data sum : int[];
+  data xs : int[];
+
+  relation Sum(ss: int[], xs: int[]) {
+    foreach (s, b) in (ss, xs) {
+      s = prev(s, 0) + b
+    }
+  }
+
+
+  
+  always Sum(sum, xs);
+}
+
+
+Component Main {
+  data x: int[];
+  data y: int[];
+
+  using SumArr(x, y);
+
+  
+  procedure incrX() {
+    for (l:int) in (y) {
+      l = l + 1;
+      /*
+      for (t: int) in (x) {
+        
+      }
+      */
+    }
+  }
+  
+}

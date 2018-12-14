@@ -1,0 +1,47 @@
+Component Double {
+  data zs: int[];
+  data a: int;
+  data b: int;
+
+  relation doub(x: int[], l: int, r: int) {
+    foreach (s) with idx in (x) {
+      ((idx % 2) = 0 ==> s = l) && 
+      ((idx % 2) = 1 ==> s = r)
+    }
+  }
+
+  always doub(zs, a, b);
+}
+
+Component Eq {
+
+  data a: int;
+  data b: int;
+
+  relation eq(l: int, r: int) {
+    l = r
+  }
+
+  always eq(a, b);
+}
+
+
+Component Main {
+  
+  data xs: int[];
+  data ys: int[];
+  data h: int;
+  data k: int;
+  data z: int;
+
+  using Double(xs, h, k); 
+  using Eq(h, z);
+  
+
+  procedure inc() {
+    h = h + 1;
+    k = k - 1;
+  }
+
+  
+}

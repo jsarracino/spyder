@@ -85,6 +85,7 @@ Component Main {
   using AltColor(evenColor, oddColor, bkgColors);
   using Either(oddColor, evenColor, bkgColors);
   
+  /*
   procedure editWeekly() {
     let i: int;
     let val: int;
@@ -95,6 +96,7 @@ Component Main {
     }
 
   }
+  */
 
   procedure evenBkg() {
     let x : int;

@@ -45,5 +45,4 @@ fromFile inp = liftM str2Prog (readFile inp)
 fromBoogieFile :: FilePath -> IO BST.Program
 fromBoogieFile inp = liftM (str2A BP.program) (readFile inp)
 
--- TODO: unsafe perform IO this ;)
 fromBoogUS inp = unsafePerformIO $ fromBoogieFile inp

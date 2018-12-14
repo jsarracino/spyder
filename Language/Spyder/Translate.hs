@@ -21,6 +21,7 @@ import Language.Spyder.Translate.Rename
 import Language.Spyder.Synth.Verify               (checkProgFile)
 import Language.Spyder.Synth                      (fixProc, fixProcGeneral)
 import Language.Boogie.Pretty                     (pretty)
+import Language.Spyder.Parser                     (fromBoogUS)
 import System.IO.Unsafe                           (unsafePerformIO)
 
 import Language.Spyder.Translate.Related
@@ -36,7 +37,7 @@ toBoogie prog@(comps, MainComp decls) = outProg
   where
     
     (bprog, (invs, varMap, dims)) = translateProg prog
-    boogDecs = case bprog of BST.Program ds -> map Pos.node ds
+    boogDecs = case (bprog, fromBoogUS "lib.bpl") of (BST.Program l, BST.Program r) -> map Pos.node $ l ++ r
     
     reledVars = alphaRels (relatedVars prog) varMap
     -- attempt to gen the program. if the initial translated program verifies, then we're good to go. otherwise, 

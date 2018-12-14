@@ -72,7 +72,7 @@ translateStmt (Imp.Decl (v, ty) rhs, vs) = (maybeToList assn, vs'')
 --  }
 -- assumes length is stored at arr[-1]
 translateStmt (Imp.For vs idxDec arrs bod, vars) = 
-    (idxInit : dimInit ++ [BST.While (BST.Expr cond) spec (loopInfo ++ iterUpdate ++ loopStart ++ bod' ++ loopEnd ++ arrUpdate ++ [idxUpdate])], vars')
+    (idxInit : dimInit ++ [BST.While (BST.Expr cond) [] (loopInfo ++ iterUpdate ++ loopStart ++ bod' ++ loopEnd ++ arrUpdate ++ [idxUpdate])], vars')
   where
     decls = vs `zip` arrs
     
@@ -108,7 +108,6 @@ translateStmt (Imp.For vs idxDec arrs bod, vars) =
             (rvs, acc ++ [rname])
 
     (newVars', allDims) = foldl allocDims (newVars, []) dimInfo
-    spec = []
 
     liftLS :: BST.BareStatement -> BST.LStatement
     liftLS s = Pos.gen ([], Pos.gen s)

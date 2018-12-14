@@ -210,7 +210,7 @@ searchAllConfigs pres posts prog globals scope blk fillme lhses rhses (cand:cand
       where
         nme = makeName n
         (varNames, _) = searchScope
-        bod = (varNames, addAssumes pres io searchBlock)
+        bod = (varNames, addAssumes pres posts io searchBlock)
     procNames = take (length examples) $ map makeName [0..]
     makeName n = "__cegis__func" ++ show n
 
@@ -262,11 +262,12 @@ checkConfig pres posts (Program header) globals config (vs, _) blk = result
       x:xs  -> Right $ buildIO x 
 
 -- given invs and a set of io, add assumes to the begin/end of the block to specialize to the IO.
-addAssumes :: [Expression] -> Map.Map String Value -> Block -> Block
-addAssumes invs io block = map buildIO (Map.toList io) ++ invStmts ++ block'
+addAssumes :: [Expression] -> [Expression] -> Map.Map String Value -> Block -> Block
+addAssumes pres posts io block = map buildIO (Map.toList io) ++ preStmts ++ block'
   where
     --Predicate attrs (SpecClause _ isAssume e)
-    invStmts = map buildInv invs
+    preStmts = map buildInv pres
+    postStmts = map buildInv posts
     buildInv :: Expression -> LStatement
     buildInv e = stmt $ Predicate [] (SpecClause Inline True e)
     buildIO :: (String, Value) -> LStatement
@@ -275,10 +276,10 @@ addAssumes invs io block = map buildIO (Map.toList io) ++ invStmts ++ block'
     buildExpr (l, r@IntValue{}) = eq (Var l) (Literal r)
     buildExpr (l, r@BoolValue{}) = eq (Var l) (Literal r)
 
-    block' = if null block then block ++ invStmts else
+    block' = if null block then block ++ postStmts else
       case last block of 
-        (Pos.Pos o (ls, Pos.Pos i (If c t f))) -> init block ++ [Pos.Pos o (ls, Pos.Pos i (If c (t ++ invStmts) Nothing))]
-        _ -> block ++ invStmts
+        (Pos.Pos o (ls, Pos.Pos i (If c t f))) -> init block ++ [Pos.Pos o (ls, Pos.Pos i (If c (t ++ postStmts) Nothing))]
+        _ -> block ++ postStmts
 
 eq :: BareExpression -> BareExpression -> Expression
 eq l r = Pos.gen $ BinaryExpression Eq (Pos.gen l) (Pos.gen r)
@@ -314,12 +315,10 @@ buildMain pres posts globals (vs, bod) = Pos.gen $ ProcedureDecl "Main" [] [] []
 
 -- run in exec mode, searching for a valid configuration.
 boogExec :: Program -> String -> [TestCase]
-boogExec p pname = case typeCheckProgram p' of
-              Left typeErrs -> error $ "exec program has typeerrors: " ++ show p'
+boogExec p pname = case typeCheckProgram p of
+              Left typeErrs -> error $ "exec program has typeerrors: " ++ show p
               Right context -> runInt context
   where 
-    p' :: Program
-    p' = case (fromBoogUS "lib.bpl", p) of (Program l, Program r) -> Program $ l ++ r
     runInt ctx = take 1 $ filter keep . maybeTake exec_max $ int p ctx pname
 
     int = interpreter branch_max rec_max loop_max minimize concretize True
@@ -337,11 +336,11 @@ boogExec p pname = case typeCheckProgram p' of
 
 -- run in test mode, searching for an invalid configuration.
 boogTest :: Program -> String -> [TestCase]
-boogTest p pname = case typeCheckProgram p' of
-              Left typeErrs -> error $ "test program has typeerrors: " ++ show p'
+boogTest p pname = case typeCheckProgram p of
+              Left typeErrs -> error $ "test program has typeerrors: " ++ show p
               Right context -> runInt context
   where 
-    p' = case (fromBoogUS "lib.bpl", p) of (Program l, Program r) -> Program $ l ++ r
+    -- p' = case (fromBoogUS "lib.bpl", p) of (Program l, Program r) -> Program $ l ++ r
     runInt ctx = take 1 $ filter keep . maybeTake exec_max $ int p ctx pname
 
     int = interpreter branch_max rec_max loop_max minimize concretize True

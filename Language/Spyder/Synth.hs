@@ -115,6 +115,19 @@ dimzero d s = case Map.lookup s d of
 
 compSpecs t = map (specToBoogie [] . Spec.inlinePrev . t)
 
+makeAssumptsRels rs = makeAssumpts $ map (specToBoogie []) rs
+
+makeAssumpts :: [Expression] -> Block
+makeAssumpts = map worker
+  where
+    worker e = gen ([], gen $ Predicate [] $ SpecClause Inline True e)
+
+
+makeAsserts :: [Expression] -> Block
+makeAsserts = map worker
+  where
+    worker e = gen ([], gen $ Predicate [] $ SpecClause Inline False e)
+
 
 fixBlock :: DimEnv -> [Spec.RelExpr] -> [Set.Set String] -> Program -> [String] -> [String] -> Body -> Block -> Block -> (Block, Program, Body)
 fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult inner
@@ -139,7 +152,7 @@ fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult
 
         (suffix, prog', bod') = createFix dims staleInvs prog globals staleVars' (filter (dimzero dims) rhsVars) scope' blk 
 
-        fixed = (blk ++ suffix, prog', bod')
+        fixed = (makeAssumpts pres ++ blk ++ suffix, prog', bod')
 
     initState = (prefix, [], header, scope)
     wrapFixStmt :: (Block, Block, Program, Body) -> LStatement -> (Block, Block, Program, Body)
@@ -147,7 +160,7 @@ fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult
       where
         (s', prog'', bod') = fixStmt dims invs relVars globals rhsVars (pref, prog', scope') s
         prefix = case s' of 
-          x@While{} -> map buildLoopAssm invs -- TODO: this doesn't actually work because the dims are wrong. see check.bpl for details.
+          x@While{} -> makeAssumptsRels invs -- TODO: this doesn't actually work because the dims are wrong. see check.bpl for details.
           _         -> [] 
         (blk', prog', scope') = fixBlock dims invs relVars prog globals rhsVars bod pref blk
         blk'' = blk' ++ prefix ++ [Pos o (ls, Pos i s')] ++ prefix
@@ -157,7 +170,7 @@ fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult
       where
         (s', prog', bod') = fixStmt dims invs relVars globals rhsVars (pref, prog, bod) s
         prefix = case s' of 
-          x@While{} -> map buildLoopAssm invs -- TODO: this doesn't actually work because the dims are wrong. see check.bpl for details.
+          x@While{} -> makeAssumptsRels invs -- TODO: this doesn't actually work because the dims are wrong. see check.bpl for details.
           _         -> [] 
         fix = prefix ++ [Pos o (ls, Pos i s')] ++ prefix
         blk' = blk ++ fix
@@ -197,7 +210,7 @@ fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult
             blk' = if null blk then loopBLK else oldPre ++ insertIntoLoop loopBLK (Just oldLoop)
 
             (newLoopPre, While c spec bod) = (init loopSS, last loopSS)
-            loopSS' = newLoopPre ++ [While c spec' bod']
+            loopSS' = newLoopPre ++ [While c spec bod']
             loopBLK = map (\s -> gen ([], gen s)) loopSS'
 
             -- holes = filter (dimzero dims') loopVars >>= genSkel
@@ -209,8 +222,9 @@ fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult
             --(relInvs, unrelInvs) = partition (isRelated relVars rhsVars) invs
             invs' = map (specializeSpec loopVars arrVs idx) invs 
     
-            spec' = spec ++ map buildLoopInv invs
-            bod' = pref ++ holes ++ map buildLoopAssm invs' ++ mid ++ suf -- ++ map buildLoopCheck
+            -- spec' = spec ++ map buildLoopInv invs
+            pres = compSpecs Spec.weakenPrev invs'
+            bod' = pref ++ holes ++ makeAssumpts pres ++ mid ++ suf -- ++ map buildLoopCheck
     
             dims' = addDims odims loopDecs `Map.union` Map.singleton idx 0
 
@@ -244,9 +258,9 @@ fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult
 
             (fixed, prog', bod') = repairBlock pres posts prog globals (Set.toList lvs) rhsVars bod oldblk snippet' assumpts
             
-            
+            fixed' = if null assumpts then fixed else trimCond fixed
 
-            fixes = parseFixes (Set.toList lvs) (trimCond fixed)
+            fixes = parseFixes (Set.toList lvs) fixed'
             skel' = rebuildBlock skel fixes
 
   
@@ -339,21 +353,23 @@ generatePrevs vs scope = foldl worker ([], scope) vs
       let (newV, newScope) = allocIfMissing nxt IntType accScope in 
         (newV:accV, newScope)
 
+buildSelfAssgn :: String -> LStatement
+buildSelfAssgn v = gen ([], gen $ Assign [(v, [])] [gen $ Var v])
+
+
 fixStmt :: DimEnv -> [Spec.RelExpr] -> [Set.Set String] -> [String] -> [String] -> (Block, Program, Body) -> BareStatement -> (BareStatement, Program, Body)
 fixStmt dims invs relVars globals rhsVars (prefix, prog, scope) = worker
    where
-    worker (If e tru fls) = (If e tru' fls', prog'', bod'')
+    worker (If e tru fls) = (If e tru' (Just fls'), prog'', bod'')
       where
         (tru', prog', bod') = recur prog scope tru
-        (fls', prog'', bod'') = case fls of 
-          Just i  -> let (r, p, b) = recur prog' bod' i in (Just r, p, b)
-          Nothing -> (Nothing, prog', bod')
+        (fls', prog'', bod'') = recur prog' bod' (fromMaybe [] fls) 
     worker (While c spec bod) = (While c spec bod', prog', scope')
       where
         (idx, vs, arrs) = parseLoopInfo $ head bod
         (pref, mid, suf) = parseLoop bod
         relVars' = relVars ++ [Set.fromList vs]
-        (fixed, prog', scope') = fixBlock dims invs'' relVars' prog globals' rhsVars' prevScope prefix mid
+        (fixed, prog', scope') = fixBlock dims invs'' relVars' prog globals' rhsVars' prevScope prefix (prevUpdates ++ mid)
 
         (relInvs, unrelInvs) = partition (isRelated arrs relVars') invs
         invs' = map (specializeSpec vs arrs idx) relInvs ++ unrelInvs
@@ -362,12 +378,17 @@ fixStmt dims invs relVars globals rhsVars (prefix, prog, scope) = worker
         (pVars, prevScope) = generatePrevs (map ("prev_" ++) baseVs) scope
         invs'' = map (updatePrevs (Map.fromList $ baseVs `zip` repeat idx)) invs'
 
+        (pres, posts) = (compSpecs Spec.weakenPrev invs, compSpecs id invs)
+
+        prevUpdates = map buildSelfAssgn pVars
+
+        -- prefix = prevUpdates ++ prefix 
 
         globals' = globals --[]
         rhsVars' = vs
 
         -- spec' = spec ++ map buildLoopInv invs
-        bod' = pref ++ fixed ++ map buildLoopAssrt invs'' ++ suf  -- TODO: these invs should actually be outside of the loop
+        bod' = pref ++ makeAssumpts pres ++ fixed ++ makeAsserts posts ++ suf
 
       --   spec' = (map (SpecClause LoopInvariant False) invs) ++ spec
       --   (tru', prog', bod') = recur prog scope tru
@@ -376,15 +397,6 @@ fixStmt dims invs relVars globals rhsVars (prefix, prog, scope) = worker
       --     Nothing -> (Nothing, prog', bod')
     worker s = (s, prog, scope)
     recur p b = fixBlock dims invs relVars p globals rhsVars b prefix
-
-
-buildLoopAssrt :: Spec.RelExpr -> LStatement
-buildLoopAssrt re = gen ([], gen $ Predicate [] $ SpecClause Inline False $ specToBoogie [] re)
-
-buildLoopInv :: Spec.RelExpr -> SpecClause
-buildLoopInv re = SpecClause LoopInvariant False $ specToBoogie [] re
-buildLoopAssm :: Spec.RelExpr -> LStatement
-buildLoopAssm re = gen ([], gen $ Predicate [] $ SpecClause Inline True $ specToBoogie [] re)
 
 isRelated :: [String] -> [Set.Set String] -> Spec.RelExpr -> Bool
 isRelated vars rels e = not $ null intersection
@@ -401,6 +413,7 @@ findEdited = foldl recurLS [] -- blk
     recurStmt edits s = recurBStmt edits (node s)
     recurBStmt edits (Assign assns _) = edits ++ map fst assns
     recurBStmt edits _ = edits
+
 
 
 findUnedited :: [Set.Set String] -> [String] -> Block -> [String]

@@ -32,6 +32,11 @@ Component Main {
   using Midpoint(x, y, m);
   using NotEq(x, y);
   
+  procedure works() {
+    m = m + 1;
+    x = x + 1;
+    y = y + 1;
+  }
 
   procedure incM() {
     m = m + 1;

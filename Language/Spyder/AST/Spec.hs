@@ -10,6 +10,7 @@ module Language.Spyder.AST.Spec (
   , gatherConds
 ) where
 
+import Data.List
 
 -- basically, the binary expression grammar from Imp, as well as foreaches. 
 -- TODO: figure out how to refactor. 
@@ -45,6 +46,7 @@ containsPrev (RelUnop _ i) = containsPrev i
 containsPrev (Foreach _ _ _ b) = containsPrev b
 containsPrev (RelApp "prev" _) =True
 containsPrev (RelApp "prev_var" _) = True
+containsPrev (RelVar v) = "prev_" `isPrefixOf` v
 containsPrev _ = False
 
 

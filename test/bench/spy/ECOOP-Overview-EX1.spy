@@ -1,0 +1,30 @@
+Component DateConv {
+  data ds: int[];
+  data ws: int[];
+
+  relation Days(xs: int[], ys: int[]) {
+    foreach (x, y) in (xs, ys) {
+      y = 7 * x
+    }
+  }
+
+  always Days(ds, ws);
+}
+
+
+Component Main {
+  data weeks: int[];
+  data days: int[];
+
+  using DateConv(days, weeks);
+
+  procedure adjustCOLA() {
+    let cola: int;
+    for (d: int) in (days) {
+      if (d < 0) {
+        d = d * cola;
+      }
+    }
+  }
+}
+

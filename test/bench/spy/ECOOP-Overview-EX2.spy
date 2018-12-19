@@ -75,22 +75,16 @@ Component Main {
   data days: int[];
   data weeklyTotals: int[];
 
-/*
   data fontColors: int[];
-
   data positiveColor: int;
   data negativeColor: int;
 
-*/
   using DateConv(days, weeks);
 
-/*
   using CondFormat(positiveColor, negativeColor, weeks, fontColors);
   using Either(positiveColor, negativeColor, fontColors);
 
-*/
   using SumArr(weeklyTotals, weeks);
-  
   
   procedure editDaily() {
     let i: int;

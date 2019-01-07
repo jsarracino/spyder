@@ -26,8 +26,6 @@ Component Main {
     for (l: int) with idx in (y) {
       if (idx == i) {
         l = l + 1;
-      } else {
-        l = l;
       }
     }
   }

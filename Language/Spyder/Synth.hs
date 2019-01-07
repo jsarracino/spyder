@@ -18,6 +18,9 @@ module Language.Spyder.Synth (
   , fixProcGeneral
   , generatePrevs
   , buildCond
+  , compSpecs
+  , findEditedDeep
+  , stripLoopInfo
   -- , generate
 ) where
 
@@ -28,7 +31,6 @@ import Data.Foldable
 import Language.Spyder.Synth.Verify
 import Language.Spyder.Synth.Template 
 import Language.Spyder.Synth.Cegis            (repairBlock, buildMain)
-import qualified Language.Spyder.AST as SAST
 import qualified Language.Spyder.AST.Spec as Spec               
 import Language.Spyder.AST.Component          (Component(..), MainDecl(..))
 import qualified Language.Spyder.AST.Imp  as Imp
@@ -37,7 +39,7 @@ import Language.Boogie.AST
 import qualified Data.Map.Strict as Map       
 import qualified Data.Set as Set
 import Language.Boogie.Position               (node, Pos(..), gen)
-import Data.List                              (delete, nub, intersect, (\\), partition)
+import Data.List                              (nub, intersect, (\\), partition)
 -- import qualified Data.Foldable  as FLD
 
 import Data.Maybe
@@ -85,7 +87,7 @@ fixProcGeneral dims invs program scope globals broken = ret
 fixProc :: DimEnv -> [Spec.RelExpr] -> [Set.Set String] -> Program -> Body -> [String] -> Block -> (Block, Program, Body)
 fixProc dims invs relVars header body globals broken = fixed
   where
-    fixed = fixBlock dims invs relVars header globals rhsVars body [] broken
+    fixed = fixBlock dims invs relVars header globals rhsVars Set.empty body [] broken
     rhsVars = findInScope header body invs
 
 useVars :: [Spec.RelExpr] -> Set.Set String -> [Spec.RelExpr]
@@ -129,8 +131,20 @@ makeAsserts = map worker
     worker e = gen ([], gen $ Predicate [] $ SpecClause Inline False e)
 
 
-fixBlock :: DimEnv -> [Spec.RelExpr] -> [Set.Set String] -> Program -> [String] -> [String] -> Body -> Block -> Block -> (Block, Program, Body)
-fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult inner
+checkInvs :: ([Spec.RelExpr], [Spec.RelExpr]) -> [String] -> (Block, Program, Body) -> Bool
+checkInvs (staleInvs, fineInvs) globals x@(blk, Program decs, scope@(vs,_)) = checkProg checkme
+  where 
+    posts = compSpecs id fineInvs
+    (pres, posts') = (compSpecs Spec.weakenPrev staleInvs ++ posts, posts ++ compSpecs id staleInvs) 
+    checkme = optimize $ Program $ decs ++ [buildMain pres posts' globals (vs, blk)]
+
+{-# NOINLINE assertFixed #-}
+assertFixed :: ([Spec.RelExpr], [Spec.RelExpr]) -> [String] -> (Block, Program, Body) -> (Block, Program, Body)
+assertFixed is gs st = if checkInvs is gs st then st else error "Expected correct program"
+
+
+fixBlock :: DimEnv -> [Spec.RelExpr] -> [Set.Set String] -> Program -> [String] -> [String] -> Set.Set String -> Body -> Block -> Block -> (Block, Program, Body)
+fixBlock dims invs relVars header globals rhsVars stales scope prefix fixme = fixResult inner
   where
     genSkel s = [genStart s, genHole s, genEnd s]
     inner = foldl wrapFixStmt initState fixme
@@ -138,37 +152,52 @@ fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult
     fixResult (_, blk, prog@(Program decs), scope'@(vs, _)) = if not isRepaired then fixed else (blk, prog, scope')
       where
 
-        (pres, posts) = (compSpecs Spec.weakenPrev invs, compSpecs id invs)
-        isRepaired = checkProg $ optimize $ Program $ decs ++ [buildMain pres posts globals (vs, blk)]
+        isRepaired = checkInvs (staleInvs, fineInvs) globals (blk, prog, scope')
         
+        staleVars = Set.toList $ stales `Set.union` Set.fromList (findEdited blk)
 
-        staleInvs = filter (isRelated (findEdited blk) relVars) invs
-        staleVars = findUnedited relVars rhsVars blk
-        staleVars' = logme staleVars
+        (staleInvs, fineInvs) = partition (isRelated staleVars relVars) invs
+
+
+        candVars = rhsVars \\ staleVars
 
         -- (invs', builder) = transRels staleInvs
 
+        pres = compSpecs Spec.weakenPrev staleInvs ++ compSpecs id fineInvs
+
         
 
-        (suffix, prog', bod') = createFix dims staleInvs prog globals staleVars' (filter (dimzero dims) rhsVars) scope' blk 
+        (suffix, prog', bod') = createFix dims staleInvs prog globals candVars (filter (dimzero dims) rhsVars) scope' blk 
 
-        fixed = (makeAssumpts pres ++ blk ++ suffix, prog', bod')
+        fixed = assertFixed (staleInvs, fineInvs) globals (makeAssumpts pres ++ blk ++ suffix, prog', bod')
 
     initState = (prefix, [], header, scope)
     wrapFixStmt :: (Block, Block, Program, Body) -> LStatement -> (Block, Block, Program, Body)
-    wrapFixStmt (pref, blk, prog, bod) (Pos o (ls, Pos i s@While{})) = (pref', blk'', prog'', bod')
+    wrapFixStmt (pref, blk, prog, bod) (Pos o (ls, Pos i s@(While _ _ b))) = (pref', blk'', prog'', bod')
       where
-        (s', prog'', bod') = fixStmt dims invs relVars globals rhsVars (pref, prog', scope') s
+        (idx, loopVars, arrVs) = parseLoopInfo $ head b
+        (loopVs, arrs) = (Set.fromList loopVars, Set.fromList arrVs)
+        newStales = loopVs `Set.intersection` findEditedDeep b
+        (s', prog'', bod') = fixStmt dims invs relVars globals rhsVars (newStales `Set.difference` arrs) (pref, prog', scope') s
         prefix = case s' of 
           x@While{} -> makeAssumptsRels invs -- TODO: this doesn't actually work because the dims are wrong. see check.bpl for details.
           _         -> [] 
-        (blk', prog', scope') = fixBlock dims invs relVars prog globals rhsVars bod pref blk
+        (blk', prog', scope') = fixBlock dims invs relVars prog globals rhsVars stales bod pref []
         blk'' = blk' ++ prefix ++ [Pos o (ls, Pos i s')] ++ prefix
 
         pref' = blk''
+
+    -- fix everything up before conditionals
+    wrapFixStmt (pref, blk, prog, bod) (Pos o (ls, Pos i s@(If e tru fls))) = (pref', blk', prog'', bod'')
+      where
+        (prefix, prog', bod') = fixBlock dims invs relVars prog globals rhsVars stales bod pref []
+        (s', prog'', bod'') = fixStmt dims invs relVars globals rhsVars Set.empty (pref ++ prefix, prog', bod') s
+        fix = prefix ++ [Pos o (ls, Pos i s')]
+        blk' = blk ++ fix
+        pref' = pref ++ fix
     wrapFixStmt (pref, blk, prog, bod) (Pos o (ls, Pos i s)) = (pref', blk', prog', bod')
       where
-        (s', prog', bod') = fixStmt dims invs relVars globals rhsVars (pref, prog, bod) s
+        (s', prog', bod') = fixStmt dims invs relVars globals rhsVars stales (pref, prog, bod) s
         prefix = case s' of 
           x@While{} -> makeAssumptsRels invs -- TODO: this doesn't actually work because the dims are wrong. see check.bpl for details.
           _         -> [] 
@@ -220,7 +249,7 @@ fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult
             (pref, mid, suf) = parseLoop bod
     
             --(relInvs, unrelInvs) = partition (isRelated relVars rhsVars) invs
-            invs' = map (specializeSpec loopVars arrVs idx) invs 
+            invs' = map (specializeSpec loopVars arrVs idx) oinvs 
     
             -- spec' = spec ++ map buildLoopInv invs
             pres = compSpecs Spec.weakenPrev invs'
@@ -237,7 +266,7 @@ fixBlock dims invs relVars header globals rhsVars scope prefix fixme = fixResult
         skel'
           | canSynth initState = buildCond snippets
           | null skel = insertIntoLoop (buildCond snippets) Nothing
-          | otherwise = front skel ++ insertIntoLoop (buildCond snippets) (Just $ last skel)
+          | otherwise = front skel ++ insertIntoLoop (buildCond snippets) (Just $ last skel) ++ makeAssumptsRels invs
 
 
         (rblk, rprog, rbod) = foldl' buildRet (skel', prog, synthScope) snippets
@@ -271,17 +300,19 @@ buildCond snips = join (let (_, x) = unzip snips in x)
 convertConds :: [([Spec.RelExpr], Block)] -> [([Spec.RelExpr], Block)]
 convertConds snips = snips >>= worker
   where
-    worker (specs, b) = if null conds then [(specs,b)] else branches
+    worker (specs, b@[Pos _ ([], Pos _ (If (Expr co) t f))]) = if null conds then [(specs,b)] else branches
       where 
         conds     = specs >>= Spec.gatherConds
-        branches  = map (\c -> (specs, singletonBlock (gen $ If (Expr $ specToBoogie [] c) b Nothing))) conds
+        branches  = map (\cn -> (specs, singletonBlock (gen $ If (Expr $ gen $ BinaryExpression And co $ specToBoogie [] cn) t f))) conds
+    worker (specs, b) = [(specs,b)]
 
       
 
 genCegPs :: [String] -> [Spec.RelExpr] -> [([Spec.RelExpr],Block)]
-genCegPs vs specs = convertConds $ if any isImp canon then foldl worker [] canon else [(specs, assigns)]
+genCegPs vs specs = convertConds $ if any isImp canon then foldl worker [] canon else [(specs, assigns')]
   where
     assigns = concat [[genStart s, genHole s, genEnd s] | s <- vs]
+    assigns' = singletonBlock (gen $ If (Expr $ specToBoogie [] (Spec.RelBool True)) assigns Nothing)
     canon = until allBase splitAnds specs
     allBase = all (not . isAnd)
 
@@ -357,19 +388,21 @@ buildSelfAssgn :: String -> LStatement
 buildSelfAssgn v = gen ([], gen $ Assign [(v, [])] [gen $ Var v])
 
 
-fixStmt :: DimEnv -> [Spec.RelExpr] -> [Set.Set String] -> [String] -> [String] -> (Block, Program, Body) -> BareStatement -> (BareStatement, Program, Body)
-fixStmt dims invs relVars globals rhsVars (prefix, prog, scope) = worker
+fixStmt :: DimEnv -> [Spec.RelExpr] -> [Set.Set String] -> [String] -> [String] -> Set.Set String -> (Block, Program, Body) -> BareStatement -> (BareStatement, Program, Body)
+fixStmt dims invs relVars globals rhsVars stales (prefix, prog, scope) = worker
    where
-    worker (If e tru fls) = (If e tru' (Just fls'), prog'', bod'')
+    worker (If e tru fls) = (If e tru' (Just fls'), prog'', scope'')
       where
-        (tru', prog', bod') = recur prog scope tru
-        (fls', prog'', bod'') = recur prog' bod' (fromMaybe [] fls) 
+        (tru', prog', scope') = recur prog scope tru
+        -- (fls', prog'', scope'') = ([], prog', scope')
+        (fls', prog'', scope'') = recur prog' scope' (fromMaybe [] fls) 
     worker (While c spec bod) = (While c spec bod', prog', scope')
       where
         (idx, vs, arrs) = parseLoopInfo $ head bod
         (pref, mid, suf) = parseLoop bod
         relVars' = relVars ++ [Set.fromList vs]
-        (fixed, prog', scope') = fixBlock dims invs'' relVars' prog globals' rhsVars' prevScope prefix (prevUpdates ++ mid)
+        stales' = stales `Set.union` (Set.fromList vs `Set.intersection` findEditedDeep bod) `Set.difference` Set.fromList arrs
+        (fixed, prog', scope') = fixBlock dims invs'' relVars' prog globals' rhsVars' stales' prevScope prefix (prevUpdates ++ mid)
 
         (relInvs, unrelInvs) = partition (isRelated arrs relVars') invs
         invs' = map (specializeSpec vs arrs idx) relInvs ++ unrelInvs
@@ -378,9 +411,9 @@ fixStmt dims invs relVars globals rhsVars (prefix, prog, scope) = worker
         (pVars, prevScope) = generatePrevs (map ("prev_" ++) baseVs) scope
         invs'' = map (updatePrevs (Map.fromList $ baseVs `zip` repeat idx)) invs'
 
-        (pres, posts) = (compSpecs Spec.weakenPrev invs, compSpecs id invs)
+        (pres, posts) = (compSpecs Spec.weakenPrev invs'', compSpecs id invs'')
 
-        prevUpdates = map buildSelfAssgn pVars
+        prevUpdates = [] --map buildSelfAssgn pVars
 
         -- prefix = prevUpdates ++ prefix 
 
@@ -396,7 +429,7 @@ fixStmt dims invs relVars globals rhsVars (prefix, prog, scope) = worker
       --     Just i  -> let (r, p, b) = recur prog' bod' i in (Just r, p, b)
       --     Nothing -> (Nothing, prog', bod')
     worker s = (s, prog, scope)
-    recur p b = fixBlock dims invs relVars p globals rhsVars b prefix
+    recur p b = fixBlock dims invs relVars p globals rhsVars stales b prefix
 
 isRelated :: [String] -> [Set.Set String] -> Spec.RelExpr -> Bool
 isRelated vars rels e = not $ null intersection
@@ -414,10 +447,23 @@ findEdited = foldl recurLS [] -- blk
     recurBStmt edits (Assign assns _) = edits ++ map fst assns
     recurBStmt edits _ = edits
 
+findEditedDeep :: Block -> Set.Set String
+findEditedDeep blk = foldl Set.union Set.empty $ map (recur . node . snd . node) $ stripLoopInfo blk
+  where
+    recur :: BareStatement -> Set.Set String
+    recur (Assign assns _) = Set.fromList $ map fst assns
+    -- recur x@Assign{} = Set.empty
+    recur (While _ _ b) = findEditedDeep b
+    recur (If _ t f) = findEditedDeep t `Set.union` findEditedDeep (fromMaybe [] f)
+    recur x@Predicate{} = Set.empty
+    -- recur (If _ t f) = findEditedDeep t `Set.union` findEditedDeep (fromMaybe [] f)
+    
 
 
-findUnedited :: [Set.Set String] -> [String] -> Block -> [String]
-findUnedited rels globals blk = computeRels used rels \\ used
+
+
+findUnedited :: [Set.Set String] -> Block -> [String]
+findUnedited rels blk = computeRels used rels \\ used
   where
     used = findEdited blk
 
@@ -437,9 +483,26 @@ gatherVars es = nub $ es >>= recur
     recur (Spec.RelBinop _ l r) = recur l ++ recur r
     recur (Spec.RelUnop _ i) = recur i
     recur (Spec.Foreach vs idx arrs i) = vs ++ arrs ++ maybeToList idx ++ recur i
-    recur _ = []
+    recur (Spec.RelCond c t f) = recur c ++ recur t ++ recur f
+    recur (Spec.Prev v _) = [v]
+    recur (Spec.RelInt _) = []
+    recur (Spec.RelBool _) = []
     -- MapSel, Quantified, MapUp TODO
-            
+
+stripLoopInfo :: Block -> Block
+stripLoopInfo blk = fst $ foldl recur ([], False) $ map (node . snd . node) blk
+  where
+    recur :: (Block, Bool) -> BareStatement -> (Block, Bool)
+    recur (acc, True) (Predicate [Attribute "forBegin" _] _) = (acc, False)
+    recur (acc, True) _ = (acc, True)
+    recur (acc, False) (Predicate [Attribute "forInfo" _] _) = (acc, True)
+    recur (acc, False) (Predicate [Attribute "forEnd" _] _) = (acc, True)
+    recur (acc, False) (While c s b) = (acc ++ wrap (While c s (stripLoopInfo b)), False)
+    recur (acc, False) (If c t f) = (acc ++ wrap (If c (stripLoopInfo t) (stripLoopInfo `fmap` f )), False)
+    recur (acc, False) s = (acc ++ wrap s, False)
+
+    wrap :: BareStatement -> [LStatement]
+    wrap bs = [gen ([], gen bs)]
 
 -- parses {:forInfo idx vs arrs} into (idx, vs, arrs)
 parseLoopInfo :: LStatement -> (String, [String], [String])

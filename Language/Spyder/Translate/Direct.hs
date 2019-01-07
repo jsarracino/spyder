@@ -72,7 +72,7 @@ translateStmt (Imp.Decl (v, ty) rhs, vs) = (maybeToList assn, vs'')
 --  }
 -- assumes length is stored at arr[-1]
 translateStmt (Imp.For vs idxDec arrs bod, vars) = 
-    (idxInit : dimInit ++ [BST.While (BST.Expr cond) [] (loopInfo ++ iterUpdate ++ loopStart ++ bod' ++ loopEnd ++ arrUpdate ++ [idxUpdate])], vars')
+    (idxInit : dimInit ++ [BST.While (BST.Expr cond) [] (loopInfo ++ [idxPos] ++ iterUpdate ++ loopStart ++ bod' ++ loopEnd ++ arrUpdate ++ [idxUpdate])], vars')
   where
     decls = vs `zip` arrs
     
@@ -115,12 +115,17 @@ translateStmt (Imp.For vs idxDec arrs bod, vars) =
     idxInit = buildInit idx
     dimInit = dimInfo >>= buildDims
     idxUpdate = (liftLS . buildIdxUp) idx
+    idxPos = (liftLS . buildIdxPos) idx
     iterUpdate = map (liftLS . buildIterUp) decls
     arrUpdate = map (liftLS . buildArrUp) decls
 
 
     buildInit :: String -> BST.BareStatement
     buildInit name = BST.Assign [(name, [])] [Pos.gen $ BST.numeral 0]
+    buildIdxPos :: String -> BST.BareStatement
+    buildIdxPos name = BST.Predicate [] $ BST.SpecClause BST.Inline True expr
+      where
+        expr = Pos.gen $ BST.BinaryExpression BST.Geq (Pos.gen $ BST.Var name) (Pos.gen $ BST.numeral 0)
     buildIdxUp :: String -> BST.BareStatement
     buildIdxUp name = BST.Assign [(name, [])] [Pos.gen $ BST.BinaryExpression BST.Plus (Pos.gen $ BST.Var name) (Pos.gen $ BST.numeral 1)]
     buildIterUp :: (Imp.VDecl, Imp.Expr) -> BST.BareStatement

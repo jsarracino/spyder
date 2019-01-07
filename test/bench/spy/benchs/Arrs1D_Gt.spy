@@ -1,0 +1,47 @@
+Component EqArrs {
+  data lhs : int[];
+  data rhs : int[];
+
+  relation Eq(x: int[], y: int[]) {
+    foreach (p, q) in (x, y) {
+      p = q
+    }
+  }
+
+
+  
+  always Eq(lhs, rhs);
+}
+
+Component GtArrs {
+  data lhs : int[];
+  data rhs : int[];
+  data m : int[];
+
+  relation Gt(x: int[], y: int[], z: int[]) {
+    foreach (p, q, t) in (x, y, z) {
+      2 * t = p + q
+    }
+  }
+
+
+  
+  always Gt(lhs, rhs, m);
+}
+
+
+Component Main {
+  data x: int[];
+  data y: int[];
+
+  data z: int[];
+
+  using EqArrs(x, y);
+  using GtArrs(x, y, m);
+
+  procedure incrX() {
+    for (l:int) in (x) {
+      l = l + 1;
+    }
+  }
+}

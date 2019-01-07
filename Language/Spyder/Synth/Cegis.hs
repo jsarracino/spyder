@@ -34,7 +34,7 @@ import Language.Spyder.Synth.Verify   (debugBoogie, checkProg, debugBlock, debug
 import Language.Spyder.Translate.Direct
 import qualified Data.Map.Strict as Map
 import qualified Data.Set.Monad as Set
-import Data.List                      (intersperse, foldl', nub, sortBy)
+import Data.List                      (intersperse, foldl', nub, sortBy, delete)
 import Control.Monad
 import Control.Monad.Logic
 import Control.Monad.Stream
@@ -104,7 +104,8 @@ generateFix :: Int -> [String] -> String -> Program -> Body -> (Program, Body, B
 generateFix 0 cands lhs prog scope = (finalProg, scope, newBlock)
   where
     (constVar, withConst) = allocFreshConst prog
-    rhsEs = map (Pos.gen . Var) (constVar:cands)
+    -- assumes lhs is always in cands
+    rhsEs = map (Pos.gen . Var) $ lhs : constVar : delete lhs cands
     (switchVar, newBlock, finalProg) = buildSwitch lhs rhsEs withConst
 -- TODO: error in num-cond2.spy with depth=1 (i think)
 
@@ -219,8 +220,12 @@ searchAllConfigs pres posts prog globals scope blk fillme lhses rhses (cand:cand
     maxVal mp = maximum $ Map.elems mp 
     
     -- debugProg "cegis-search-debug.bpl" $!
+    debugger
+      | maxVal cand > 1 = debugProg "cegis-search-debug.bpl" 
+      | maxVal cand > 2 = error "cand depth exceeded"
+      | otherwise = id
   
-    checkMe = optimize $ buildMainSearch globals procNames $ case searchProg of Program x -> Program $ x ++ procs
+    checkMe = debugger $ optimize $ buildMainSearch globals procNames $ case searchProg of Program x -> Program $ x ++ procs
 
     buildAns :: Config -> (Program, Body, Block)
     buildAns cs = (finalProg, searchBody, newFixBlock )
@@ -350,7 +355,7 @@ boogTest p pname = case typeCheckProgram p of
     rec_max = Nothing 
     loop_max = Nothing 
     minimize = True
-    concretize = True
+    concretize = False
     maybeTake = \case
       Nothing -> id
       Just n -> take n

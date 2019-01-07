@@ -1,0 +1,46 @@
+void equal_arrays(int n, int[n] p, int[n] q){
+	for(int i=0; i<n; ++i){
+		assert p[i] == q[i];
+	}
+}
+
+int[n] incr_x(int n, ref int[n] x, ref int[n] y) {
+	for(int i=0; i<n; i++){
+		x[i] = 2 * y[i];
+	}
+	return x;
+}
+
+generator int[n] incr_y(int n, ref int[n] y, int bnd) {
+	for(int i=0; i<n; i++){
+		y[i] = expr(y[i], bnd);
+	}
+	return y;
+}
+
+generator int expr(int y, int bnd) {
+	assert bnd > 0;
+	generator int mult(){
+		return {| y |} * {| y | ?? |};
+	}
+	if(??) { return mult(); }
+	else { return mult() + expr(y, bnd-1); }
+}
+
+int[n] buildGol(int n){
+	int[n] out;
+	for(int i = 0; i < n; ++i){
+        if(i%2==0) {out[i] = 1;}
+        else {out[i] = 1;}
+    }
+    return out;
+}
+
+harness void sketch (int a, int b, int c, int n) {
+	n = 50;
+	int[n] x = buildGol(n);
+	int[n] y = x;
+	int[n] x1 = incr_x(n,x,y);
+	int[n] y1 = incr_y(n,y,1);
+	equal_arrays(n, x1, y1);
+}

@@ -27,7 +27,7 @@ Component Main {
   
 
   procedure incrX() {
-
+    let t: int;
     for (l : int[]) in (x) {
       for (s : int) in (l) {
         s = 2 * t;

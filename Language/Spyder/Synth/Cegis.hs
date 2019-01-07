@@ -220,7 +220,10 @@ searchAllConfigs pres posts prog globals scope blk fillme lhses rhses (cand:cand
     maxVal mp = maximum $ Map.elems mp 
     
     -- debugProg "cegis-search-debug.bpl" $!
-    debugger = if maxVal cand > 1 then debugProg "cegis-search-debug.bpl" else id
+    debugger
+      | maxVal cand > 1 = debugProg "cegis-search-debug.bpl" 
+      | maxVal cand > 2 = error "cand depth exceeded"
+      | otherwise = id
   
     checkMe = debugger $ optimize $ buildMainSearch globals procNames $ case searchProg of Program x -> Program $ x ++ procs
 

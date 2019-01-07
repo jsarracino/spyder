@@ -142,6 +142,7 @@ checkInvs (staleInvs, fineInvs) globals x@(blk, Program decs, scope@(vs,_)) = ch
 assertFixed :: ([Spec.RelExpr], [Spec.RelExpr]) -> [String] -> (Block, Program, Body) -> (Block, Program, Body)
 assertFixed is gs st = if checkInvs is gs st then st else error "Expected correct program"
 
+
 fixBlock :: DimEnv -> [Spec.RelExpr] -> [Set.Set String] -> Program -> [String] -> [String] -> Set.Set String -> Body -> Block -> Block -> (Block, Program, Body)
 fixBlock dims invs relVars header globals rhsVars stales scope prefix fixme = fixResult inner
   where
@@ -151,7 +152,7 @@ fixBlock dims invs relVars header globals rhsVars stales scope prefix fixme = fi
     fixResult (_, blk, prog@(Program decs), scope'@(vs, _)) = if not isRepaired then fixed else (blk, prog, scope')
       where
 
-        isRepaired = checkInvs (staleInvs, fineInvs) globals (blk, prog, scope)
+        isRepaired = checkInvs (staleInvs, fineInvs) globals (blk, prog, scope')
         
         staleVars = Set.toList $ stales `Set.union` Set.fromList (findEdited blk)
 
@@ -248,7 +249,7 @@ fixBlock dims invs relVars header globals rhsVars stales scope prefix fixme = fi
             (pref, mid, suf) = parseLoop bod
     
             --(relInvs, unrelInvs) = partition (isRelated relVars rhsVars) invs
-            invs' = map (specializeSpec loopVars arrVs idx) invs 
+            invs' = map (specializeSpec loopVars arrVs idx) oinvs 
     
             -- spec' = spec ++ map buildLoopInv invs
             pres = compSpecs Spec.weakenPrev invs'
@@ -265,7 +266,7 @@ fixBlock dims invs relVars header globals rhsVars stales scope prefix fixme = fi
         skel'
           | canSynth initState = buildCond snippets
           | null skel = insertIntoLoop (buildCond snippets) Nothing
-          | otherwise = front skel ++ insertIntoLoop (buildCond snippets) (Just $ last skel)
+          | otherwise = front skel ++ insertIntoLoop (buildCond snippets) (Just $ last skel) ++ makeAssumptsRels invs
 
 
         (rblk, rprog, rbod) = foldl' buildRet (skel', prog, synthScope) snippets
@@ -393,6 +394,7 @@ fixStmt dims invs relVars globals rhsVars stales (prefix, prog, scope) = worker
     worker (If e tru fls) = (If e tru' (Just fls'), prog'', scope'')
       where
         (tru', prog', scope') = recur prog scope tru
+        -- (fls', prog'', scope'') = ([], prog', scope')
         (fls', prog'', scope'') = recur prog' scope' (fromMaybe [] fls) 
     worker (While c spec bod) = (While c spec bod', prog', scope')
       where
@@ -409,7 +411,7 @@ fixStmt dims invs relVars globals rhsVars stales (prefix, prog, scope) = worker
         (pVars, prevScope) = generatePrevs (map ("prev_" ++) baseVs) scope
         invs'' = map (updatePrevs (Map.fromList $ baseVs `zip` repeat idx)) invs'
 
-        (pres, posts) = (compSpecs Spec.weakenPrev invs, compSpecs id invs)
+        (pres, posts) = (compSpecs Spec.weakenPrev invs'', compSpecs id invs'')
 
         prevUpdates = [] --map buildSelfAssgn pVars
 

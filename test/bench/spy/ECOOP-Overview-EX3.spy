@@ -1,0 +1,112 @@
+Component DateConv {
+  data ds: int[];
+  data ws: int[];
+
+  relation Days(xs: int[], ys: int[]) {
+    foreach (x, y) in (xs, ys) {
+      y = 7 * x
+    }
+  }
+
+  always Days(ds, ws);
+}
+
+Component CondFormat {
+
+  data pos : int;
+  data neg : int;
+  data vals : int[];
+  data colors: int[];
+
+  relation Colored(p: int, n: int, vs: int[], cs: int[]) {
+    foreach (v, c) in (vs, cs) {
+      (v >= 0 ==> c = p) &&
+      (v <  0 ==> c = n)
+    }
+  }
+
+  always Colored(pos, neg, vals, colors);
+}
+
+Component AltColor {
+  data evenColor : int;
+  data oddColor : int;
+  data rows : int[];
+
+  relation Alternating(e: int, o: int, cs: int[]) {
+    foreach (c) with idx in (cs){
+      ((idx % 2) = 0 ==> c = e) && 
+      ((idx % 2) = 1 ==> c = o)
+    }
+  }
+
+  always Alternating(evenColor, oddColor, rows);
+}
+
+Component Either {
+  data a : int;
+  data b: int;
+  data vals : int[];
+
+  relation allEither(l: int, r: int, cs: int[]) {
+    foreach (c) in (cs){
+      (c = l || c = r)
+    }
+  }
+
+  always allEither(a, b, vals);
+}
+
+Component ColorDiff {
+  data l: int;
+  data r: int;
+
+  relation diff(x: int, y: int) {
+    x != y
+  }
+
+  always diff(l, r);
+}
+
+Component SumArr {
+  data sum : int[];
+  data xs : int[];
+
+  relation Sum(ss: int[], xs: int[]) {
+    foreach (s, b) in (ss, xs) {
+      s = prev(s, 0) + b
+    }
+  }
+  always Sum(sum, xs);
+}
+
+
+Component Main {
+  data weeks: int[];
+  data days: int[];
+  data weeklyTotals: int[];
+
+  data fontColors: int[];
+  data positiveColor: int;
+  data negativeColor: int;
+
+  using DateConv(days, weeks);
+
+  using CondFormat(positiveColor, negativeColor, days, fontColors);
+  using Either(positiveColor, negativeColor, fontColors);
+  //using ColorDiff(positiveColor, negativeColor);
+
+  using SumArr(weeklyTotals, weeks);
+  
+  procedure editDaily() {
+    let i: int;
+    let val: int;
+    for (d: int) with idx in (days) {
+      if (idx == i) {
+        d = val;
+      } 
+    }
+  }
+
+}
+

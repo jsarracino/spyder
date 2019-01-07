@@ -1,7 +1,7 @@
 
 extra-package-dbs: []
 packages:
-- ./boogaloo
+# - ./boogaloo
 - .
 # - ./haskell-z3
 extra-deps:
@@ -31,7 +31,7 @@ extra-deps:
 # - optparse-applicative-0.12.0.0
 
 
-# - ./boogaloo
+- ./boogaloo
 # - ghc-mod-4.1.6
 # - intero-0.1.24
 # - stack-run-0.1.1.0
@@ -40,3 +40,9 @@ resolver: lts-2.0
 
 ghc-options:
   generic-deriving: -f-base-4-9
+
+extra-include-dirs: 
+  - /usr/local/include
+extra-lib-dirs: 
+  - /usr/local/lib
+  

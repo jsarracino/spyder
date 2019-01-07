@@ -16,6 +16,7 @@ cabal-version:       >=1.10
 library
   -- hs-source-dirs:      Language
   exposed-modules:
+    Language.Spyder,
     Language.Spyder.AST,
     Language.Spyder.AST.Imp,
     Language.Spyder.AST.Spec,
@@ -60,9 +61,10 @@ library
 
 executable spyder
   -- hs-source-dirs:      Language
-  main-is:             Language/Spyder.hs
-  ghc-options:         -threaded -rtsopts -with-rtsopts=-N -main-is Spyder.hs -W -fno-warn-missing-signatures -fno-warn-dodgy-exports -fno-warn-unused-do-bind
+  main-is:             Spyder.hs
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N -W -fno-warn-missing-signatures -fno-warn-dodgy-exports -fno-warn-unused-do-bind
   other-modules:
+    Language.Spyder
     Language.Spyder.AST
     Language.Spyder.Bench
     Language.Spyder.Config

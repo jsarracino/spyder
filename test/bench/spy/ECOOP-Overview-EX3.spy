@@ -84,7 +84,7 @@ Component SumArr {
 Component Main {
   data weeks: int[];
   data days: int[];
-  data dailyTotals: int[];
+  data weeklyTotals: int[];
 
   data fontColors: int[];
   data positiveColor: int;
@@ -92,11 +92,11 @@ Component Main {
 
   using DateConv(days, weeks);
 
-  using CondFormat(positiveColor, negativeColor, weeks, fontColors);
+  using CondFormat(positiveColor, negativeColor, days, fontColors);
   using Either(positiveColor, negativeColor, fontColors);
   //using ColorDiff(positiveColor, negativeColor);
 
-  using SumArr(dailyTotals, days);
+  using SumArr(weeklyTotals, weeks);
   
   procedure editDaily() {
     let i: int;
@@ -104,7 +104,7 @@ Component Main {
     for (d: int) with idx in (days) {
       if (idx == i) {
         d = val;
-      }
+      } 
     }
   }
 

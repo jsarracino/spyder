@@ -1,1 +1,78 @@
-// https://github.com/paulhoughton/mortgage/
+Component MonthlyInterest {
+
+	data minterest : int[];
+	data yinterest : int[];
+
+  relation MonthlyI(yi: int[], mi: int[]) {
+    foreach (m, y) in (mi, yi) {
+      m = y / 1200
+    }
+  }
+
+  always MonthlyI(minterest, yinterest);
+}
+
+Component NumberPayments {
+	data ypayment : int[];
+	data mpayment : int[];
+
+	relation MonthlyN(yp: int[], mp: int[]) {
+		foreach (m, y) in (mp, yp) {
+		  mp = yp * 12
+		}
+	}
+
+	always MonthlyN(ypayment, mpayment);
+}
+
+Component MultArr {
+	data vals : int[];
+ 	data rate : int;
+	data exp : int;
+	data nmonths : int;
+
+	relation Exponent(vals : int[], r: int, n: int, e: int) {
+    	foreach (v) with index in (vals) {
+        	v = prev(v, 1) * (1 + r) && index = n ==> e = v
+    	}	
+  	}
+  	always Exponent(vals, rate, nmonths, exp);
+}
+
+Component MonthlyPayment {
+	data principal : int;
+	data yearlyinterest : int[];
+	data numberofyears : int[];
+	data monthlypayment : int[];
+	data exponent : int;
+
+	relation MonthlyP(p : int, yi : int[], yn : int[], mp : int[], exp : int) {
+		foreach (rate, pay) in (yi, mp) {
+			pay = p * rate * exp / (exp - 1)
+		}
+	}
+
+	always MonthlyP(principal, yearlyinterest, numberofyears, monthlypayment, exponent);
+}
+
+Component Main {
+	data monthi : int[];
+	data yeari : int[];
+	data monthn : int[];
+	data yearn : int[];
+	data principal : int;
+	data overpayment : int;
+	data monthlyp : int[];
+	data exponent : int;
+	data accumulator : int[];
+	using MonthlyInterest(yeari, monthi);
+	using NumberPayments(yearn, monthn);
+	using MultArr(accumulator, yeari, yearn, exponent);
+	using MonthlyPayment(principal, yeari, yearn, monthlyp, exponent);
+
+	procedure editMortgage() {
+		for (x : int) in (yearn) {
+			x = x + 2;
+		}
+	}
+  }

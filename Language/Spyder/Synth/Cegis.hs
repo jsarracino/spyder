@@ -48,6 +48,7 @@ import Language.Spyder.Opt
 
 import Language.Spyder.Parser         (fromBoogUS)
 
+import System.IO.Unsafe               (unsafePerformIO)
 -- get = (Map.!)
 
 
@@ -106,7 +107,8 @@ generateFix 0 cands lhs prog scope = (finalProg, scope, newBlock)
     (constVar, withConst) = allocFreshConst prog
     -- assumes lhs is always in cands
     rhsEs = map (Pos.gen . Var) $ lhs : constVar : delete lhs cands
-    (switchVar, newBlock, finalProg) = buildSwitch lhs rhsEs withConst
+    (switchVar, newBlock, switchProg) = buildSwitch lhs rhsEs withConst
+    finalProg = addConstBounds switchProg constVar
 -- TODO: error in num-cond2.spy with depth=1 (i think)
 
 -- at depth n, allocate two variables for n-1 depths, and build binops/unops from the smaller vars
@@ -134,7 +136,11 @@ generateFix n cands lhs prog scope = (finalProg, newScope, lBlock ++ rBlock ++ n
     rv = Pos.gen $ Var rvar
     binops = [Pos.gen $ BinaryExpression op lv rv | op <- [Plus, Minus, Times]]
     unops = [Pos.gen $ UnaryExpression Neg rv]
+   
     
+addConstBounds (Program decs) v = Program $ bounds ++ decs
+  where 
+    bounds = map (Pos.gen . AxiomDecl) $ buildBounds 0 8 v
 buildBounds :: Int -> Int -> String -> [Expression]
 buildBounds lower upper name = [lo, hi]
   where 
@@ -173,13 +179,30 @@ type IOExamples = [Map.Map String Value] -- list of states, where each state is 
 -- params: invariants, program preamble, global variables, lhs of variables, rhs expression seeds, enclosing function scope, basic block for repair, fix template, and assumptions.
 -- returns: the repaired block, a new program, and a new function scope
 repairBlock :: [Expression] -> [Expression] -> Program -> [String] -> [String] -> [String] -> Body -> Block -> Block -> Block -> (Block, Program, Body)
-repairBlock pres posts prog globals lhsVars rhsVars scope blk templ assumpts = ret
+repairBlock pres posts prog globals lhsVars rhsVars scope blk templ assumpts = debug ret
   where
+    debugCegis = True
+    -- debug x = if not debugCegis then x else unsafePerformIO $! do {
+    --   writeFile "cegis-debug.txt" $! concatMap (++ "\n") outs;
+    --   return x
+    -- }
+    debug x = x
+    outs = 
+      ("Pres: " ++ show pres)
+      : ("Posts: " ++ show posts)
+      : ("Prog: " ++ show prog)
+      : ("lvars: " ++ show lhsVars)
+      : ("rvars: " ++ show rhsVars)
+      : ("prefix: " ++ show blk)
+      : ("template: " ++ show templ)
+      : ("assumptions: " ++ show assumpts)
+      : []
+      
     initConfig = Map.fromList []
     ret =  case checkConfig pres posts prog globals initConfig scope (blk ++ assumpts) of 
       Left _ -> (templ, prog, scope)
       Right io -> let (finalProg, newScope, fixedBlock) = searchAllConfigs pres posts prog globals scope (blk ++ assumpts) templ lhsVars rhsVars initCandDepths [io] in
-        (fixedBlock, optimize finalProg, newScope)
+        (fixedBlock, finalProg, newScope)
         
     initCandDepths = [Map.fromList $ lhsVars `zip` repeat 0]
 
@@ -188,6 +211,12 @@ repairBlock pres posts prog globals lhsVars rhsVars scope blk templ assumpts = r
 
 -- assumes at least one IO example
 searchAllConfigs :: [Expression] -> [Expression] -> Program -> [String] -> Body -> Block -> Block -> [String] -> [String] -> [Candidate] -> IOExamples -> (Program, Body, Block)
+-- searchAllConfigs 10 pres posts prog globals scope blk fillme lhses rhses (cand:cands) examples = 
+--   searchAllConfigs 0 pres posts prog globals scope blk fillme lhses rhses (cands ++ newCands) examples
+--   where
+--     newCands = sortBy (comparing maxVal) $ map buildCand (Map.toList cand)
+--     buildCand (c, v) = Map.insert c (v+1) cand
+--     maxVal mp = maximum $ Map.elems mp 
 searchAllConfigs pres posts prog globals scope blk fillme lhses rhses (cand:cands) examples = result
   where
     -- foreach lhs -> depth, look for a fix using depth. link all together.

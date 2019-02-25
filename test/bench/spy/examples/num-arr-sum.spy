@@ -8,8 +8,6 @@ Component SumArr {
     }
   }
 
-
-  
   always Sum(sum, xs);
 }
 
@@ -21,15 +19,14 @@ Component Main {
   using SumArr(x, y);
 
 
- /*
+ 
   procedure incrX() {
     for (l:int) in (y) {
       l = l + 1;
     }
   }
-  */
 
-
+/*
   procedure condIncr() {
     let i: int;
     for (l: int) with idx in (y) {
@@ -38,6 +35,6 @@ Component Main {
       }
     }
   }
-  
+  */
   
 }

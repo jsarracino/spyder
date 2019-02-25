@@ -43,6 +43,7 @@ library
     Language.Spyder.Synth.Context,
     Language.Spyder.Synth.Enum,
     Language.Spyder.Synth.Verify,
+    Language.Spyder.Synth.Schedule,
     Language.Spyder.Util
   build-depends: base >= 4.7 && < 5
                , parsec

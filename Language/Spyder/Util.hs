@@ -15,6 +15,7 @@ module Language.Spyder.Util (
   , bs2lss
   , stmt
   , uncons
+  , gatherVars
 ) where
 
 -- import Data.List
@@ -23,6 +24,10 @@ import Language.Boogie.AST
 import qualified Language.Boogie.Position as Pos
 import qualified Data.Set as Set
 import Data.Maybe
+
+import qualified Language.Spyder.AST.Spec as Spec
+
+import Data.List                              (nub, intersect, (\\), partition)
 
 
 --- prefix x y: is x a prefix of y?
@@ -77,7 +82,20 @@ allocIfMissing name ty (itws, b) = (vname, ([itws'], b))
       else allocFreshLocal name ty $ concat itws
 
 
-
+gatherVars :: [Spec.RelExpr] -> [String]
+gatherVars es = nub $ es >>= recur
+  where 
+    recur :: Spec.RelExpr -> [String]
+    recur (Spec.RelVar x) = [x]
+    recur (Spec.RelApp _ es) = nub $ es >>= recur
+    recur (Spec.RelBinop _ l r) = recur l ++ recur r
+    recur (Spec.RelUnop _ i) = recur i
+    recur (Spec.Foreach vs idx arrs i) = vs ++ arrs ++ maybeToList idx ++ recur i
+    recur (Spec.RelCond c t f) = recur c ++ recur t ++ recur f
+    recur (Spec.Prev v _) = [v]
+    recur (Spec.RelInt _) = []
+    recur (Spec.RelBool _) = []
+    -- MapSel, Quantified, MapUp TODO
 -- given a overall scope, a prefix, and a list of variables, allocate a new variable (of int type)
 -- return the name of the variable and the new list of variables
 allocFreshLocal :: String -> Type -> [IdTypeWhere] -> (String, [IdTypeWhere])

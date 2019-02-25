@@ -13,7 +13,6 @@ module Language.Spyder.Synth (
   , log
   , trimCond
   , specializeSpec
-  , gatherVars
   , isRelated
   , fixProcGeneral
   , generatePrevs
@@ -21,6 +20,7 @@ module Language.Spyder.Synth (
   , compSpecs
   , findEditedDeep
   , stripLoopInfo
+  , calculateCegisProblems
   -- , generate
 ) where
 
@@ -58,6 +58,8 @@ import Text.Printf
 import System.IO.Unsafe
 
 import Control.Monad (join)
+
+import Language.Spyder.Synth.Schedule
 
 -- given a procedure, fix with general synthesis by searching for a repair at the end
 fixProcGeneral :: DimEnv -> [Spec.RelExpr] -> Program -> Body -> [String] -> Block -> (Block, Program, Body)
@@ -263,36 +265,48 @@ fixBlock dims invs relVars header globals rhsVars stales scope prefix fixme = fi
 
         snippets = genCegPs (Set.toList lvs) finalInvs
 
+        determined = Set.fromList $ gatherVars finalInvs \\ Set.toList lvs
+        problems = calculateCegisProblems determined lvs finalInvs
+
         skel'
           | canSynth initState = buildCond snippets
           | null skel = insertIntoLoop (buildCond snippets) Nothing
           | otherwise = front skel ++ insertIntoLoop (buildCond snippets) (Just $ last skel) ++ makeAssumptsRels invs
 
 
-        (rblk, rprog, rbod) = foldl' buildRet (skel', prog, synthScope) snippets
+        (rblk, rprog, rbod, _) = foldl' buildRet (skel', prog, synthScope, []) problems
         ret = (foldl (flip trimBlock) rblk (Set.toList lvs), rprog, rbod)
 
         -- realRs = filter (dimzero finalDims) (Map.keys finalDims)
-
-        buildRet :: (Block, Program, Body) -> ([Spec.RelExpr], Block) -> (Block, Program, Body)
-        buildRet (skel, prog, bod) nxt = (skel', prog', bod')
+                    
+        -- buildRet :: (Block, Program, Body) -> ([Spec.RelExpr], Block) -> (Block, Program, Body)
+        buildRet :: (Block, Program, Body, [Spec.RelExpr]) -> (Set.Set String, [Spec.RelExpr]) -> (Block, Program, Body, [Spec.RelExpr])
+        buildRet (skel, prog, bod, curInvs) (lvalues, locInvs) = (skel', prog', bod', newInvs)
           where
-            (invs, snippet) = nxt
 
-            (pres, posts) = (compSpecs Spec.weakenPrev invs, compSpecs id invs)
+            newInvs = curInvs ++ locInvs
 
-            (assumpts, snippet') = completeCond (Set.toList lvs, invs) snippet
+            (pres, posts) = (compSpecs Spec.weakenPrev (if null curInvs then finalInvs else curInvs), compSpecs id newInvs)
 
-            rhsVars = gatherVars invs
+            (skel', prog', bod') = foldl inner (skel, prog, bod) snippets
+            snippets = genCegPs (Set.toList lvalues) locInvs
+            inner (sk, p, b) (invs, snip) = (sk', p', b')
+              where
+                (assumpts, snip') = completeCond (Set.toList lvalues) snip
+                (fixed, p', b') = repairBlock pres posts p globals (Set.toList lvalues) (gatherVars invs) b oldblk snip' assumpts
+                fixed' = if null assumpts then fixed else trimCond fixed
+                fixes = parseFixes (Set.toList lvalues) fixed'
+                sk' = rebuildBlock sk fixes
 
-            (fixed, prog', bod') = repairBlock pres posts prog globals (Set.toList lvs) rhsVars bod oldblk snippet' assumpts
-            
-            fixed' = if null assumpts then fixed else trimCond fixed
 
-            fixes = parseFixes (Set.toList lvs) fixed'
-            skel' = rebuildBlock skel fixes
 
-  
+
+
+
+calculateCegisProblems :: Set.Set String -> Set.Set String -> [Spec.RelExpr] -> [(Set.Set String, [Spec.RelExpr])]
+calculateCegisProblems srcs lvars invs = schedule
+  where
+    schedule = init $ scheduleInvs srcs lvars invs
    
 buildCond :: [([Spec.RelExpr], Block)] -> Block
 buildCond snips = join (let (_, x) = unzip snips in x)
@@ -333,8 +347,8 @@ genCegPs vs specs = convertConds $ if any isImp canon then foldl worker [] canon
     isAnd (Spec.RelBinop Spec.And _ _) = True
     isAnd _ = False
 
-completeCond :: ([String], [Spec.RelExpr]) -> Block -> (Block, Block)
-completeCond (vs, invs) b = case uncons $ b >>= bs2lss worker of 
+completeCond :: [String] -> Block -> (Block, Block)
+completeCond vs b = case uncons $ b >>= bs2lss worker of 
                               Just (assumpt@(Pos _ ([], Pos _ (Predicate [] (SpecClause Inline True _)))), x@(Pos _ ([], Pos _ If{})):xs) -> ([assumpt], x:xs)
                               Just (x, y) -> ([], x:y)
                               Nothing -> ([], [])
@@ -474,20 +488,7 @@ findInScope (Program decs) _ desugInvs = (decs >>= (getVars . node)) `intersect`
     getVars _ = []
     invVars = gatherVars desugInvs
 
-gatherVars :: [Spec.RelExpr] -> [String]
-gatherVars es = nub $ es >>= recur
-  where 
-    recur :: Spec.RelExpr -> [String]
-    recur (Spec.RelVar x) = [x]
-    recur (Spec.RelApp _ es) = nub $ es >>= recur
-    recur (Spec.RelBinop _ l r) = recur l ++ recur r
-    recur (Spec.RelUnop _ i) = recur i
-    recur (Spec.Foreach vs idx arrs i) = vs ++ arrs ++ maybeToList idx ++ recur i
-    recur (Spec.RelCond c t f) = recur c ++ recur t ++ recur f
-    recur (Spec.Prev v _) = [v]
-    recur (Spec.RelInt _) = []
-    recur (Spec.RelBool _) = []
-    -- MapSel, Quantified, MapUp TODO
+
 
 stripLoopInfo :: Block -> Block
 stripLoopInfo blk = fst $ foldl recur ([], False) $ map (node . snd . node) blk

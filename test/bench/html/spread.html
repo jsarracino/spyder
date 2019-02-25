@@ -7,28 +7,23 @@
     <table id = "table">
         <tr>
             <td><div>Weekly</div></td>
-            <td><div>Monthly</div></td>
-            <td><div>Yearly</div></td>
+            <td><div>Daily</div></td>
+            <td><div>Totals</div></td>
         </tr>
         <tr>
-          <td><div contenteditable>-200</div></td>
-          <td><div contenteditable>-800</div></td>
-          <td><div contenteditable>-9600</div></td>
+          <td><div contenteditable>-210</div></td>
+          <td><div contenteditable>-30</div></td>
+          <td><div contenteditable>-30</div></td>
         </tr>
         <tr>
+            <td><div contenteditable>-350</div></td>
             <td><div contenteditable>-50</div></td>
-            <td><div contenteditable>-200</div></td>
-            <td><div contenteditable>-2400</div></td>
-          </tr>
+            <td><div contenteditable>-80</div></td>
+        </tr>
         <tr>
-            <td><div contenteditable>750</div></td>
-            <td><div contenteditable>3000</div></td>
-            <td><div contenteditable>36000</div></td>
-            </tr>
-        <tr>
-            <td><div contenteditable>-45</div></td>
-            <td><div contenteditable>-180</div></td>
-            <td><div contenteditable>-2160</div></td>
+            <td><div contenteditable>700</div></td>
+            <td><div contenteditable>100</div></td>
+            <td><div contenteditable>20</div></td>
         </tr>
     </table>
 
@@ -48,7 +43,7 @@
 var negColor, posColor,  // string
     oddColor, evenColor;
 
-var week, month, year; // HTMLElement[]
+var week, day, total; // HTMLElement[]
 var evenPicker, oddPicker; // HTMLInputElement
 
 // initialize values
@@ -58,22 +53,24 @@ var evenPicker, oddPicker; // HTMLInputElement
   negColor = "red";
   oddColor = document.getElementById('evenPicker').value;
   evenColor = document.getElementById("oddPicker").value;
-  [week, month, year] = [[], [], []];
+  [week, day, total] = [[], [], []];
   let cls = [].slice.call(document.getElementById('table').rows);
   for (let row of cls.slice(1)) {
     let [r, e, s] = row.cells;
-    week.push(r); month.push(e); year.push(s);
+    week.push(r); day.push(e); total.push(s);
   }
+
+  console.log(week);
 
   for (let index = 0; index != week.length; ++index) {
     if (index % 2 == 0) {
       week[index].style.backgroundColor = evenColor;
-      month[index].style.backgroundColor = evenColor;
-      year[index].style.backgroundColor = evenColor;
+      day[index].style.backgroundColor = evenColor;
+      total[index].style.backgroundColor = evenColor;
     } else {
       week[index].style.backgroundColor = oddColor;
-      month[index].style.backgroundColor = oddColor;
-      year[index].style.backgroundColor = oddColor;
+      day[index].style.backgroundColor = oddColor;
+      total[index].style.backgroundColor = oddColor;
     }
   }
 }) ();
@@ -88,8 +85,14 @@ function refreshColors(idx) { // int
   }
 
   week[idx].style.color = color;
-  month[idx].style.color = color;
-  year[idx].style.color = color;
+  day[idx].style.color = color;
+
+  if (parseFloat(total[idx].textContent) < 0) {
+    color = negColor;
+  } else {
+    color = posColor;
+  }
+  total[idx].style.color = color;
 }
 
 
@@ -102,22 +105,41 @@ for (let index = 0; index != week.length; ++index) {
 
   week[index].oninput = () => {
     let w = parseFloat(week[index].textContent);
-    month[index].textContent = w * 4;
-    year[index].textContent = w * 12 * 4;
+    day[index].textContent = w / 7;
+    for (let idx = index; idx != week.length; ++idx) {
+      if (idx == 0) {
+        total[idx].textContent = day[index].textContent;
+      } else {
+        total[idx].textContent = parseFloat(total[idx-1].textContent) + parseFloat(day[idx].textContent);
+        let color;
+        if (parseFloat(total[idx].textContent) > 0) {
+          color = posColor;
+        } else {
+          color = negColor;
+        }
+        total[idx].style.color = color;//blah
+      }
+    }
     refreshColors(index);
   }
 
-  month[index].oninput = () => {
-    let m = parseFloat(month[index].textContent);
-    week[index].textContent = m / 4;
-    year[index].textContent = m * 12;
-    refreshColors(index);
-  }
-
-  year[index].oninput = () => {
-    let y = parseFloat(year[index].textContent);
-    week[index].textContent = y / (4 * 12);
-    month[index].textContent = y / 12;
+  day[index].oninput = () => {
+    let d = parseFloat(day[index].textContent);
+    week[index].textContent = d * 7;
+    for (let idx = index; idx != week.length; ++idx) {
+      if (idx == 0) {
+        total[idx].textContent = day[index].textContent;
+      } else {
+        total[idx].textContent = parseFloat(total[idx-1].textContent) + parseFloat(day[idx].textContent);
+        let color;
+        if (parseFloat(total[idx].textContent) > 0) {
+          color = posColor;
+        } else {
+          color = negColor;
+        }
+        total[idx].style.color = color;//blah
+      }
+    }
     refreshColors(index);
   }
 }
@@ -128,12 +150,12 @@ document.getElementById('evenPicker').oninput = () => {
   for (let index = 0; index != week.length; ++index) {
     if (index % 2 == 0) {
       week[index].style.backgroundColor = evenColor;
-      month[index].style.backgroundColor = evenColor;
-      year[index].style.backgroundColor = evenColor;
+      day[index].style.backgroundColor = evenColor;
+      total[index].style.backgroundColor = evenColor;
     } else {
       week[index].style.backgroundColor = oddColor;
-      month[index].style.backgroundColor = oddColor;
-      year[index].style.backgroundColor = oddColor;
+      day[index].style.backgroundColor = oddColor;
+      total[index].style.backgroundColor = oddColor;
     }
   }
 }
@@ -143,12 +165,12 @@ document.getElementById('oddPicker').oninput = () => {
   for (let index = 0; index != week.length; ++index) {
     if (index % 2 == 0) {
       week[index].style.backgroundColor = evenColor;
-      month[index].style.backgroundColor = evenColor;
-      year[index].style.backgroundColor = evenColor;
+      day[index].style.backgroundColor = evenColor;
+      total[index].style.backgroundColor = evenColor;
     } else {
       week[index].style.backgroundColor = oddColor;
-      month[index].style.backgroundColor = oddColor;
-      year[index].style.backgroundColor = oddColor;
+      day[index].style.backgroundColor = oddColor;
+      total[index].style.backgroundColor = oddColor;
     }
   }
 }

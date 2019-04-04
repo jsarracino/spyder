@@ -37,14 +37,14 @@ class Benchmark:
         self.components = components    # Description of components used (in the table)
         self.redo = redo
 
-    def str(self):
-        return self.name + ': ' + self.description + ' ' + str(self.components)
+	def str(self):
+		return self.name + ': ' + self.description + ' ' + str(self.components)
 
 class BenchmarkGroup:
-    def __init__(self, name, default_options, benchmarks):
-        self.name = name   
-        self.default_options = default_options  # Command-line options to use for all benchmarks in this group when running in common context
-        self.benchmarks = benchmarks            # List of benchmarks in this group
+	def __init__(self, name, default_options, benchmarks):
+		self.name = name
+		self.default_options = default_options  # Command-line options to use for all benchmarks in this group when running in common context
+		self.benchmarks = benchmarks            # List of benchmarks in this group
 
 ALL_BENCHMARKS = [
     BenchmarkGroup("Numerical Programs", [], [
@@ -63,17 +63,17 @@ ALL_BENCHMARKS = [
 ]
 
 class SynthesisResult:
-    def __init__(self, name, source_size, inv_size, spyder_holes, time, sktime):
-        self.name = name                        # Benchmark name
-        self.spyder_source_size = source_size   # Size of Spyder source code
-        self.spyder_invariant_size = inv_size   # Cumulative invariant size (in AST nodes)
-        # self.spyder_lines = spyder_lines        # Number of lines inserted
-        self.spyder_holes = spyder_holes        # Number of holes        
-        self.spyder_time = time                 # Synthesis time (seconds)
-        self.sketch_time = sktime            # Sketch synthesis times (seconds)
+	def __init__(self, name, source_size, inv_size, spyder_holes, time, sktime):
+		self.name = name                        # Benchmark name
+		self.spyder_source_size = source_size   # Size of Spyder source code
+		self.spyder_invariant_size = inv_size   # Cumulative invariant size (in AST nodes)
+		# self.spyder_lines = spyder_lines        # Number of lines inserted
+		self.spyder_holes = spyder_holes        # Number of holes
+		self.spyder_time = time                 # Synthesis time (seconds)
+		self.sketch_time = sktime            # Sketch synthesis times (seconds)
 
-    def str(self):
-        return self.name + ', ' + '{0:0.2f}'.format(self.spyder_time) # + ', '  + self.code_size + ', ' + self.spec_size + ', ' + self.measure_count
+	def str(self):
+		return self.name + ', ' + '{0:0.2f}'.format(self.spyder_time) # + ', '  + self.code_size + ', ' + self.spec_size + ', ' + self.measure_count
 
 spy_cursor = 0
 def run_benchmark(name, opts, default_opts):
@@ -147,28 +147,27 @@ def run_benchmark(name, opts, default_opts):
       print()
       
 def format_time(t):
-    if t < 0:
-        return '-'
-    else:
-        return '{0:0.2f}'.format(t)
+	if t < 0:
+		return '-'
+	else:
+		return '{0:0.2f}'.format(t)
 
 # def write_csv():
-    # '''Generate CSV file from the results dictionary'''
-    # with open(CSV_FILE, 'w') as outfile:
-        # for group in groups:
-            # for b in group.benchmarks:
-                # outfile.write (b.name + ',')
-                # result = results [b.name]
-                # outfile.write (result.spec_size + ',')
-                # outfile.write (result.code_size + ',')
-                # outfile.write (format_time(result.time) + ',')
-                # outfile.write ('\n')
-                
+	# '''Generate CSV file from the results dictionary'''
+	# with open(CSV_FILE, 'w') as outfile:
+		# for group in groups:
+			# for b in group.benchmarks:
+				# outfile.write (b.name + ',')
+				# result = results [b.name]
+				# outfile.write (result.spec_size + ',')
+				# outfile.write (result.code_size + ',')
+				# outfile.write (format_time(result.time) + ',')
+				# outfile.write ('\n')
+
 def fill_with_blanks():
   for group in groups:
-      for b in group.benchmarks:
-          results [b.name] = SynthesisResult(b.name, '-', '-', '-', '-', 0.0)
-                  
+	  for b in group.benchmarks:
+		  results [b.name] = SynthesisResult(b.name, '-', '-', '-', '-', 0.0)
 
 def write_latex():
     '''Generate Latex table from the results dictionary'''
@@ -211,11 +210,11 @@ def write_latex():
     print(['Total:', total_count])
     
 # def cmdline():
-    # import argparse
-    # a = argparse.ArgumentParser()
-    # a.add_argument('--medium', action='store_true')
-    # a.add_argument('--small', action='store_true')
-    # return a.parse_args()    
+	# import argparse
+	# a = argparse.ArgumentParser()
+	# a.add_argument('--medium', action='store_true')
+	# a.add_argument('--small', action='store_true')
+	# return a.parse_args()
 
 if __name__ == '__main__':
     init()

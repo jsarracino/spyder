@@ -21,10 +21,12 @@ module Language.Spyder.Synth (
   , findEditedDeep
   , stripLoopInfo
   , calculateCegisProblems
+  , generateSubProblems
+  , combineSynSolutions
   -- , generate
 ) where
 
-import Prelude hiding (foldl, all, concat, any)
+import Prelude hiding (foldl, all, concat, any, concatMap)
 import Data.Foldable                
 
 
@@ -50,6 +52,7 @@ import Language.Spyder.Translate.Specs
 import Language.Spyder.Translate.Direct
 
 import Language.Spyder.Translate.Related
+import Language.Spyder.Translate.Rebuild
 import Language.Spyder.Translate.Rename
 
 import Language.Spyder.Util
@@ -171,7 +174,7 @@ fixBlock dims invs relVars header globals rhsVars stales scope prefix fixme = fi
 
         (suffix, prog', bod') = createFix dims staleInvs prog globals candVars (filter (dimzero dims) rhsVars) scope' blk 
 
-        fixed = assertFixed (staleInvs, fineInvs) globals (makeAssumpts pres ++ blk ++ suffix, prog', bod')
+        fixed = assertFixed (staleInvs, fineInvs) globals (makeAssumpts pres ++ suffix, prog', bod')
 
     initState = (prefix, [], header, scope)
     wrapFixStmt :: (Block, Block, Program, Body) -> LStatement -> (Block, Block, Program, Body)
@@ -212,91 +215,112 @@ fixBlock dims invs relVars header globals rhsVars stales scope prefix fixme = fi
     createFix :: DimEnv -> [Spec.RelExpr] -> Program -> [String] -> [String] -> [String] -> Body -> Block -> (Block, Program, Body)
     createFix dims invs prog globals lvars rvars scope oldblk = ret
       where
-        initState = (dims, invs, scope, templ, Set.fromList lvars, Set.fromList rvars)
-        canSynth (ds, _, _, _, lvs, _) = all (dimzero ds) lvs
+        -- initState = (dims, invs, scope, templ, Set.fromList lvars, Set.fromList rvars)
+        -- canSynth (ds, _, _, _, lvs, _) = all (dimzero ds) lvs
 
-        worker (odims, oinvs, oscope, blk, lvs, rvs) = (dims', invs', scope', blk', lvs', rvs')
-          where 
-            lvs' = okvs `Set.union` Set.fromList loopVars
-            rvs' = rvs `Set.union` Set.filter (dimzero dims') (Set.fromList (idx : loopVars))
-            (okvs, arrvs) = Set.partition (dimzero odims) lvs
+        -- worker (odims, oinvs, oscope, blk, lvs, rvs) = (dims', invs', scope', blk', lvs', rvs')
+        --   where 
+        --     lvs' = okvs `Set.union` Set.fromList loopVars
+        --     rvs' = rvs `Set.union` Set.filter (dimzero dims') (Set.fromList (idx : loopVars))
+        --     (okvs, arrvs) = Set.partition (dimzero odims) lvs
 
-            loopDecs = map genLoopV $ Set.toList arrvs
+        --     loopDecs = map genLoopV $ Set.toList arrvs
 
-            genLoopV arrV = ("cegis_loop_var", lty)
-              where
-                lty = case buildTy $ (Map.!) odims arrV of 
-                  (Imp.ArrTy i) -> i
-                  _         -> error $ "expected array variable in arrVs, instead found " ++ arrV
+        --     genLoopV arrV = ("cegis_loop_var", lty)
+        --       where
+        --         lty = case buildTy $ (Map.!) odims arrV of 
+        --           (Imp.ArrTy i) -> i
+        --           _         -> error $ "expected array variable in arrVs, instead found " ++ arrV
 
-            (itws, r) = oscope
+        --     (itws, r) = oscope
 
-            (loopSS, newItws) = translateStmt (Imp.For loopDecs (Just "cegis_loop_idx") (map Imp.VConst $ Set.toList arrvs) (Imp.Seq []), concat itws)
-            scope' = ([newItws], r)
+        --     (loopSS, newItws) = translateStmt (Imp.For loopDecs (Just "cegis_loop_idx") (map Imp.VConst $ Set.toList arrvs) (Imp.Seq []), concat itws)
+        --     scope' = ([newItws], r)
 
-            (oldPre, oldLoop) = (init blk, last blk)
+        --     (oldPre, oldLoop) = (init blk, last blk)
 
   
 
-            blk' = if null blk then loopBLK else oldPre ++ insertIntoLoop loopBLK (Just oldLoop)
+        --     blk' = if null blk then loopBLK else oldPre ++ insertIntoLoop loopBLK (Just oldLoop)
 
-            (newLoopPre, While c spec bod) = (init loopSS, last loopSS)
-            loopSS' = newLoopPre ++ [While c spec bod']
-            loopBLK = map (\s -> gen ([], gen s)) loopSS'
+        --     (newLoopPre, While c spec bod) = (init loopSS, last loopSS)
+        --     loopSS' = newLoopPre ++ [While c spec bod']
+        --     loopBLK = map (\s -> gen ([], gen s)) loopSS'
 
-            -- holes = filter (dimzero dims') loopVars >>= genSkel
-            holes = []
+        --     -- holes = filter (dimzero dims') loopVars >>= genSkel
+        --     holes = []
 
-            (idx, loopVars, arrVs) = parseLoopInfo $ head bod
-            (pref, mid, suf) = parseLoop bod
+        --     (idx, loopVars, arrVs) = parseLoopInfo $ head bod
+        --     (pref, mid, suf) = parseLoop bod
     
-            --(relInvs, unrelInvs) = partition (isRelated relVars rhsVars) invs
-            invs' = map (specializeSpec loopVars arrVs idx) oinvs 
+        --     --(relInvs, unrelInvs) = partition (isRelated relVars rhsVars) invs
+        --     invs' = map (specializeSpec loopVars arrVs idx) oinvs 
     
-            -- spec' = spec ++ map buildLoopInv invs
-            pres = compSpecs Spec.weakenPrev invs'
-            bod' = pref ++ holes ++ makeAssumpts pres ++ mid ++ suf -- ++ map buildLoopCheck
+        --     -- spec' = spec ++ map buildLoopInv invs
+        --     pres = compSpecs Spec.weakenPrev invs'
+        --     bod' = pref ++ holes ++ makeAssumpts pres ++ mid ++ suf -- ++ map buildLoopCheck
     
-            dims' = addDims odims loopDecs `Map.union` Map.singleton idx 0
+        --     dims' = addDims odims loopDecs `Map.union` Map.singleton idx 0
 
 
-        (finalDims, finalInvs, synthScope, skel, lvs, rvs) = until canSynth worker initState
-        templ = concat [[genStart s, genHole s, genEnd s] | s <- filter (dimzero dims) lvars]
+        -- (finalDims, finalInvs, synthScope, skel, lvs, rvs) = until canSynth worker initState
+        -- templ = concat [[genStart s, genHole s, genEnd s] | s <- filter (dimzero dims) lvars]
 
-        snippets = genCegPs (Set.toList lvs) finalInvs
+ 
 
-        determined = Set.fromList $ gatherVars finalInvs \\ Set.toList lvs
-        problems = calculateCegisProblems determined lvs finalInvs
+        -- skel'
+        --   | canSynth initState = buildCond snippets
+        --   | null skel = insertIntoLoop (buildCond snippets) Nothing
+        --   | otherwise = front skel ++ insertIntoLoop (buildCond snippets) (Just $ last skel) ++ makeAssumptsRels invs
 
-        skel'
-          | canSynth initState = buildCond snippets
-          | null skel = insertIntoLoop (buildCond snippets) Nothing
-          | otherwise = front skel ++ insertIntoLoop (buildCond snippets) (Just $ last skel) ++ makeAssumptsRels invs
+        determined = Set.fromList $ gatherVars invs \\ lvars
+        problems = calculateCegisProblems determined (Set.fromList lvars) invs
 
+        (rblk, rprog, rbod, _, _) = foldl' buildRet (oldblk, prog, scope, [], dims) problems
 
-        (rblk, rprog, rbod, _) = foldl' buildRet (skel', prog, synthScope, []) problems
-        ret = (foldl (flip trimBlock) rblk (Set.toList lvs), rprog, rbod)
+        ret = (rblk, rprog, rbod)
 
-        -- realRs = filter (dimzero finalDims) (Map.keys finalDims)
-                    
-        -- buildRet :: (Block, Program, Body) -> ([Spec.RelExpr], Block) -> (Block, Program, Body)
-        buildRet :: (Block, Program, Body, [Spec.RelExpr]) -> (Set.Set String, [Spec.RelExpr]) -> (Block, Program, Body, [Spec.RelExpr])
-        buildRet (skel, prog, bod, curInvs) (lvalues, locInvs) = (skel', prog', bod', newInvs)
+        
+       
+        -- ret = (foldl (flip trimBlock) rblk (Set.toList lvs), rprog, rbod)
+        -- ret = error "TODO"
+
+        buildRet :: (Block, Program, Body, [Spec.RelExpr], DimEnv) -> (Set.Set String, [Spec.RelExpr]) -> (Block, Program, Body, [Spec.RelExpr], DimEnv)
+        buildRet (blk, prog, bod@(itws, b), curInvs, env) (lvalues, locInvs) = (blk ++ blk', prog', ([itws'], b), newInvs, env')
           where
 
             newInvs = curInvs ++ locInvs
+            (pres, posts) = (compSpecs Spec.weakenPrev (if null curInvs then invs else curInvs), compSpecs id newInvs)
 
-            (pres, posts) = (compSpecs Spec.weakenPrev (if null curInvs then finalInvs else curInvs), compSpecs id newInvs)
 
-            (skel', prog', bod') = foldl inner (skel, prog, bod) snippets
-            snippets = genCegPs (Set.toList lvalues) locInvs
-            inner (sk, p, b) (invs, snip) = (sk', p', b')
-              where
-                (assumpts, snip') = completeCond (Set.toList lvalues) snip
-                (fixed, p', b') = repairBlock pres posts p globals (Set.toList lvalues) (gatherVars invs) b oldblk snip' assumpts
-                fixed' = if null assumpts then fixed else trimCond fixed
-                fixes = parseFixes (Set.toList lvalues) fixed'
-                sk' = rebuildBlock sk fixes
+            (env', bindings, specInvs, lvs, skel) = generateSubProblems env (lvalues, locInvs) Map.empty []
+
+            lvs' = Set.filter (dimzero env') lvs
+
+            snip = concatMap genSkel lvs'
+            assumpts = []
+
+            (fixed, prog', bod') = repairBlock pres posts prog globals (Set.toList lvs') (gatherVars newInvs) bod blk snip assumpts
+            fixed' = if null assumpts then fixed else trimCond fixed
+            fixes = parseFixes (Set.toList lvalues) fixed'
+
+
+            newSpyBlk = combineSynSolutions env' skel (rebuildFix $ concat $ Map.elems fixes)
+            (blk', itws') = translateBlock (newSpyBlk, concat itws)
+
+            -- snippets = genCegPs (Set.toList lvs') locInvs
+
+
+
+        --     (skel', prog', bod') = foldl inner (skel, prog, bod) snippets
+        --     snippets = genCegPs (Set.toList lvalues) locInvs
+        --     inner (sk, p, b) (invs, snip) = (sk', p', b')
+        --       where
+        --         (assumpts, snip') = completeCond (Set.toList lvalues) snip
+        --         (fixed, p', b') = repairBlock pres posts p globals (Set.toList lvalues) (gatherVars invs) b (oldblk ++ sk) snip' assumpts
+        --         fixed' = if null assumpts then fixed else trimCond fixed
+        --         fixes = parseFixes (Set.toList lvalues) fixed'
+        --         sk' = rebuildBlock sk fixes
 
 
 
@@ -307,7 +331,43 @@ calculateCegisProblems :: Set.Set String -> Set.Set String -> [Spec.RelExpr] -> 
 calculateCegisProblems srcs lvars invs = schedule
   where
     schedule = init $ scheduleInvs srcs lvars invs
+  
+    -- ** convert the lvars + invariants to a template for synthesis:
+    --   *** group lvars by dims. dim k >= 1 goes (together) in a loop of depth k.
+    --   *** flatten invariants, lvars until all lvars are depth 0. collect each set of flattened lvars.
+generateSubProblems :: DimEnv -> (Set.Set String, [Spec.RelExpr]) -> Map.Map String String -> [([String], String, [String])] -> (DimEnv, Map.Map String String, [Spec.RelExpr], Set.Set String, [([String], String, [String])])
+generateSubProblems env (lvars, invs) bindings skel = 
+  if Set.null complexVars then (env, bindings, invs, lvars, skel) else generateSubProblems env' (lvars', invs') bindings' skel'
+  where
+    (doneVars, complexVars) = Set.partition (dimzero env) lvars
    
+    (loopVars, withLoop) = foldl adder (Map.empty, env) (Set.toList complexVars)
+    (idxVar, env') = allocFreshSpy "cegis_idx_var" (buildTy 0) withLoop
+    invs' =  map (specializeSpec (Map.elems loopVars) (Set.toList complexVars) idxVar) invs 
+    bindings' = Map.union bindings loopVars
+    skel' = (Map.elems loopVars, idxVar, Map.keys loopVars) : skel
+
+    lvars' = doneVars `Set.union` Set.fromList (Map.elems loopVars)
+
+    adder :: (Map.Map String String, DimEnv) -> String -> (Map.Map String String, DimEnv)
+    adder (vars, e) var = 
+      let ty = buildTy $ (Map.!) e var - 1
+          (newVar, newE) = allocFreshSpy "cegis_loop_var" ty e
+      in
+        (Map.insert var newVar vars, newE)
+
+
+
+-- *** foreach set of flattened lvars, put the conditional case into a loop over the flattened var. repeat until the original loop is ready to go.
+combineSynSolutions :: DimEnv -> [([String], String, [String])] -> Imp.Block -> Imp.Block
+combineSynSolutions env [] blk = blk
+combineSynSolutions env ((iters, idx, arrs):skels) inner = 
+  combineSynSolutions env skels $ Imp.Seq [Imp.For iterTups (Just idx) (map Imp.VConst arrs) inner]
+  where
+    iterTups :: [Imp.VDecl]
+    iterTups = map (\s -> (s, buildTy $ (Map.!) env s)) iters
+
+
 buildCond :: [([Spec.RelExpr], Block)] -> Block
 buildCond snips = join (let (_, x) = unzip snips in x)
 

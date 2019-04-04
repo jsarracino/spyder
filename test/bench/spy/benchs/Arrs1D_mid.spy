@@ -4,7 +4,7 @@ Component EqArrs {
 
   relation Eq(x: int[], y: int[]) {
     foreach (p, q) in (x, y) {
-      p = q
+      p != q
     }
   }
 
@@ -13,7 +13,7 @@ Component EqArrs {
   always Eq(lhs, rhs);
 }
 
-Component GtArrs {
+Component MidArrs {
   data lhs : int[];
   data rhs : int[];
   data m : int[];
@@ -37,10 +37,10 @@ Component Main {
   data z: int[];
 
   using EqArrs(x, y);
-  using GtArrs(x, y, z);
+  using MidArrs(x, y, z);
 
   procedure incrX() {
-    for (l:int) in (x) {
+    for (l:int) in (z) {
       l = l + 1;
     }
   }

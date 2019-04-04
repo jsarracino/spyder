@@ -11,16 +11,6 @@ Component Midpoint {
   
 }
 
-Component NotEq {
-  data l: int;
-  data r: int;
-
-  relation notEq(x: int, y: int) {
-    x != y
-  }
-
-  always notEq(l, r);
-}
 
 
 Component Main {
@@ -30,7 +20,6 @@ Component Main {
   data m: int;
 
   using Midpoint(x, y, m);
-  using NotEq(x, y);
   
 
   procedure incM() {

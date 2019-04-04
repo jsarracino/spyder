@@ -17,7 +17,6 @@ Component EqArrs {
 Component Main {
   data x: int[];
   data y: int[];
-
   data z: int[];
 
   using EqArrs(x, y);

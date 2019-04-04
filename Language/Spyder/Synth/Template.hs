@@ -64,6 +64,9 @@ parseFixes names b = Map.fromList $ zip names (map worker names)
   --         _ -> env
 
 
+
+
+
 rebuildBlock :: Block -> Map.Map String Block -> Block
 rebuildBlock blk mp = Map.foldlWithKey (substInHole False) blk (Map.mapWithKey trimBlock mp) 
 

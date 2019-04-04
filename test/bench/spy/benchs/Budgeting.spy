@@ -1,31 +1,86 @@
 Component DateConv {
+  data ds: int[];
   data ws: int[];
-  data ms: int[];
-  data ys: int[];
 
-  relation Months(ws: int[], ms: int[]) {
-    foreach (w, m) in (ws, ms) {
-      m = 4 * w
+  relation Days(xs: int[], ys: int[]) {
+    foreach (x, y) in (xs, ys) {
+      y = 7 * x
     }
   }
 
-  relation Years(ms: int[], ys: int[]) {
-    foreach (m, y) in (ms, ys) {
-      y = 12 * m
-    }
-  }
-
-  always Months(ws, ms);
-  always Years(ms, ys);
+  always Days(ds, ws);
 }
+
+Component CondFormat {
+
+  data pos : int;
+  data neg : int;
+  data vals : int[];
+  data colors: int[];
+
+  relation Colored(p: int, n: int, vs: int[], cs: int[]) {
+    foreach (v, c) in (vs, cs) {
+      (v >= 0 ==> c = p) &&
+      (v <  0 ==> c = n)
+    }
+  }
+
+  always Colored(pos, neg, vals, colors);
+}
+
+Component AltColor {
+  data evenColor : int;
+  data oddColor : int;
+  data rows : int[];
+
+  relation Alternating(e: int, o: int, cs: int[]) {
+    foreach (c) with idx in (cs){
+      ((idx % 2) = 0 ==> c = e) && 
+      ((idx % 2) = 1 ==> c = o)
+    }
+  }
+
+  always Alternating(evenColor, oddColor, rows);
+}
+
+Component Either {
+  data a : int;
+  data b: int;
+  data vals : int[];
+
+  relation allEither(l: int, r: int, cs: int[]) {
+    foreach (c) in (cs){
+      (c = l || c = r)
+    }
+  }
+
+  always allEither(a, b, vals);
+}
+
 
 Component Main {
   data weeks: int[];
-  data months: int[];
-  data years: int[];
+  data days: int[];
 
-  using DateConv(weeks, months, years);
+  data fontColors: int[];
+  data bkgColors: int[];
 
+  data oddColor: int;
+  data evenColor: int;
+  data positiveColor: int;
+  data negativeColor: int;
+
+  using DateConv(days, weeks);
+
+  
+  using CondFormat(positiveColor, negativeColor, weeks, fontColors);
+  using Either(positiveColor, negativeColor, fontColors);
+  using AltColor(evenColor, oddColor, bkgColors);
+  using Either(oddColor, evenColor, bkgColors);
+
+  
+  
+  
   procedure editWeekly() {
     let i: int;
     let val: int;
@@ -34,5 +89,27 @@ Component Main {
         w = val;
       }
     }
+
   }
+  
+
+  procedure adjustCOLA() {
+    let cola: int;
+    for (d: int) in (days) {
+      if (d < 0) {
+        d = d * cola;
+      }
+    }
+  }
+
+
+  procedure evenBkg() {
+    let x : int;
+    evenColor = x;
+    oddColor = oddColor;
+  }
+
+
+
 }
+

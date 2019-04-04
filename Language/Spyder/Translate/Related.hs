@@ -9,6 +9,7 @@ module Language.Spyder.Translate.Related (
   , addDims
   , addITWs
   , buildTy
+  , allocFreshSpy
 ) where
 
 import Language.Spyder.AST

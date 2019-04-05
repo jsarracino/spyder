@@ -27,12 +27,19 @@ import Options.Applicative.Types
 --   arg  <- readerAsk
 --   maybe (readerError $ "cannot parse value `" ++ arg ++ "'") return . f $ arg
 
-file2Boogie :: FilePath -> IO BST.Program
-file2Boogie inp = liftM Translate.toBoogie (Parser.fromFile inp)
+file2Boogie :: Bool -> FilePath -> IO BST.Program
+file2Boogie plain inp = liftM (Translate.toBoogie plain) (Parser.fromFile inp)
 
 file2Boogiefile :: FilePath -> FilePath -> IO BST.Program
 file2Boogiefile inp outp = do {
-  boog <- file2Boogie inp;
+  boog <- file2Boogie False inp;
+  writeFile outp (show $ pretty boog);
+  return boog
+}
+
+file2PlainBoogie :: FilePath -> FilePath -> IO BST.Program
+file2PlainBoogie inp outp = do {
+  boog <- file2Boogie True inp;
   writeFile outp (show $ pretty boog);
   return boog
 }
@@ -65,22 +72,20 @@ runOpts (SpyOpts inf outf) = do {
   putStrLn $ "source: size " ++ show spysize;
   invsize <- liftM invSize spy;
   putStrLn $ "inv: size " ++ show invsize;
+  file2PlainBoogie inf "plain.bpl";
   file2Boogiefile inf outf;
   return ()
 }
   where
-    boog = file2Boogie inf
     spy = Parser.fromFile inf
 runOpts (Benches mode inf) = do {
     i <- worker mode;
     putStrLn $ "result : " ++ show i
   }
   where
-    boog = file2Boogie inf
     spy = Parser.fromFile inf
 
     worker :: BenchMode -> IO Int
-    worker Boog   = liftM boogSize boog
     worker Spy    = liftM spySize spy
     worker Invs  = liftM invSize spy
 

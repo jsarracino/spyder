@@ -32,8 +32,8 @@ import Control.Monad
 import System.IO.Unsafe
 
 
-toBoogie :: Program -> BST.Program
-toBoogie prog@(comps, MainComp decls) = outProg 
+toBoogie :: Bool -> Program -> BST.Program
+toBoogie plain prog@(comps, MainComp decls) = outProg 
   where
     
     (bprog, (invs, varMap, dims)) = translateProg prog
@@ -67,11 +67,10 @@ toBoogie prog@(comps, MainComp decls) = outProg
       where
         decs = case newProg of BST.Program i -> i
         dims' = dims `addITWs` oldvars
-        repairTargetted = True
         newProc = Pos.gen $! BST.ProcedureDecl nme tyargs formals rets contr (Just (newvars, fixed))
-        (fixed, newProg, (newvars, _)) = if repairTargetted 
-          then fixProc dims' invs reledVars p bod globals fixme  
-          else fixProcGeneral dims' invs p bod globals fixme
+        (fixed, newProg, (newvars, _)) = if plain 
+          then  (fixme, p, bod)
+          else fixProc dims' invs reledVars p bod globals fixme 
         
         
     takeHeader = not . takeProc -- everything but procedures

@@ -18,7 +18,7 @@ if platform.system() in ['Linux', 'Darwin']:
     SPYDER_CMD = ['/usr/bin/time', '-p', TIMEOUT_CMD, TIMEOUT, './Script.hs']                             # Command to call Spyder
     SKETCH_CMD = ['/usr/bin/time', '-p', TIMEOUT_CMD, TIMEOUT, './sketch']
  
-
+WC_CMD = "wc -l"
 LOGFILE = 'results.log'                                         # Log file
 SPY_LOGFILE = 'spy-results.log'                                         # Log file
 SK_LOGFILE = 'sk-results.log'                                         # Log file
@@ -49,22 +49,22 @@ class BenchmarkGroup:
 
 ALL_BENCHMARKS = [
     BenchmarkGroup("Numerical Programs", [], [
-        Benchmark('Midpoint', 'midpoint','Mid'),
-        Benchmark('Midpoint_Neq', 'distinct mid','Mid-NE'),
-        Benchmark('Arrs1D_Eq', 'equal arrays','Eq-1D'),
-        Benchmark('Arrs1D_Mid', 'midpoint arrays','Mid-Arr'),
+        # Benchmark('Midpoint', 'midpoint','Mid'),
+        # Benchmark('Midpoint_Neq', 'distinct mid','Mid-NE'),
+        # Benchmark('Arrs1D_Eq', 'equal arrays','Eq-1D'),
+        # Benchmark('Arrs1D_Mid', 'midpoint arrays','Mid-Arr'),
         Benchmark('Arrs2D_Eq', 'equal arrays','Eq-2D')
         ]),
     BenchmarkGroup("Web Applications",  [], [
-        Benchmark('GoL1D', '1D GoL', 'cells2colors'),
-        Benchmark('Budgeting','overview', 'conversions'),
-        Benchmark('Expenses','split costs', 'splitting'),
+        # Benchmark('GoL1D', '1D GoL', 'cells2colors'),
+        # Benchmark('Budgeting','overview', 'conversions'),
+        # Benchmark('Expenses','split costs', 'splitting'),
         # Benchmark('Spreadsheet ', 'overview', 'conversions, colors')
         ])
 ]
 
 class SynthesisResult:
-    def __init__(self, name, source_size, inv_size, spyder_holes, time, sktime):
+    def __init__(self, name, source_size, inv_size, spyder_holes, time, sktime, overhead):
         self.name = name                        # Benchmark name
         self.spyder_source_size = source_size   # Size of Spyder source code
         self.spyder_invariant_size = inv_size   # Cumulative invariant size (in AST nodes)
@@ -72,6 +72,7 @@ class SynthesisResult:
         self.spyder_holes = spyder_holes        # Number of holes
         self.spyder_time = time                 # Synthesis time (seconds)
         self.sketch_time = sktime            # Sketch synthesis times (seconds)
+        self.overhead = overhead
 
     def str(self):
         return self.name + ', ' + '{0:0.2f}'.format(self.spyder_time) # + ', '  + self.code_size + ', ' + self.spec_size + ', ' + self.measure_count
@@ -104,7 +105,7 @@ def run_benchmark(name, opts, default_opts):
       print(["{0:0.2f}".format(end - start)])
       if False: # Synthesis failed
           print(*[Back.BLACK + Fore.RED + Style.BRIGHT + 'FAIL' + Style.RESET_ALL])
-          results[name] = SynthesisResult(name, (end - start), '-', '-', '-', '-')
+          results[name] = SynthesisResult(name, (end - start), '-', '-', '-', '-', 0)
       else: # Synthesis succeeded: code metrics from the output and record synthesis time
           sp_lastLines = os.popen("tail -n 8 %s" % SPY_LOGFILE).read().split('\n')
           sk_lastLines = os.popen("tail -n 8 %s" % SK_LOGFILE).read().split('\n')
@@ -149,7 +150,9 @@ def run_benchmark(name, opts, default_opts):
         
 
         #   print(sketch_time)
-          results[name] = SynthesisResult(name, spyder_source_size, spyder_invariant_size, spyder_holes, spyder_time, sketch_time )
+          (ll, lr) = diffLines("plain.bpl", "out.bpl")
+          overhead = (lr - ll)/ll
+          results[name] = SynthesisResult(name, spyder_source_size, spyder_invariant_size, spyder_holes, spyder_time, sketch_time, overhead)
 
           print(*[Back.BLACK + Fore.GREEN + Style.BRIGHT + ' OK ' + Style.RESET_ALL])
 
@@ -178,6 +181,14 @@ def fill_with_blanks():
       for b in group.benchmarks:
           results [b.name] = SynthesisResult(b.name, '-', '-', '-', '-', 0.0)
 
+
+def diffLines(l, r):
+    wcL = int(os.popen("%s %s" % (WC_CMD, l)).read().strip().split(' ')[0])
+    wcR = int(os.popen("%s %s" % (WC_CMD, r)).read().strip().split(' ')[0])
+
+    return (wcL, wcR)
+
+
 def write_latex():
     '''Generate Latex table from the results dictionary'''
     
@@ -205,6 +216,7 @@ def write_latex():
                     ' & ' + b.description +\
                     ' & ' + str(result.spyder_source_size) +\
                     ' & ' + str(result.spyder_invariant_size) + \
+                    ' & ' + str(round(result.overhead*100,2)) + "\%" + \
                     ' & ' + format_time(result.spyder_time) + \
                     ' & ' + format_time(result.sketch_time[0]) + \
                     ' & ' + format_time(result.sketch_time[1]) + \

@@ -10,15 +10,20 @@ module Language.Spyder.Translate.Related (
   , addITWs
   , buildTy
   , allocFreshSpy
+  , relatedFromInvs
+  , varRelated
 ) where
 
 import Language.Spyder.AST
 import Language.Spyder.AST.Component
+import Language.Spyder.AST.Spec
 import qualified Language.Spyder.AST.Imp as Imp
 import qualified Language.Boogie.AST as BST
 
 import qualified Data.Set as Set
 import qualified Data.Map.Strict as Map
+
+import Language.Spyder.Util
 
 
 import Data.Maybe
@@ -32,6 +37,10 @@ relatedVars (_, MainComp decs) = filter (not . Set.null) $ map worker decs
   where
     worker (MainUD (_, rhs)) = Set.fromList rhs
     worker _ = Set.empty
+
+
+relatedFromInvs :: [RelExpr] -> [Set.Set String]
+relatedFromInvs invs = filter (not . Set.null) $ map (Set.fromList . gatherVars . (: [])) invs
 
 alphaRels :: [Set.Set String] -> Map.Map String String -> [Set.Set String]
 alphaRels rels varmap = renamed
@@ -50,6 +59,10 @@ computeRels vs rels = (Set.toList . snd) $ until transitiveClo growRels init
     transitiveClo (l, r) = l == r
     init :: (Set.Set String, Set.Set String)
     init = (Set.fromList vs, grow $ fst init)
+
+varRelated :: [Set.Set String] -> [String] -> String -> Bool
+varRelated rels ls r = r `elem` computeRels ls rels
+
 
 type DimEnv = Map.Map String Int
 

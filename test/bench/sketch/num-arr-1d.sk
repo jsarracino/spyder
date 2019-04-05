@@ -11,17 +11,17 @@ int[n] incr_x(int n, ref int[n] x, ref int[n] y) {
 	return x;
 }
 
-generator int[n] incr_y(int n, ref int[n] y, int bnd) {
+generator int[n] incr_y(int n, ref int[n] x, ref int[n] y, int idx, int bnd) {
 	for(int i=0; i<n; i++){
-		y[i] = expr(y[i], bnd);
+		y[i] = expr(y[i], x[i], idx, bnd);
 	}
 	return y;
 }
 
-generator int expr(int y, int bnd) {
+generator int expr(int y, int x, int idx, int bnd) {
 	assert bnd > 0;
 	generator int mult(){
-		return {| y |} * {| y | ?? |};
+		return {| y | x | idx |} * {| y | ?? |};
 	}
 	if(??) { return mult(); }
 	else { return mult() + expr(y, bnd-1); }

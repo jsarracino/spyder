@@ -273,8 +273,11 @@ fixBlock dims invs relVars header globals rhsVars stales scope prefix fixme = fi
         --   | null skel = insertIntoLoop (buildCond snippets) Nothing
         --   | otherwise = front skel ++ insertIntoLoop (buildCond snippets) (Just $ last skel) ++ makeAssumptsRels invs
 
+        invRels = relatedFromInvs invs
+        isStale = varRelated invRels (gatherVars invs)
+
         determined = Set.fromList $ gatherVars invs \\ lvars
-        problems = calculateCegisProblems determined (Set.fromList lvars) invs
+        problems = calculateCegisProblems determined (Set.fromList $ filter isStale lvars) invs
 
         (rblk, rprog, rbod, _, _) = foldl' buildRet (oldblk, prog, scope, [], dims) problems
 
@@ -286,7 +289,7 @@ fixBlock dims invs relVars header globals rhsVars stales scope prefix fixme = fi
         -- ret = error "TODO"
 
         buildRet :: (Block, Program, Body, [Spec.RelExpr], DimEnv) -> (Set.Set String, [Spec.RelExpr]) -> (Block, Program, Body, [Spec.RelExpr], DimEnv)
-        buildRet (blk, prog, bod@(itws, b), curInvs, env) (lvalues, locInvs) = (blk ++ blk', prog', ([itws'], b), newInvs, env')
+        buildRet (blk, prog, bod, curInvs, env) (lvalues, locInvs) = (blk ++ blk', prog', ([itws'], b), newInvs, env')
           where
 
             newInvs = curInvs ++ locInvs
@@ -295,7 +298,10 @@ fixBlock dims invs relVars header globals rhsVars stales scope prefix fixme = fi
 
             (env', bindings, specInvs, lvs, skel) = generateSubProblems env (lvalues, locInvs) Map.empty []
 
-            lvs' = Set.filter (dimzero env') lvs
+            invRels = relatedFromInvs locInvs
+            isStale = varRelated invRels (gatherVars newInvs)
+
+            lvs' = Set.filter (\s -> isStale s && dimzero env' s) lvs
 
             snip = concatMap genSkel lvs'
             assumpts = []
@@ -303,6 +309,8 @@ fixBlock dims invs relVars header globals rhsVars stales scope prefix fixme = fi
             (fixed, prog', bod') = repairBlock pres posts prog globals (Set.toList lvs') (gatherVars newInvs) bod blk snip assumpts
             fixed' = if null assumpts then fixed else trimCond fixed
             fixes = parseFixes (Set.toList lvalues) fixed'
+
+            (itws, b) = bod'
 
 
             newSpyBlk = combineSynSolutions env' skel (rebuildFix $ concat $ Map.elems fixes)

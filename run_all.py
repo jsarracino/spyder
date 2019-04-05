@@ -13,10 +13,11 @@ from colorama import init, Fore, Back, Style
 
 # Globals
 if platform.system() in ['Linux', 'Darwin']:
-    SPYDER_CMD = ['/usr/bin/time', '-p', './Script.hs']                             # Command to call Spyder
-    SKETCH_CMD = ['/usr/bin/time', '-p', './sketch']
     TIMEOUT_CMD = 'gtimeout'                                     # Timeout command
-    TIMEOUT = '120'                                             # Timeout value (seconds)    
+    TIMEOUT = '10m'                                             # Timeout value (seconds)   
+    SPYDER_CMD = ['/usr/bin/time', '-p', TIMEOUT_CMD, TIMEOUT, './Script.hs']                             # Command to call Spyder
+    SKETCH_CMD = ['/usr/bin/time', '-p', TIMEOUT_CMD, TIMEOUT, './sketch']
+ 
 
 LOGFILE = 'results.log'                                         # Log file
 SPY_LOGFILE = 'spy-results.log'                                         # Log file
@@ -37,14 +38,14 @@ class Benchmark:
         self.components = components    # Description of components used (in the table)
         self.redo = redo
 
-	def str(self):
-		return self.name + ': ' + self.description + ' ' + str(self.components)
+    def str(self):
+        return self.name + ': ' + self.description + ' ' + str(self.components)
 
 class BenchmarkGroup:
-	def __init__(self, name, default_options, benchmarks):
-		self.name = name
-		self.default_options = default_options  # Command-line options to use for all benchmarks in this group when running in common context
-		self.benchmarks = benchmarks            # List of benchmarks in this group
+    def __init__(self, name, default_options, benchmarks):
+        self.name = name
+        self.default_options = default_options  # Command-line options to use for all benchmarks in this group when running in common context
+        self.benchmarks = benchmarks            # List of benchmarks in this group
 
 ALL_BENCHMARKS = [
     BenchmarkGroup("Numerical Programs", [], [
@@ -55,25 +56,25 @@ ALL_BENCHMARKS = [
         Benchmark('Arrs2D_Eq', 'equal arrays','Eq-2D')
         ]),
     BenchmarkGroup("Web Applications",  [], [
-        Benchmark('GoL1D_logic', '1D GoL', 'cells2colors'),
-        Benchmark('Budgeting','w-m-y', 'conversions'),
+        Benchmark('GoL1D', '1D GoL', 'cells2colors'),
+        Benchmark('Budgeting','overview', 'conversions'),
         Benchmark('Expenses','split costs', 'splitting'),
         # Benchmark('Spreadsheet ', 'overview', 'conversions, colors')
         ])
 ]
 
 class SynthesisResult:
-	def __init__(self, name, source_size, inv_size, spyder_holes, time, sktime):
-		self.name = name                        # Benchmark name
-		self.spyder_source_size = source_size   # Size of Spyder source code
-		self.spyder_invariant_size = inv_size   # Cumulative invariant size (in AST nodes)
-		# self.spyder_lines = spyder_lines        # Number of lines inserted
-		self.spyder_holes = spyder_holes        # Number of holes
-		self.spyder_time = time                 # Synthesis time (seconds)
-		self.sketch_time = sktime            # Sketch synthesis times (seconds)
+    def __init__(self, name, source_size, inv_size, spyder_holes, time, sktime):
+        self.name = name                        # Benchmark name
+        self.spyder_source_size = source_size   # Size of Spyder source code
+        self.spyder_invariant_size = inv_size   # Cumulative invariant size (in AST nodes)
+        # self.spyder_lines = spyder_lines        # Number of lines inserted
+        self.spyder_holes = spyder_holes        # Number of holes
+        self.spyder_time = time                 # Synthesis time (seconds)
+        self.sketch_time = sktime            # Sketch synthesis times (seconds)
 
-	def str(self):
-		return self.name + ', ' + '{0:0.2f}'.format(self.spyder_time) # + ', '  + self.code_size + ', ' + self.spec_size + ', ' + self.measure_count
+    def str(self):
+        return self.name + ', ' + '{0:0.2f}'.format(self.spyder_time) # + ', '  + self.code_size + ', ' + self.spec_size + ', ' + self.measure_count
 
 spy_cursor = 0
 def run_benchmark(name, opts, default_opts):
@@ -85,8 +86,9 @@ def run_benchmark(name, opts, default_opts):
       logfile.write(name + '\n')
       logfile.seek(0, os.SEEK_END)
       # Run Spyder on the benchmark:
-      start = time.time()
+      
       print("BENCH: running spyder on input file %s.spy" % name, file=spy_log, flush=True)
+      start = time.time()
       call(SPYDER_CMD + SPYDER_OPTS + ['/Users/john/spyder/test/bench/spy/benchs/' + name + '.spy'], stdout=spy_log, stderr=spy_log)
       end = time.time()
       os.chdir('/Users/john/sketch-1.7.5/sketch-frontend')
@@ -119,10 +121,17 @@ def run_benchmark(name, opts, default_opts):
 
           
 
-          spyder_time = float(sp_lastLines[-3].split(' ')[-1])
+        #   spyder_time = float(sp_lastLines[-3].split(' ')[-1])
+          spyder_time = list(map(lambda x: x.split(' ')[-1][:-1], re.findall("real\s*\d+\.\d+\s*", spy_contents)))[-1]
+          spyder_source_size = list(map(lambda x: x.split(' ')[-1][:-1], re.findall("source: size\s*\d+\s*", spy_contents)))[-1]
+          spyder_invariant_size = list(map(lambda x: x.split(' ')[-2][:-1], re.findall("inv: size\s*\d+\s*", spy_contents)))[-1]
 
-          spyder_source_size = spy_lines[0].split(' ')[-1]
-          spyder_invariant_size = spy_lines[1].split(' ')[-1]
+          spyder_time = float(spyder_time)
+          spyder_source_size = int(spyder_source_size)
+          spyder_invariant_size = int(spyder_invariant_size)
+
+        #   spyder_source_size = spy_lines[0].split(' ')[-1]
+        #   spyder_invariant_size = spy_lines[1].split(' ')[-1]
           spyder_holes = len(re.findall("holes: \d+.*$",spy_contents))
           spy_log.seek(0)
         #   sk_log.seek(0)
@@ -147,27 +156,27 @@ def run_benchmark(name, opts, default_opts):
       print()
       
 def format_time(t):
-	if t < 0:
-		return '-'
-	else:
-		return '{0:0.2f}'.format(t)
+    if t < 0:
+        return '-'
+    else:
+        return '{0:0.2f}'.format(t)
 
 # def write_csv():
-	# '''Generate CSV file from the results dictionary'''
-	# with open(CSV_FILE, 'w') as outfile:
-		# for group in groups:
-			# for b in group.benchmarks:
-				# outfile.write (b.name + ',')
-				# result = results [b.name]
-				# outfile.write (result.spec_size + ',')
-				# outfile.write (result.code_size + ',')
-				# outfile.write (format_time(result.time) + ',')
-				# outfile.write ('\n')
+    # '''Generate CSV file from the results dictionary'''
+    # with open(CSV_FILE, 'w') as outfile:
+        # for group in groups:
+            # for b in group.benchmarks:
+                # outfile.write (b.name + ',')
+                # result = results [b.name]
+                # outfile.write (result.spec_size + ',')
+                # outfile.write (result.code_size + ',')
+                # outfile.write (format_time(result.time) + ',')
+                # outfile.write ('\n')
 
 def fill_with_blanks():
   for group in groups:
-	  for b in group.benchmarks:
-		  results [b.name] = SynthesisResult(b.name, '-', '-', '-', '-', 0.0)
+      for b in group.benchmarks:
+          results [b.name] = SynthesisResult(b.name, '-', '-', '-', '-', 0.0)
 
 def write_latex():
     '''Generate Latex table from the results dictionary'''
@@ -210,11 +219,11 @@ def write_latex():
     print(['Total:', total_count])
     
 # def cmdline():
-	# import argparse
-	# a = argparse.ArgumentParser()
-	# a.add_argument('--medium', action='store_true')
-	# a.add_argument('--small', action='store_true')
-	# return a.parse_args()
+    # import argparse
+    # a = argparse.ArgumentParser()
+    # a.add_argument('--medium', action='store_true')
+    # a.add_argument('--small', action='store_true')
+    # return a.parse_args()
 
 if __name__ == '__main__':
     init()

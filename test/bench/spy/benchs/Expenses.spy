@@ -12,7 +12,7 @@ Component Shared {
 
   relation Mid(ls: int[], rs: int[], ms: int[]) {
     foreach (a, b, c) in (ls, rs, ms) {
-      2 * c = a + b
+      c = (a + b) / 2
     }
   }
 
@@ -26,18 +26,21 @@ Component Main {
   data sum: int[];
   data mid: int[];
 
-  using Shared(me, them, sum, mid);
+  using Shared(me, them, mid, sum);
 
-  procedure editMe() {
+  procedure addRow() {
     let i: int;
     let val: int;
-    for (x: int) with idx in (me) {
+    let val2: int;
+    for (x: int, t: int) with idx in (me, them) {
       if (idx == i) {
         x = val;
+        t = val2;
       }
     }
   }
 
+  /*
   procedure editThem() {
     let i: int;
     let val: int;
@@ -47,5 +50,6 @@ Component Main {
       }
     }
   }
+  */
 
 }

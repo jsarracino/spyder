@@ -10,6 +10,7 @@ import Language.Spyder.Util
 import qualified Data.Set as Set
 import Data.List
 
+
 -- assumes at least one inv
 scheduleInvs :: Set.Set String -> Set.Set String -> [RelExpr] -> [(Set.Set String, [RelExpr])]
 scheduleInvs srcs dsts invs = if Set.null dsts then [(srcs, invs)] else ret

@@ -16,7 +16,7 @@ Component OneDGoL {
 
 Component Main {
   // the model
-  data oldCells : int[]; // bool[]
+  //data oldCells : int[]; // bool[]
   data cells : int[]; // bool[]
   data running : int; // bool
 
@@ -49,13 +49,18 @@ Component Main {
   
   procedure golLogic(){
     let uBound: int; // don't actually know the range of the cells
-    let count : int = 0;
+    let count : int; // or the count
+    let oldCell: int; // also can't assume anything about oldcell
 
+
+  /*
     for (oc: int, nc: int) in (oldCells, cells) {
       oc = nc;
     }
+  */
 
-    for (cell: int, oldCell: int) with idx in (cells, oldCells) {
+    for (cell: int) with idx in (cells) {
+      /*
       if (idx == 0) {
 
         if (idx + 1 == uBound) { // no slack
@@ -91,6 +96,9 @@ Component Main {
         }
 
       }
+      */
+
+
 
       if (oldCell == 0) {
         if (count == 2 || count == 3) {

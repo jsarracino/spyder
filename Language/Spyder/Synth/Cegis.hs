@@ -112,13 +112,17 @@ generateFix 0 cands lhs prog scope = (finalProg, scope, newBlock)
 -- TODO: error in num-cond2.spy with depth=1 (i think)
 
 -- at depth n, allocate two variables for n-1 depths, and build binops/unops from the smaller vars
-generateFix n cands lhs prog scope = (finalProg, newScope, lBlock ++ rBlock ++ newBlock)
+generateFix n cands lhs prog scope = (finalProg, newScope, constBlk ++ lBlock ++ rBlock ++ newBlock)
   where
     (lvar, scope', prog') = allocCegisLocal prog scope
     (rvar, scope'', prog'') = allocCegisLocal prog' scope'
+    (constVar, scope''', prog''') = allocCegisLocal prog'' scope''
 
+    -- this grammar: expr ::= ?? * basic + expr | basic
+    (recurConst, scopeConst, constBlk) = generateFix 0 [] constVar prog''' scope'''
     (recurL, scope_, lBlock) = generateFix 0 cands lvar prog'' scope''
     (recurR, scopeR, rBlock) = generateFix (n-1) cands rvar recurL scope_
+    
     
     rhsEs = [lv, rv] ++ binops ++ unops
 
@@ -132,10 +136,12 @@ generateFix n cands lhs prog scope = (finalProg, newScope, lBlock ++ rBlock ++ n
       where 
         bounds = map (Pos.gen . AxiomDecl) (buildBounds 0 (length rhsEs) switchConst)
     
+    cv = Pos.gen $ Var constVar
     lv = Pos.gen $ Var lvar
     rv = Pos.gen $ Var rvar
-    binops = [Pos.gen $ BinaryExpression op lv rv | op <- [Plus, Minus, Times]]
-    unops = [Pos.gen $ UnaryExpression Neg rv]
+    -- binops = [Pos.gen $ BinaryExpression op lv rv | op <- [Plus, Minus, Times]]
+    binops = [Pos.gen $ BinaryExpression Plus (Pos.gen $ BinaryExpression Times cv lv) rv]
+    unops = [Pos.gen $ UnaryExpression Neg rv, Pos.gen $ BinaryExpression Div rv (Pos.gen $ Literal $ IntValue 2)]
    
     
 addConstBounds (Program decs) v = Program $ bounds ++ decs

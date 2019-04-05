@@ -1,0 +1,97 @@
+void expsum(int n, int[n] l, int[n] r, int[n] s) {
+	for(int i=0; i<n; ++i){
+		assert s[i] == l[i] + r[i];
+	}
+}
+
+void preexpsum(int n, int[n] l, int[n] r, int[n] s) {
+	for(int i=0; i<n; ++i){
+		assume s[i] == l[i] + r[i];
+	}
+}
+    
+void expmid(int n, int[n] l, int[n] r, int[n] m) {
+	for(int i=0; i<n; ++i){
+		assert 2 * m[i] == l[i] + r[i];
+	}
+}
+
+void preexpmid(int n, int[n] l, int[n] r, int[n] m) {
+	for(int i=0; i<n; ++i){
+		assume 2 * m[i] == l[i] + r[i];
+	}
+}
+
+int[n] editMe(int val, int idx, int n, ref int[n] me){
+	for(int i=0; i<n; ++i){
+		if(idx == i){
+			me[i] = val;
+        }
+    }
+    return me;
+}
+
+int[n] editThem(int val, int idx, int n, ref int[n] them){
+	for(int i=0; i<n; ++i){
+		if(idx == i){
+			them[i] = val;
+        }
+    }
+    return them;
+}
+
+generator int[n] update(int val, int idx, int n, ref int[n] y){
+	for(int i=0; i<n; ++i){
+		if(idx == i){
+			y[i] = expr(val,y[i],idx,1);
+        }
+    }
+    return y;
+}
+
+generator int expr(int x,int y, int z, int bnd) {
+	assert bnd > 0;
+	generator int mult(){
+		return {| x | y | z|} * {| x | y | z | ?? |};
+	}
+	if(??) { return mult(); }
+	else { return mult() + expr(x,y,z, bnd-1); }
+}
+
+int[n] buildGol(int n){
+	int[n] out;
+    for(int i = 0; i < n; ++i){
+        out[i] = 2;
+    }
+    return out;
+}
+
+int[n] sbuildGol(int n){
+	int[n] out;
+    for(int i = 0; i < n; ++i){
+        out[i] = 4;
+    }
+    return out;
+}
+
+harness void sketch (int n, int val, int idx) {
+	n = 50;
+    int[n] me = buildGol(n); 
+    int[n] them = buildGol(n); 
+    int[n] mid = buildGol(n); 
+    int[n] sum = sbuildGol(n); 
+	preexpmid(n,me,them,mid);
+	preexpsum(n,me,them,sum);
+    int[n] me1 = editMe(val,idx,n,me);
+	int[n] sum1 = update(val,idx,n,sum);
+	int[n] mid1 = update(val,idx,n,mid);
+	int[n] them1 = update(val,idx,n,them);
+	expsum(n,me1,them1,sum1);
+	expmid(n,me1,them1,mid1);
+	int[n] them2 = editThem(val,idx,n,them);
+	int[n] me2 = update(val,idx,n,me);
+	int[n] mid2 = update(val,idx,n,mid);
+	int[n] sum2 = update(val,idx,n,sum);
+	expsum(n,me2,them2,sum2);
+	expmid(n,me2,them2,mid2);
+}

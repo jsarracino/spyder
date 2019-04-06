@@ -1,0 +1,135 @@
+void days(int n, int[n] d, int[n] w){
+	for(int i=0; i<n; i++){
+		assert w[i] == 7 * d[i];
+	}
+}
+
+void colored(int pos, int neg, int n, int[n] vals, int[n] colors){
+	for(int i=0; i<n; ++i){
+		if(vals[i]>=0)
+			assert colors[i] == pos;
+		else if(vals[i]<0)
+			assert colors[i] == neg;
+	}
+}
+
+void altcolor(int evencolor, int oddcolor, int n, int[n] rows){
+	for(int i=0; i<n; ++i){
+		if(i%2==0) 
+			assert rows[i] == evencolor;
+		else if(i%2==1) 
+			assert rows[i] == oddcolor;
+	}
+}
+
+void either(int lcolor, int rcolor, int n, int[n] rows){
+	for(int i=0; i<n; ++i){
+		assert rows[i] == lcolor || rows[i] == rcolor;
+	}
+}
+
+generator int expr(int x, int y, int z, int a, int bnd) {
+	assert bnd > 0;
+	generator int mult(){
+		return ?? * {| x | y | z | a | ?? |} * {| x | y | z | a | ?? |};
+	}
+	if(??) { return mult(); }
+	else { return mult() + expr(x,y,z,a,bnd-1); }
+}
+
+generator int[n] update(int val, int idx, int n, int[n] x, int[n] y){
+	for(int i=0; i<n; ++i){
+		if(idx == i){
+			y[i] = expr(val,idx,x[i],y[i],1);
+        }
+    }
+    return y;
+}
+
+generator int[n] updatecola(int cola, int idx, int n, int[n] x, int[n] y){
+	for(int i=0; i<n; ++i){
+		if(y[i] < 0){
+			y[i] = expr(cola,idx,x[i],y[i],1);
+        }
+    }
+    return y;
+}
+
+generator int[n] arrexpr(int n, int r, int[n] p, ref int[n] q) {
+	for(int i=0; i<n; i++){
+		if(i%2 == 0){
+			q[i] = expr(r, p[i], q[i], i, 1);
+		} else if (i%2 == 1){
+			q[i] = expr(r, p[i], q[i], i, 1);
+		}
+	}
+	return q;
+}
+
+int[n] editDaily(int val, int idx, int n, int[n] days){
+	for(int i=0; i<n; ++i){
+		if(idx == i){
+			days[i] = val;
+		}
+	}
+	return days;
+}
+
+int[n] adjustcola(int cola, int idx, int n, int[n] days){
+	for(int i=0; i<n; ++i){
+		if(days[i] < 0){
+			days[i] = days[i] * cola;
+		}
+	}
+	return days;
+}
+
+int bkgroundcolor(int x, int evencolor, int oddcolor){
+	evencolor = x;
+	oddcolor = oddcolor;
+	return evencolor;
+}
+
+int[n] dbuildGol(int n){
+	int[n] out;
+    for(int i = 0; i < n; ++i){
+        if(i%2==0) {out[i] = -i;}
+        else {out[i] = i;}
+    }
+    return out;
+}
+
+int[n] wbuildGol(int n){
+	int[n] out;
+    for(int i = 0; i < n; ++i){
+        if(i%2==0) {out[i] = -7*i;}
+        else {out[i] = 7*i;}
+    }
+    return out;
+}
+
+int[n] rbuildGol(int n, int even, int odd){
+	int[n] out;
+    for(int i = 0; i < n; ++i){
+        if(i%2==0) {out[i] = even;}
+        else {out[i] = odd;}
+    }
+    return out;
+}
+
+harness void sketch (int pos, int neg, int n, int even, int odd, int val, int idx, int cola) {
+	n = 3;
+	int[n] week = wbuildGol(n);
+	int[n] day = dbuildGol(n);
+    days(n,day,week);
+	int[n] day1 = editDaily(val,idx,n,day);
+	int[n] week1 = update(val,idx,n,week,week);
+	days(n,day1,week1);
+    int[n] day2 = adjustcola(cola,idx,n,day);
+    int[n] week2 = updatecola(cola,idx,n,week,week);
+	days(n,day2,week2);
+	int[n] rows = rbuildGol(n,even,odd);
+	int even1 = bkgroundcolor(val,even,odd);
+	int[n] rows1 = arrexpr(n,val,rows,rows);
+	altcolor(even1,odd,n,rows1);
+}

@@ -1,5 +1,6 @@
-void incr_mid ( ref int out ) {
+int incr_mid ( int out ) {
 	out = out + 1;
+	return out;
 }
 
 generator int expr(int x, int y, int z, int bnd){
@@ -12,7 +13,7 @@ generator int expr(int x, int y, int z, int bnd){
 }
 
 void midPoint(int x, int y, int mid) {
-	assert x + y == 2 * mid;
+	assert (x + y)/2 == mid;
 }
  
 void update(int ox, int nx, int oy, int ny) {
@@ -22,10 +23,20 @@ void update(int ox, int nx, int oy, int ny) {
 
 harness void sketch (int x, int y, int mid) {
 	assume x + y == 2 * mid;
-	incr_mid (mid);
+	int mid1 = incr_mid(mid);
 	int x1 = expr(x,y,mid,1);
 	int y1 = expr(x,y,mid,1);
 	update(x, x1, y, y1);
-	midPoint(x1, y1, mid);
+	midPoint(x1, y1, mid1);
+	int x2 = incr_mid(x);
+	int mid2 = expr(x,y,mid,1);
+	int y2 = expr(x,y,mid,1);
+	update(y, y2, mid, mid2);
+	midPoint(x2, y2, mid2);
+	int y3 = incr_mid(y);
+	int mid3 = expr(x,y,mid,1);
+	int x3 = expr(x,y,mid,1);
+	update(x, x3, mid, mid3);
+	midPoint(x3, y3, mid3);
 }
 

@@ -8,11 +8,15 @@ void cells2colors(int n, int[n] p, int[n] q){
 	}
 }
 
-generator int[n] arrexpr(int n, int r, ref int[n] p, int[n] q) {
+generator int[n] arrexpr(int n, int r, int[n] p, ref int[n] q) {
 	for(int i=0; i<n; i++){
-		p[i] = expr(r, p[i], q[i], 1);
+		if(p[i] == 0){
+			q[i] = expr(r, p[i], q[i], 1);
+		} else if (p[i] == 1){
+			q[i] = expr(r, p[i], q[i], 1);
+		}
 	}
-	return p;
+	return q;
 }
 
 generator int expr(int x, int y, int z, int bnd) {
@@ -38,24 +42,34 @@ int[n] colorOnClick(int n, ref int[n] rendered, int[n] cells, int locIndex){
 	return rendered;
 }
 
-int toggleStart(int start, int stop, int run){
+generator void toggleStart(int start, int stop, int run){
 	if(start == 0){
-		start = 1;
+		int nstart = 1;
+		run = expr(nstart,stop,run,1);
+    	stop = expr(nstart,stop,run,1);
+    	goodConfig(nstart,stop,run);
     }
     else if(start == 1){
-		start = 0;
+		int nstart = 0;
+		run = expr(nstart,stop,run,1);
+    	stop = expr(nstart,stop,run,1);
+    	goodConfig(nstart,stop,run);
     }
-	return start;
 }
 
-int toggleStop(int start, int stop, int run){
+generator void toggleStop(int start, int stop, int run){
 	if(stop == 0){
-		stop = 1;
+		int nstop = 1;
+		start = expr(start,nstop,run,1);
+		run = expr(start,nstop,run,1);
+    goodConfig(start,nstop,run);
     }
     else if(stop == 1){
-		stop = 0;
+		int nstop = 0;
+		start = expr(start,nstop,run,1);
+		run = expr(start,nstop,run,1);
+    goodConfig(start,nstop,run);
     }
-	return stop;
 }
 
 int[n] golLogic(int uBound, int n, int[n] cells, int idx, int[n] rendered){
@@ -100,11 +114,11 @@ int[n] golLogic(int uBound, int n, int[n] cells, int idx, int[n] rendered){
 
     	if (oldCells[idx] == 0) {
         	if (count == 2 || count == 3) {
-				cells[idx] = 1;
+						cells[idx] = 1;
         		}
     	} else {
        		if (count != 2 && count != 4) {
-				cells[idx] = 0;
+						cells[idx] = 0;
         	}
     	}
   	}
@@ -126,18 +140,11 @@ harness void sketch (int start, int stop, int run, int n, int idx) {
 	int[n] cells = buildGol(n);
     cells2colors(n,cells,rendered);
 	int[n] nrendered = colorOnClick(n,rendered,cells,idx);
-	int[n] ncells = arrexpr(n, idx, cells, nrendered);
-    cells2colors(n,ncells,nrendered);
-	int start1 = toggleStart(start,stop,run);
-	int run1 = expr(start,stop,run,1);
-	int stop1 = expr(start,stop,run,1);
-    goodConfig(start1,stop1,run1);
-	int stop2 = toggleStop(start,stop,run);
-	int start2 = expr(start,stop,run,1);
-	int run2 = expr(start,stop,run,1);
-	goodConfig(start2,stop2,run2);
-	int[n] lcells = golLogic(n,n,cells,idx,rendered);
-	int[n] lrendered = arrexpr(n,idx,rendered,cells);
+	int[n] ncells = arrexpr(n, idx, nrendered, cells);
+    cells2colors(n,ncells,nrendered);   
+	toggleStart(start, stop, run);
+	toggleStop(start, stop, run);
+	int[n] lcells = golLogic(n,n,cells,1,rendered);
+	int[n] lrendered = arrexpr(n,idx,lcells,rendered);
 	cells2colors(n, lcells, lrendered);
-    
 }

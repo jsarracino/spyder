@@ -33,7 +33,7 @@ import System.IO.Unsafe
 
 
 toBoogie :: Bool -> Program -> BST.Program
-toBoogie plain prog@(comps, MainComp decls) = outProg 
+toBoogie plain prog@(comps, MainComp decls) = outProg'
   where
     
     (bprog, (invs, varMap, dims)) = translateProg prog
@@ -54,6 +54,9 @@ toBoogie plain prog@(comps, MainComp decls) = outProg
     linkHeader pd = BST.Program $ map Pos.gen $ boogHeader ++ [pd]
 
     outProg = unsafePerformIO $ foldM repProc (BST.Program $ map Pos.gen $ boogHeader ++ okProcs) brokenProcs
+
+    decs = case outProg of BST.Program x -> map Pos.node x
+    outProg' = BST.Program $ map Pos.gen $ filter takeProc decs
 
 
     repProc :: BST.Program -> BST.BareDecl -> IO BST.Program

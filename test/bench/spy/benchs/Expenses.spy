@@ -28,7 +28,7 @@ Component Main {
 
   using Shared(me, them, mid, sum);
 
-  procedure addRow() {
+  procedure addRowMeThem() {
     let i: int;
     let val: int;
     let val2: int;
@@ -40,16 +40,39 @@ Component Main {
     }
   }
 
-  /*
-  procedure editThem() {
+  procedure addRowMeSum() {
     let i: int;
     let val: int;
-    for (x: int) with idx in (them) {
+    let val2: int;
+    for (x: int, t: int) with idx in (me, sum) {
       if (idx == i) {
         x = val;
+        t = val2;
       }
     }
   }
-  */
+
+  procedure adjustMeEntry() {
+    let i: int;
+    let val: int;
+    for (x: int, t: int) with idx in (me, sum) {
+      if (idx == i) {
+        x = val;
+        t = sum;
+      }
+    }
+  }
+
+  procedure adjustThemEntry() {
+    let i: int;
+    let val: int;
+    for (x: int, t: int) with idx in (them, sum) {
+      if (idx == i) {
+        x = val;
+        t = sum;
+      }
+    }
+  }
+
 
 }

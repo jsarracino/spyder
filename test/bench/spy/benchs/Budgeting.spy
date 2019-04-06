@@ -81,12 +81,12 @@ Component Main {
   
   
   
-  procedure editWeekly() {
+  procedure editDaily() {
     let i: int;
     let val: int;
-    for (w: int) with idx in (weeks) {
+    for (d: int) with idx in (days) {
       if (idx == i) {
-        w = val;
+        d = val;
       }
     }
 

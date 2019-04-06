@@ -27,4 +27,14 @@ Component Main {
       l = l + 1;
     }
   }
+  procedure incrY() {
+    for (l:int) in (y) {
+      l = l + 1;
+    }
+  }
+  procedure incrZ() {
+    for (l:int) in (z) {
+      l = l + 1;
+    }
+  }
 }

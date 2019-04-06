@@ -14,7 +14,7 @@ from colorama import init, Fore, Back, Style
 # Globals
 if platform.system() in ['Linux', 'Darwin']:
     TIMEOUT_CMD = 'gtimeout'                                     # Timeout command
-    TIMEOUT = '10m'                                             # Timeout value (seconds)   
+    TIMEOUT = '5m'                                             # Timeout value (seconds)   
     SPYDER_CMD = ['/usr/bin/time', '-p', TIMEOUT_CMD, TIMEOUT, './Script.hs']                             # Command to call Spyder
     SKETCH_CMD = ['/usr/bin/time', '-p', TIMEOUT_CMD, TIMEOUT, './sketch']
  
@@ -49,17 +49,16 @@ class BenchmarkGroup:
 
 ALL_BENCHMARKS = [
     BenchmarkGroup("Numerical Programs", [], [
-        # Benchmark('Midpoint', 'midpoint','Mid'),
-        # Benchmark('Midpoint_Neq', 'distinct mid','Mid-NE'),
-        # Benchmark('Arrs1D_Eq', 'equal arrays','Eq-1D'),
-        # Benchmark('Arrs1D_Mid', 'midpoint arrays','Mid-Arr'),
+        Benchmark('Midpoint', 'midpoint','Mid'),
+        Benchmark('Midpoint_Neq', 'distinct mid','Mid-NE'),
+        Benchmark('Arrs1D_Eq', 'equal arrays','Eq-1D'),
+        Benchmark('Arrs1D_Mid', 'midpoint arrays','Mid-Arr'),
         Benchmark('Arrs2D_Eq', 'equal arrays','Eq-2D')
         ]),
     BenchmarkGroup("Web Applications",  [], [
-        # Benchmark('GoL1D', '1D GoL', 'cells2colors'),
-        # Benchmark('Budgeting','overview', 'conversions'),
-        # Benchmark('Expenses','split costs', 'splitting'),
-        # Benchmark('Spreadsheet ', 'overview', 'conversions, colors')
+        Benchmark('GoL1D', '1D GoL', 'cells2colors'),
+        Benchmark('Budgeting','overview', 'conversions'),
+        Benchmark('Expenses','split costs', 'splitting')
         ])
 ]
 
@@ -150,8 +149,11 @@ def run_benchmark(name, opts, default_opts):
         
 
         #   print(sketch_time)
-          (ll, lr) = diffLines("plain.bpl", "out.bpl")
-          overhead = (lr - ll)/ll
+          call(SPYDER_CMD + SPYDER_OPTS + ['/Users/john/spyder/test/bench/spy/benchs/' + name + '_repair.spy'], stdout=spy_log, stderr=spy_log)
+          spy_log.seek(0)
+          spy_contents = spy_log.read()
+          overhead = list(map(lambda x: x.split(' ')[-1][:-1], re.findall("source: size\s*\d+\s*", spy_contents)))[-1]
+          overhead = int(overhead)
           results[name] = SynthesisResult(name, spyder_source_size, spyder_invariant_size, spyder_holes, spyder_time, sketch_time, overhead)
 
           print(*[Back.BLACK + Fore.GREEN + Style.BRIGHT + ' OK ' + Style.RESET_ALL])
@@ -183,8 +185,8 @@ def fill_with_blanks():
 
 
 def diffLines(l, r):
-    wcL = int(os.popen("%s %s" % (WC_CMD, l)).read().strip().split(' ')[0])
-    wcR = int(os.popen("%s %s" % (WC_CMD, r)).read().strip().split(' ')[0])
+    wcL = int(os.popen("./clean.sh %s | %s" % (l, WC_CMD)).read().strip().split(' ')[0])
+    wcR = int(os.popen("./clean.sh %s | %s" % (l, WC_CMD)).read().strip().split(' ')[0])
 
     return (wcL, wcR)
 
@@ -211,12 +213,13 @@ def write_latex():
                 # print(result.spyder_source_size)
                 # print(result.spyder_invariant_size)
                 # print(result.spyder_holes)  
-                # print(result.spyder_time)        
+                # print(result.spyder_time)  
+                # print(result.overhead - result.spyder_source_size)      
                 row = \
                     ' & ' + b.description +\
                     ' & ' + str(result.spyder_source_size) +\
                     ' & ' + str(result.spyder_invariant_size) + \
-                    ' & ' + str(round(result.overhead*100,2)) + "\%" + \
+                    ' & ' + str(result.overhead - result.spyder_source_size) + \
                     ' & ' + format_time(result.spyder_time) + \
                     ' & ' + format_time(result.sketch_time[0]) + \
                     ' & ' + format_time(result.sketch_time[1]) + \

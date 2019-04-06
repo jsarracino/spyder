@@ -4,7 +4,7 @@ Component Midpoint {
   data mid: int;
 
   relation midPoint(x: int, y: int, m: int) {
-    x + y = 2 * m
+    (x + y) / 2 = m
   }
   
   always midPoint(lhs, rhs, mid);
@@ -35,6 +35,12 @@ Component Main {
 
   procedure incM() {
     m = m + 1;
+  }
+  procedure incX() {
+    x = x + 1;
+  }
+  procedure incY() {
+    y = y + 1;
   }
 
   

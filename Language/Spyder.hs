@@ -73,7 +73,7 @@ runOpts (SpyOpts inf outf) = do {
   invsize <- liftM invSize spy;
   putStrLn $ "inv: size " ++ show invsize;
   file2PlainBoogie inf "plain.bpl";
-  file2Boogiefile inf outf;
+  -- file2Boogiefile inf outf;
   return ()
 }
   where

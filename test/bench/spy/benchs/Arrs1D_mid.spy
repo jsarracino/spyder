@@ -40,6 +40,18 @@ Component Main {
   using MidArrs(x, y, z);
 
   procedure incrX() {
+    for (l:int) in (x) {
+      l = l + 1;
+    }
+  }
+
+  procedure incrY() {
+    for (l:int) in (y) {
+      l = l + 1;
+    }
+  }
+
+  procedure incrZ() {
     for (l:int) in (z) {
       l = l + 1;
     }

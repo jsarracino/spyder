@@ -25,6 +25,12 @@ Component Main {
   procedure incM() {
     m = m + 1;
   }
+  procedure incX() {
+    x = x + 1;
+  }
+  procedure incY() {
+    y = y + 1;
+  }
 
   
 

@@ -14,12 +14,13 @@ Component Midpoint {
 Component NotEq {
   data l: int;
   data r: int;
+  data u: int;
 
-  relation notEq(x: int, y: int) {
-    x != y
+  relation notEq(x: int, y: int, m: int) {
+    x != y && x != m && y != m
   }
 
-  always notEq(l, r);
+  always notEq(l, r, u);
 }
 
 
@@ -30,8 +31,15 @@ Component Main {
   data m: int;
 
   using Midpoint(x, y, m);
-  using NotEq(x, y);
+  using NotEq(x, y, m);
   
+  procedure incX() {
+    x = x + 1;
+  }
+
+  procedure incY() {
+    y = y + 1;
+  }
 
   procedure incM() {
     m = m + 1;

@@ -1,0 +1,30 @@
+Component Main {
+  data weeks: int[];
+  data days: int[];
+  data totals: int[];
+
+  data fontColorsDays: int[];
+  data fontColorsTotals: int[];
+
+  data positiveColor: int;
+  data negativeColor: int;
+
+
+  procedure adjustCOLA() {
+    let cola: int = 2;
+    for (d: int, w: int, t: int, ct: int) with i in (days, weeks, totals, fontColorsTotals) {
+      if (d > 0) {
+        d = d * cola;
+        w = w * cola;
+      }
+      t = t + 0 + d;
+      if (t < 0) {
+        ct = negativeColor;
+      } else {
+        ct = positiveColor;
+      }
+    }
+  }
+
+}
+

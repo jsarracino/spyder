@@ -12,6 +12,7 @@ module Language.Spyder.Translate.Related (
   , allocFreshSpy
   , relatedFromInvs
   , varRelated
+  , genDims
 ) where
 
 import Language.Spyder.AST
@@ -25,6 +26,7 @@ import qualified Data.Map.Strict as Map
 
 import Language.Spyder.Util
 
+import Language.Spyder.Translate.Expr
 
 import Data.Maybe
 import Data.List
@@ -84,6 +86,11 @@ addDim env (v, ty) = Map.insert v (dim ty) env
 
 addDims :: DimEnv -> [Imp.VDecl] -> DimEnv
 addDims = foldl addDim
+
+genDims :: DimEnv -> [BST.IdTypeWhere]
+genDims env = map worker $ Map.toList env
+  where
+    worker (v, i) = translateITW (v, buildTy i)
 
 
 addITW :: DimEnv -> BST.IdTypeWhere -> DimEnv

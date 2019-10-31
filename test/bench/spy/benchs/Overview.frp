@@ -1,0 +1,47 @@
+Component DateConv {
+  data ds: int[];
+  data ws: int[];
+  data ts: int[];
+  data colors: int[];
+  data pos: int;
+  data neg: int;
+  data rowColors: int;
+  data tColors: int;
+
+
+  relation solveDays(days: int[]) {
+    foreach (d, w, t, c, rc, tc) in (days, ws, ts, colors, rowColors, tColors) {
+      w = 7 * d && t = prev(t,0) + d && (d >= 0 ==> rc = pos) &&(d <  0 ==> rc = neg) && ((prev(t,0) + d) >= 0 ==> tc = pos) &&( (prev(t,0) + d) <  0 ==> tc = neg)
+    }
+  }
+
+  relation solveWeeks(weeks: int[]) {
+    foreach (d, w, t, c, rc, tc) in (ds, weeks, ts, colors, rowColors, tColors) {
+      d = w/7 && t = prev(t,0) + w/7 && (w/7 >= 0 ==> rc = pos) &&(w/7 <  0 ==> rc = neg) && ((prev(t,0) + w/7) >= 0 ==> tc = pos) &&( (prev(t, 0) + w/7) <  0 ==> tc = neg)
+    }
+  }
+}
+
+Component Main {
+  data weeks: int[];
+  data days: int[];
+  data totals: int[];
+
+  data fontColorsDays: int[];
+  data fontColorsTotals: int[];
+
+  data positiveColor: int;
+  data negativeColor: int;
+
+
+  procedure adjustCOLA() {
+    let cola: int = 2;
+    for (d: int) in (days) {
+      if (d > 0) {
+        d = d * cola;
+      }
+    }
+  }
+
+}
+

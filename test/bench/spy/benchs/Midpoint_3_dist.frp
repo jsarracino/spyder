@@ -1,0 +1,41 @@
+Component Midpoint {
+  data lhs : int;
+  data rhs: int;
+  data mid: int;
+
+  relation solveX(x: int) {
+    y = y + (2 * m - y) - x && m = m + (2 * m - y) - x
+  }
+  relation solveY(y: int) {
+    x = x + (2 * m - x) - y && m = m + (2 * m - x) - y
+  }
+  relation solveM(m: int) {
+    x = x + ((x + y)/2 - 2 * m) - m && y = y + ((x + y)/2 - 2 * m) - m
+  }
+  
+}
+
+
+Component Main {
+  
+  data x: int;
+  data y: int;
+  data m: int;
+
+  using Midpoint(x, y, m);
+  using NotEq(x, y);
+  
+  procedure incX() {
+    x = x + 1;
+  }
+
+  procedure incY() {
+    y = y + 1;
+  }
+
+  procedure incM() {
+    m = m + 1;
+  }
+
+  
+}

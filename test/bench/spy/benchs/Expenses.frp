@@ -1,0 +1,37 @@
+Component Shared {
+  data l: int;
+  data r: int;
+  data m: int;
+
+
+  relation solveL(l: int) {
+    m = (l + r) / 2
+  }
+
+  relation solveR(r: int) {
+    m = (l + r) / 2
+  }
+  
+}
+
+Component Main {
+  data me: int;
+  data them: int;
+  data mid: int;
+
+  using Shared(me, them, mid);
+
+  procedure addRowMeThem() {
+    let val: int;
+    let val2: int;
+    x = val;
+    them = val2;
+  }
+
+  procedure addRowMe() {
+    let val: int;
+    x = val;
+  }
+
+
+}

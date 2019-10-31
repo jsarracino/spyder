@@ -6,6 +6,7 @@ module Language.Spyder (
 ) where
 
 import qualified Language.Spyder.AST.Imp as IST
+import qualified Language.Spyder.AST as SST
 import Language.Boogie.AST as BST
 import qualified Language.Spyder.Translate as Translate
 import qualified Language.Spyder.Parser as Parser
@@ -37,6 +38,9 @@ file2Boogiefile inp outp = do {
   return boog
 }
 
+file2Spy :: FilePath -> IO SST.Program
+file2Spy = Parser.fromFile
+
 file2PlainBoogie :: FilePath -> FilePath -> IO BST.Program
 file2PlainBoogie inp outp = do {
   boog <- file2Boogie True inp;
@@ -44,21 +48,29 @@ file2PlainBoogie inp outp = do {
   return boog
 }
 
-maybeReader :: (String -> Maybe a) -> ReadM a
-maybeReader f = eitherReader $ \arg ->
-  maybe (Left $ "cannot parse value `" ++ arg ++ "'") pure . f $ arg
+-- maybeReader :: (String -> Maybe a) -> ReadM a
+-- maybeReader f = eitherReader $ \arg ->
+--   maybe (Left $ "cannot parse value `" ++ arg ++ "'") pure . f $ arg
 
 data BenchMode = Boog | Spy | Invs
   deriving (Eq, Show, Ord)
 
-data SpyOptions = SpyOpts { 
-        inFile       :: FilePath   -- path to input file
-      , outFile      :: FilePath   -- path to output file
+data SpyOptions = 
+    Compile { 
+      inFile       :: FilePath   -- path to input file
+    , outFile      :: FilePath   -- path to output file
     } 
-  | Benches {
+  | BenchSize {
       ty              :: BenchMode
     , inp             :: FilePath
-  }
+    }
+  | BenchDiff {
+      inpF             :: FilePath
+    , outF             :: FilePath
+    } 
+  | Parse {
+      fname :: FilePath
+    }
   deriving (Eq, Show, Ord)
 
   -- spyder_source_size = re.match("\(source: size (\d+)\).*$",spy_contents).group(1)
@@ -66,36 +78,41 @@ data SpyOptions = SpyOpts {
   -- spyder_invariant_size = re.match("\(lines: (\d+)\).*$",spy_contents).group(1)
   -- spyder_holes = len(re.findall("\(holes: (\d+)\).*$",spy_contents))
 runOpts :: SpyOptions -> IO ()
-runOpts (SpyOpts inf outf) = do {
+runOpts (Compile inf outf) = do {
   -- putStrLn $ "source: size " ++ show $ boogSize boog;
-  spysize <- liftM spySize spy;
-  putStrLn $ "source: size " ++ show spysize;
-  invsize <- liftM invSize spy;
-  putStrLn $ "inv: size " ++ show invsize;
-  file2PlainBoogie inf "plain.bpl";
-  -- file2Boogiefile inf outf;
+  -- implsize <- liftM implSize spy;
+  -- putStrLn $ "impl: size " ++ show implsize;
+  -- specsize <- liftM specSize spy;
+  -- putStrLn $ "spec: size " ++ show specsize;
+  -- file2PlainBoogie inf "plain.bpl";
+  file2Boogiefile inf outf;
   return ()
 }
   where
     spy = Parser.fromFile inf
-runOpts (Benches mode inf) = do {
-    i <- worker mode;
-    putStrLn $ "result : " ++ show i
+runOpts (BenchSize _ inf) = do {
+    implsize <- liftM implSize spy;
+    putStrLn $ "impl: size " ++ show implsize;
+    specsize <- liftM specSize spy;
+    putStrLn $ "spec: size " ++ show specsize;
   }
   where
     spy = Parser.fromFile inf
 
-    worker :: BenchMode -> IO Int
-    worker Spy    = liftM spySize spy
-    worker Invs  = liftM invSize spy
-
+runOpts (Parse inf) = putStrLn =<< Parser.tryParsing <$> readFile inf 
+runOpts (BenchDiff inp outp) = do {
+  inf <- Parser.fromFile inp;
+  writeFile (outp ++ "-spec") $ show $ specTree inf;
+  writeFile (outp ++ "-impl") $ show $ implTree inf;
+  writeFile outp $ show $ treeify inf;
+}
 
 parseOpts :: Parser SpyOptions
-parseOpts = normal <|> benches
+parseOpts = normal <|> (df *> diff) <|> sizebench <|> parse 
   where
-    benches :: Parser SpyOptions
-    benches = Benches <$> bmode <*> inp
-    normal = SpyOpts <$> inp <*> outp
+    sizebench :: Parser SpyOptions
+    sizebench = BenchSize <$> bmode <*> inp
+    normal = Compile <$> inp <*> outp
     inp = strOption ( 
             long "input"
         <>  short 'i'
@@ -110,6 +127,18 @@ parseOpts = normal <|> benches
         <> value "out.bpl"
         <> help "Output file location" 
       )
+
+    parse :: Parser SpyOptions
+    parse = Parse <$> fname 
+    fname = strOption (
+            long "parse input"
+        <>  short 'p'
+        <>  metavar "INPUT"
+        <>  help "Input file location"
+      )
+    diff :: Parser SpyOptions
+    diff = BenchDiff <$> inp <*> outp
+    df = switch (long "diff" <> short 'd' <> help "Diff switch")
 
       
     bmode :: Parser BenchMode

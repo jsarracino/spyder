@@ -1,0 +1,62 @@
+void midpoint_arrs(int n, int[n] l, int[n] r, int[n] m){
+	for(int i=0; i<n; ++i){
+		assert l[i] + r[i] == m[i] * 2 && l[i] !=  r[i];
+	}
+}
+
+int[n] incr_arr(int n, ref int[n] a) {
+	for(int i=0; i<n; i++){
+		a[i] = a[i] + 1;
+	}
+	return a;
+}
+
+generator int[n] update(int n, ref int[n] x, ref int[n] y, ref int[n] m, int bnd) {
+	for(int i=0; i<n; i++){
+		y[i] = expr(x[i], y[i], m[i], i, bnd);
+    //y[i] = y[i] + 1;
+	}
+  for(int i=0; i<n; i++){
+		x[i] = expr(x[i], y[i], m[i], i, bnd);
+    //x[i] = x[i] + 1;
+	}
+	return y;
+}
+
+generator int expr(int x, int y, int m, int i, int bnd) {
+	assert bnd > 0;
+	generator int mult(){
+		return {| x | y | m | i | ?? |} * ??;
+	}
+	if(??) { return mult(); }
+	else { return mult() + expr(x, y, m, i, bnd-1); }
+}
+
+int[n] build(int n){
+	int[n] out;
+	for(int i = 0; i < n; ++i){
+    out[i] = i;
+  }
+  return out;
+}
+
+harness void sketch () {
+  int n = 3;
+	int[n] x = build(n);
+  int[n] y;
+  int[n] m;
+  for (int i = 0; i < n; ++i) {
+    if (i%3 == 0) {
+      m[i] = i + 13;
+    } else {
+      m[i] = i + 7;
+    }
+    y[i] = 2 * m[i] - x[i];
+  }
+	//int[n] x1 = incr_x(n,x,y);
+	//int[n] y1 = incr_y(n,y,1);
+  incr_arr(n,m);
+  update(n, x, y, m, 3);
+
+  midpoint_arrs(n, x, y, m);
+}

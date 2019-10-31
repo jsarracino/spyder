@@ -1,6 +1,3 @@
-void goodConfig(int start, int stop, int run){
-	assert ((0 <= run && run <= 1) && (0 <= start && start <= 1) && (0 <= stop && stop <= 1) && start != stop && run == start);
-}
 
 void cells2colors(int n, int[n] p, int[n] q){
 	for(int i=0; i<n; ++i){
@@ -40,36 +37,6 @@ int[n] colorOnClick(int n, ref int[n] rendered, int[n] cells, int locIndex){
 		}
 	}
 	return rendered;
-}
-
-generator void toggleStart(int start, int stop, int run){
-	if(start == 0){
-		int nstart = 1;
-		run = expr(nstart,stop,run,1);
-    	stop = expr(nstart,stop,run,1);
-    	goodConfig(nstart,stop,run);
-    }
-    else if(start == 1){
-		int nstart = 0;
-		run = expr(nstart,stop,run,1);
-    	stop = expr(nstart,stop,run,1);
-    	goodConfig(nstart,stop,run);
-    }
-}
-
-generator void toggleStop(int start, int stop, int run){
-	if(stop == 0){
-		int nstop = 1;
-		start = expr(start,nstop,run,1);
-		run = expr(start,nstop,run,1);
-    goodConfig(start,nstop,run);
-    }
-    else if(stop == 1){
-		int nstop = 0;
-		start = expr(start,nstop,run,1);
-		run = expr(start,nstop,run,1);
-    goodConfig(start,nstop,run);
-    }
 }
 
 int[n] golLogic(int uBound, int n, int[n] cells, int idx, int[n] rendered){
@@ -138,12 +105,10 @@ harness void sketch (int start, int stop, int run, int n, int idx) {
 	n = 10;
 	int[n] rendered = buildGol(n);
 	int[n] cells = buildGol(n);
-    cells2colors(n,cells,rendered);
+  cells2colors(n,cells,rendered);
 	int[n] nrendered = colorOnClick(n,rendered,cells,idx);
 	int[n] ncells = arrexpr(n, idx, nrendered, cells);
-    cells2colors(n,ncells,nrendered);   
-	toggleStart(start, stop, run);
-	toggleStop(start, stop, run);
+  cells2colors(n,ncells,nrendered);  
 	int[n] lcells = golLogic(n,n,cells,1,rendered);
 	int[n] lrendered = arrexpr(n,idx,lcells,rendered);
 	cells2colors(n, lcells, lrendered);

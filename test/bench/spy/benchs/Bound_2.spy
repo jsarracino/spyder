@@ -1,0 +1,31 @@
+Component Bound {
+  data x: int;
+  data y: int;
+
+  relation bound(x: int, y: int) {
+    x < y
+  }
+  
+  always bound(x, y);
+  
+}
+
+
+Component Main {
+  
+  data x: int;
+  data y: int;
+
+  using Bound(x, y);
+
+  procedure incX() {
+    x = x + 1;
+  }
+  
+
+  procedure decY() {
+    y = y - 1;
+  }
+
+  
+}

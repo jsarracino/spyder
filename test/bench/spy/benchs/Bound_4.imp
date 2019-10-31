@@ -1,0 +1,44 @@
+Component Main {
+  
+  data x: int;
+  data y: int;
+  data z: int;
+  data u: int;
+
+  procedure incX() {
+    x = x + 1;
+    y = y + 1;
+    z = z + 1;
+    u = u + 1;
+  }
+
+  procedure decY() {
+    y = y - 1;
+    x = x - 1;
+  }
+
+  procedure incY() {
+    y = y + 1;
+    z = z + 1;
+    u = u + 1;
+  }
+
+  procedure decZ() {
+    z = z - 1;
+    y = y - 1;
+    x = x - 1;
+  }
+
+  procedure incZ() {
+    z = z + 1;
+    u = u + 1;
+  }
+  procedure decU() {
+    u = u - 1;
+    z = z - 1;
+    y = y - 1;
+    x = x - 1;
+  }
+
+  
+}

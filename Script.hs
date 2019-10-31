@@ -1,6 +1,6 @@
 #!/usr/bin/env stack
 {- stack
-  --resolver lts-2.0
+  --resolver lts-12.14
   runghc
 -}
 

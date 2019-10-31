@@ -26,6 +26,9 @@ translateBop = \case
   Imp.Or -> BST.Or
   Imp.Eq -> BST.Eq
   Imp.Neq -> BST.Neq
+  Imp.Mod -> BST.Mod
+  x -> error $ "unknown binop " ++ show x
+  -- Imp.Impl -> BST.Impl
 
 translateUop :: Imp.Uop -> BST.UnOp
 translateUop = \case

@@ -1,0 +1,79 @@
+Component Bound {
+  data xs: int[];
+  data ys: int[];
+  data zs: int[];
+  data us: int[];
+
+  relation updateX(xs: int[]) {
+    foreach (x, y, z, u) in (xs, ys, zs, us) {
+      y = x + 1 && z = x + 2 && u = x + 3
+    }
+  }
+  relation updateY(y: int) {
+    foreach (x, y, z, u) in (xs, ys, zs, us) {
+      x = y - 1 && z = y + 1 && u = y + 2
+    }
+  }
+  relation updateZ(z: int) {
+    foreach (x, y, z, u) in (xs, ys, zs, us) {
+      x = z - 2 && y = z - 1 && u = z + 1
+    }
+  }
+  relation updateU(u: int) {
+    foreach (x, y, z, u) in (xs, ys, zs, us) {
+      x = u - 3 && y = u - 2 && z = u - 1
+    }
+  }
+  
+}
+
+
+Component Main {
+  
+  data xs: int;
+  data ys: int;
+  data zs: int;
+  data us: int;
+
+  using Bound(xs, ys);
+  using Bound2(ys,zs);
+  using Bound3(zs,us);
+  
+
+  procedure incX() {
+    for (x: int) in (xs) {
+      x = x + 1;
+    }
+  }
+
+  procedure decY() {
+    for (y: int) in (ys) {
+      y = y - 1;
+    }
+  }
+
+  procedure incY() {
+    for (y: int) in (ys) {
+      y = y + 1;
+    }
+  }
+
+  procedure decZ() {
+    for (z: int) in (zs) {
+      z = z - 1;
+    }
+  }
+
+  procedure incZ() {
+    for (z: int) in (zs) {
+      z = z + 1;
+    }
+  }
+  procedure decU() {
+    for (u: int) in (us) {
+      u = u - 1;
+    }
+  }
+
+  
+}

@@ -1,0 +1,35 @@
+void incr ( ref int out ) {
+	out = out + 1;
+}
+
+void decr (ref int out) {
+	out = out - 1;
+}
+
+generator int expr(int x, int y, int bnd){
+	assert bnd > 0;
+	generator int sum(){
+		return {| x | y | z|} + {| x | y | z | ?? |};
+	}
+	if(??) { return sum(); }
+	else { return sum() * expr(x,y,z,bnd-1); }
+}
+
+boolean bound(int x, int y) {
+	return x < y;
+}
+
+harness void sketch (int x, int y) {
+	assume bound(x, y);
+
+  incr(x);
+  y = expr(x, y, 1);
+  
+  assert bound(x, y);
+
+  decr(y);
+  x = expr(x, y, 1);
+
+  assert bound(x, y);
+
+}

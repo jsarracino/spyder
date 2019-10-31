@@ -1,5 +1,6 @@
 {-# LANGUAGE MonadComprehensions #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleContexts #-}
 module Language.Spyder.Synth.Enum (
   RhsExpr(..)
   -- , enumExprs

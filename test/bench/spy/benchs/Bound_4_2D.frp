@@ -1,0 +1,129 @@
+Component Bound {
+  data xss: int[][];
+  data yss: int[][];
+  data zss: int[][];
+  data uss: int[][];
+
+  relation updateX(xss: int[][]) {
+    foreach (xs, ys, zs, us) in (xss, yss, zss, uss) {
+      foreach (x, y, z, u) in (xs, ys, zs, us) {
+        y = x + 1 && z = x + 2 && u = x + 3
+      }
+    }
+  }
+  relation updateY(y: int) {
+    foreach (xs, ys, zs, us) in (xss, yss, zss, uss) {
+      foreach (x, y, z, u) in (xs, ys, zs, us) {
+        x = y - 1 && z = y + 1 && u = y + 2
+      }
+    }
+  }
+  relation updateZ(z: int) {
+    foreach (xs, ys, zs, us) in (xss, yss, zss, uss) {
+      foreach (x, y, z, u) in (xs, ys, zs, us) {
+        x = z - 2 && y = z - 1 && u = z + 1
+      }
+    }
+  }
+  relation updateU(u: int) {
+    foreach (x, y, z, u) in (xs, ys, zs, us) {
+      x = u - 3 && y = u - 2 && z = u - 1
+    }
+  }
+  
+}
+
+Component Bound2 {
+  data xss: int[][];
+  data yss: int[][];
+
+  relation bound(xss: int[], yss: int[]) {
+    foreach (xs, ys) in (xss, yss) {
+      foreach (x, y) in (xs, ys) {
+        x < y
+      }
+    }
+  }
+  
+  always bound(xss, yss);
+  
+}
+
+Component Bound3 {
+  data xss: int[][];
+  data yss: int[][];
+
+  relation bound(xss: int[], yss: int[]) {
+    foreach (xs, ys) in (xss, yss) {
+      foreach (x, y) in (xs, ys) {
+        x < y
+      }
+    }
+  }
+  
+  always bound(xss, yss);
+  
+}
+
+
+Component Main {
+  
+  data xss: int;
+  data yss: int;
+  data zss: int;
+  data uss: int;
+
+  using Bound(xss, yss);
+  using Bound2(yss,zss);
+  using Bound3(zss,uss);
+  
+
+  procedure incX() {
+    for (xs: int[]) in (xss) {
+      for (x: int) in (xs) {
+        x = x + 1;
+      }
+    }
+  }
+
+  procedure decY() {
+    for (ys: int) in (yss) {
+      for (y: int) in (ys) {
+        y = y - 1;
+      }
+    }
+  }
+
+  procedure incY() {
+    for (ys: int) in (yss) {
+      for (y: int) in (ys) {
+        y = y + 1;
+      }
+    }
+  }
+
+  procedure decZ() {
+    for (zs: int) in (zss) {
+      for (z: int) in (zs) {
+        z = z - 1;
+      }
+    }
+  }
+
+  procedure incZ() {
+    for (zs: int) in (zss) {
+      for (z: int) in (zs) {
+        z = z + 1;
+      }
+    }
+  }
+  procedure decU() {
+    for (us: int) in (uss) {
+      for (u: int) in (us) {
+        u = u - 1;
+      }
+    }
+  }
+
+  
+}

@@ -1,0 +1,110 @@
+Component Bound {
+  data xss: int[][];
+  data yss: int[][];
+
+  relation bound(xss: int[], yss: int[]) {
+    foreach (xs, ys) in (xss, yss) {
+      foreach (x, y) in (xs, ys) {
+        x < y
+      }
+    }
+  }
+  
+  always bound(xss, yss);
+  
+}
+
+Component Bound2 {
+  data xss: int[][];
+  data yss: int[][];
+
+  relation bound(xss: int[], yss: int[]) {
+    foreach (xs, ys) in (xss, yss) {
+      foreach (x, y) in (xs, ys) {
+        x < y
+      }
+    }
+  }
+  
+  always bound(xss, yss);
+  
+}
+
+Component Bound3 {
+  data xss: int[][];
+  data yss: int[][];
+
+  relation bound(xss: int[], yss: int[]) {
+    foreach (xs, ys) in (xss, yss) {
+      foreach (x, y) in (xs, ys) {
+        x < y
+      }
+    }
+  }
+  
+  always bound(xss, yss);
+  
+}
+
+
+Component Main {
+  
+  data xss: int;
+  data yss: int;
+  data zss: int;
+  data uss: int;
+
+  using Bound(xss, yss);
+  using Bound2(yss,zss);
+  using Bound3(zss,uss);
+  
+
+  procedure incX() {
+    for (xs: int[]) in (xss) {
+      for (x: int) in (xs) {
+        x = x + 1;
+      }
+    }
+  }
+
+  procedure decY() {
+    for (ys: int) in (yss) {
+      for (y: int) in (ys) {
+        y = y - 1;
+      }
+    }
+  }
+
+  procedure incY() {
+    for (ys: int) in (yss) {
+      for (y: int) in (ys) {
+        y = y + 1;
+      }
+    }
+  }
+
+  procedure decZ() {
+    for (zs: int) in (zss) {
+      for (z: int) in (zs) {
+        z = z - 1;
+      }
+    }
+  }
+
+  procedure incZ() {
+    for (zs: int) in (zss) {
+      for (z: int) in (zs) {
+        z = z + 1;
+      }
+    }
+  }
+  procedure decU() {
+    for (us: int) in (uss) {
+      for (u: int) in (us) {
+        u = u - 1;
+      }
+    }
+  }
+
+  
+}

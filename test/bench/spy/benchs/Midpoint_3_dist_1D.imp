@@ -1,0 +1,34 @@
+
+Component Main {
+  
+  data xs: int[];
+  data ys: int[];
+  data ms: int[];
+
+  
+  procedure incX() {
+    for (x: int, y: int, m: int) in (xs, ys, ms) {
+      x = x + 1;
+      y = y + 1;
+      m = m + 1;
+    }
+  }
+
+  procedure incY() {
+    for (y: int, x: int, m: int) in (ys, xs, ms) {
+      y = y + 1;
+      x = x + 1;
+      m = m + 1;
+    }
+  }
+
+  procedure incM() {
+    for (m: int, x: int, y: int) in (ms, xs, ys) {
+      m = m + 1;
+      x = x + 1;
+      y = y + 1;
+    }
+  }
+
+  
+}

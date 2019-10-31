@@ -20,7 +20,7 @@ Component MidArrs {
 
   relation Gt(x: int[], y: int[], z: int[]) {
     foreach (p, q, t) in (x, y, z) {
-      2 * t = p + q
+      t = (p + q) / 2
     }
   }
 

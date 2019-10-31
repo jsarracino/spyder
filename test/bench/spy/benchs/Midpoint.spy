@@ -4,7 +4,7 @@ Component Midpoint {
   data mid: int;
 
   relation midPoint(x: int, y: int, m: int) {
-    (x + y) / 2 = m
+    ((x + y) / 2 = m) &&  x != y && y != m && x != m
   }
   
   always midPoint(lhs, rhs, mid);
@@ -23,14 +23,20 @@ Component Main {
   
 
   procedure incM() {
+    let z: int;
     m = m + 1;
+
+    if (z > 0) {
+      m = m + 1;
+    } else {
+      m = m;
+    }
   }
-  procedure incX() {
-    x = x + 1;
-  }
+
   procedure incY() {
     y = y + 1;
   }
+  
 
   
 

@@ -1,0 +1,106 @@
+void incr ( int n, ref int[n][n] out ) {
+	for (int i = 0; i < n; ++i) {
+		for (int j = 0; j < n; ++j) {
+			out[i][j] = out[i][j] + 1;
+		}
+	}
+}
+
+
+generator int[n][n] arrExpr(int n, int[n][n] it, int[n][n] p, int[n][n] q, int b) {
+	int[n][n] output;
+	for(int i=0; i<n; i++){
+		for (int j = 0; j < n; ++j) {
+			output[i][j] = expr(it[i][j], p[i][j], q[i][j], i, j, b);
+		}
+	}
+	return output;
+}
+
+generator int expr(int x, int y, int z, int k, int j, int bnd){
+	assert bnd > 0;
+	generator int sum(){
+		return {| x | y | z | k | j |} + {| x | y | z | k | j | ?? |};
+	}
+	if(??) { return sum(); }
+	else { return sum() * expr(x,y,z,k,j,bnd-1); }
+}
+
+void midPointSpec(int n, int[n][n] x, int[n][n] y, int[n][n] mid) {
+	for (int i = 0; i < n; ++i) {
+		for (int j = 0; j < n; ++j) {
+			assert x[i][j] + y[i][j] == 2 * mid[i][j];
+		}
+	}
+}
+
+void midpointAssume(int n, int[n][n] x, int[n][n] y, int[n][n] mid) {
+	for (int i = 0; i < n; ++i) {
+		for (int j = 0; j < n; ++j) {
+			assume x[i][j] + y[i][j] == 2 * mid[i][j];
+		}
+	}
+}
+ 
+void distinctSpec(int n, int[n][n] l, int[n][n] r) {
+	for (int i = 0; i < n; ++i) {
+		for (int j = 0; j < n; ++j) {
+			assert l[i][j] != r[i][j];
+		}
+	}
+}
+void distinctAssume(int n, int[n][n] l, int[n][n] r) {
+	for (int i = 0; i < n; ++i) {
+		for (int j = 0; j < n; ++j) {
+			assume l[i][j] != r[i][j];
+		}
+	}
+}
+
+void buildMidpoint(int n, ref int[n][n] x, ref int[n][n] y, ref int[n][n] mid) {
+	for (int i = 1; i < n + 1; ++i) {
+		for (int j = 0; j < n; ++j) {
+			x[i-1][j] = i+j;
+			mid[i-1][j] = 2 * (i + j);
+			y[i-1][j] = 3 * (i + j);
+		}
+	}
+}
+
+harness void sketch () {
+	int n = 50;
+	int[n][n] x;
+	int[n][n] y;
+	int[n][n] mid;
+	buildMidpoint(n, x, y, mid);
+
+	midpointAssume(n, x, y, mid);
+	distinctAssume(n, x, y);
+
+	incr(n, x);
+
+	int[n][n] m1 = arrExpr(n,x,y,mid,1);
+	int[n][n] y1 = arrExpr(n,x,y,m1,1);
+	distinctSpec(n, x, y1);
+	midPointSpec(n, x, y1, m1);
+
+	mid = m1;
+	y = y1;
+
+	incr(n, mid);
+
+	int[n][n] x1 = arrExpr(n,x,y,mid,1);
+	y1 = arrExpr(n,x1,y,mid,1);
+	distinctSpec(n, x1, y1);
+	midPointSpec(n, x1, y1, mid);
+
+	x = x1;
+	y = y1;
+
+	incr(n, y);
+
+	x1 = arrExpr(n,x,y,mid,1);
+	m1 = arrExpr(n,x1,y,mid,1);
+	distinctSpec(n, x1, y);
+	midPointSpec(n, x1, y, m1);
+}

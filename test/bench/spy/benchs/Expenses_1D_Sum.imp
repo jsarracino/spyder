@@ -1,0 +1,62 @@
+
+
+Component Main {
+  data me: int[];
+  data them: int[];
+  data mid: int[];
+  data sum: int[];
+
+  procedure addRowMeThem() {
+    let i: int;
+    let val: int;
+    let val2: int;
+    for (x: int, t: int, m: int, s: int) with idx in (me, them, mid, sum) {
+      if (idx == i) {
+        x = val;
+        t = val2;
+        m = (val + val2)/2;
+        s = val + val2;
+      }
+    }
+  }
+
+  procedure addRowMe() {
+    
+    let val: int;
+    let val2: int;
+    let i: int;
+    for (x: int, m: int, t: int, s: int) with idx in (me, mid, them, sum) {
+      if (idx == i) {
+        x = val;
+        m = (val + t)/2;
+        s = x + t;
+      }
+    }
+  }
+
+  procedure adjustMeEntry() {
+    
+    let val: int;
+    let i: int;
+    for (x: int, m: int, t: int, s: int) with idx in (me, mid, them, sum) {
+      if (idx == i) {
+        x = val;
+        m = (val + t)/2;
+        s = x + t;
+      }
+    }
+  }
+
+  procedure adjustThemEntry() {
+    
+    let val: int;
+    let i: int;
+    for (x: int, m: int, t: int) with idx in (them, mid, me) {
+      if (idx == i) {
+        x = val;
+        m = (val + t)/2;
+        s = x + t;
+      }
+    }
+  }
+}

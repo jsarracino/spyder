@@ -1,0 +1,66 @@
+Component Bound {
+  data xs: int[];
+  data ys: int[];
+  data zs: int[];
+
+  relation updateX(xs: int[]) {
+    foreach (x, y, z) in (xs, ys, zs) {
+      y = x + 1 && z = x + 2
+    }
+  }
+  relation updateY(y: int) {
+    foreach (x, y, z) in (xs, ys, zs) {
+      x = y - 1 && z = y + 1
+    }
+  }
+  relation updateZ(z: int) {
+    foreach (x, y, z) in (xs, ys, zs) {
+      x = z - 2 && y = z - 1
+    }
+  }
+  
+}
+
+
+Component Main {
+  
+  data xs: int;
+  data ys: int;
+  data zs: int;
+
+  using Bound(xs, ys);
+  using Bound2(ys,zs);
+  
+
+  procedure incX() {
+    for (x: int) in (xs) {
+      x = x + 1;
+    }
+  }
+
+  procedure decY() {
+    for (y: int) in (ys) {
+      y = y - 1;
+    }
+  }
+
+  procedure incY() {
+    for (y: int) in (ys) {
+      y = y + 1;
+    }
+  }
+
+  procedure decZ() {
+    for (z: int) in (zs) {
+      z = z - 1;
+    }
+  }
+
+  procedure incZ() {
+    for (z: int) in (zs) {
+      z = z + 1;
+    }
+  }
+
+  
+}

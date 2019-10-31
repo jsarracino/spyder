@@ -1,0 +1,41 @@
+Component EqArrs {
+  data lhs : int[][];
+  data rhs : int[][];
+
+  relation Eq(x: int[][], y: int[][]) {
+    foreach (p, q) in (x, y) {
+      foreach (s, t) in (p, q) {
+        s = t
+      }
+    }
+  }
+
+
+  
+  always Eq(lhs, rhs);
+}
+
+
+Component Main {
+  
+  data x : int[][];
+  data y : int[][];
+  data z : int[][];
+
+  using EqArrs(x, y);
+  using EqArrs(y, z);
+  
+
+  procedure incrX() {
+    let t: int;
+    for (l : int[], m: int[], n: int[]) in (x,y,z) {
+      for (s : int, t: int, u: int) in (l, m, n) {
+        s = 2 * t;
+        t = s;
+        n = t;
+      }
+    }
+  }
+
+  
+}

@@ -1,0 +1,88 @@
+Component Shared {
+  data l: int[];
+  data r: int[];
+  data m: int[];
+  data s: int[];
+
+  data pos : int;
+  data neg : int;
+  data colors: int[];
+
+  relation solveL(l: int[]) {
+    foreach (ll, rr, mm, ss, c) in (l, r, m, s, colors) {
+      mm = (ll + rr) / 2 && ss = ll + rr && c = (ll + rr >= 0 ==> posColor && ll + rr < 0 ==> negColor)
+    }
+    
+  }
+
+  relation solveR(r: int[]) {
+    foreach (ll, rr, mm, ss, c) in (l, r, m, s, colors) {
+      mm = (ll + rr) / 2 && ss = ll + rr && c = (ll + rr >= 0 ==> posColor && ll + rr < 0 ==> negColor)
+    }
+  }
+}
+
+Component Main {
+  data me: int[];
+  data them: int[];
+  data mid: int[];
+  data sum: int[];
+
+  data posColor : int;
+  data negColor : int;
+  data colors : int[];
+
+  using Shared(me, them, mid, sum);
+  using CondFormat(posColor, negColor, sum, colors);
+
+  procedure addRowMeThem() {
+    
+    let val: int;
+    let val2: int;
+    let i: int;
+    for (x: int, t: int) with idx in (me, them) {
+      if (idx == i) {
+        x = val;
+        t = val2;
+      }
+    }
+  }
+
+  procedure addRowMeSum() {
+    
+    let val: int;
+    let val2: int;
+    let i: int;
+    for (x: int, t: int) with idx in (me, sum) {
+      if (idx == i) {
+        x = val;
+        t = val2;
+      }
+    }
+  }
+
+  procedure adjustMeEntry() {
+    let val: int;
+    let i: int;
+    for (x: int, t: int) with idx in (me, sum) {
+      if (idx == i) {
+        x = val;
+        t = t;
+      }
+    }
+  }
+
+  procedure adjustThemEntry() {
+
+    let val: int;
+    let i: int;
+    for (x: int, t: int) with idx in (them, sum) {
+      if (idx == i) {
+        x = val;
+        t = t;
+      }
+    }
+  }
+
+
+}

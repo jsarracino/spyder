@@ -1,0 +1,68 @@
+Component Midpoint {
+  data lhs : int[][];
+  data rhs: int[][];
+  data mid: int[][];
+
+  relation midPoint(xss: int[][], yss: int[][], mss: int[][]) {
+    foreach (xs, ys, ms) in (xss, yss, mss) {
+      foreach (x, y, m) in (xs, ys, ms) {
+        x + y = 2 * m
+      }
+    }
+  }
+  
+  always midPoint(lhs, rhs, mid);
+  
+}
+
+Component NotEq {
+  data l: int[][];
+  data r: int[][];
+
+  relation notEq(xss: int[][], yss: int[][]) {
+    foreach (xs, ys) in (xss, yss) {
+      foreach (x, y) in (xs, ys) {
+        x != y
+      }
+    }
+  }
+
+  always notEq(l, r);
+}
+
+
+Component Main {
+  
+  data xss: int[][];
+  data yss: int[][];
+  data mss: int[][];
+
+  using Midpoint(xss, yss, mss);
+  using NotEq(xss, yss);
+  
+  procedure incX() {
+    for (xs: int[]) in (xss) {
+      for (x: int) in (xs) {
+        x = x + 1;
+      }
+    }
+  }
+
+  procedure incY() {
+    for (ys: int[]) in (yss) {
+      for (y: int) in (ys) {
+        y = y + 1;
+      }
+    }
+  }
+
+  procedure incM() {
+    for (ms: int[]) in (mss) {
+      for (m: int) in (ms) {
+        m = m + 1;
+      }
+    }
+  }
+
+  
+}

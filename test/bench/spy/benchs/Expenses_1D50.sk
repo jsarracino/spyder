@@ -1,0 +1,103 @@
+generator int expr(int x, int y, int z, int p, int bnd){
+	assert bnd > 0;
+	generator int sum(){
+		return {| ((x | y | z | p) +  (x | y | z | p | ??) ) | ?? |};
+	}
+	if(??) { return sum(); }
+	else { return {| expr(x,y,z,p,bnd-1) (* | /) sum() |}; }
+}
+
+
+generator void updateLoc(int n, ref int[n] out, int[n] xs, int[n] ys, int[n] zs, int at, int bound) {
+  out[at] = expr(at, xs[at], ys[at], zs[at], bound);
+}
+
+boolean midPoint(int n, int[n] x, int[n] y, int[n] mid) {
+  boolean out = true;
+  for (int i = 0; i < n; ++i) {
+    out = out && (x[i] + y[i])/2 == mid[i];
+  }
+	return out;
+}
+
+void buildExpenses(int n, ref int[n] x, ref int[n] y, ref int[n] mid) {
+  for (int i = 0; i < n; ++i) {
+    x[i] = i;
+    y[i] = 5 * i;
+    mid[i] = 3 * i;
+  }
+}
+
+harness void sketch (int i1, int other1, int i2, int other2, int i3, int other3, int i4, int other4) {
+  int n = 50;
+  int[n] x;
+  int[n] y; 
+  int[n] mid;
+
+  buildExpenses(n, x, y, mid);
+
+	assume midPoint(n, x, y, mid);
+
+  /*
+  procedure addRowMeThem() {
+    let i: int;
+    let val: int;
+    let val2: int;
+    for (x: int, t: int) with idx in (me, them) {
+      if (idx == i) {
+        x = val;
+        t = val2;
+      }
+    }
+  }
+  */
+
+  assume 0 <= i1 && i1 < n;
+	x[i1] = other1;
+  y[i1] = other2;
+	updateLoc(n,mid,x,y,mid,i1,2);
+	assert midPoint(n, x, y, mid);
+
+  /*
+  procedure addRowMe() {
+    let val: int;
+    let val2: int;
+    let i: int;
+    for (x: int) with idx in (me) {
+      if (idx == i) {
+        x = val;
+      }
+    }
+  }
+  */
+  
+
+  assume 0 <= i2 && i2 < n;
+	x[i2] = other3;
+	updateLoc(n,y,x,y,mid,i2,2);
+  updateLoc(n,mid,x,y,mid,i2,2);
+	assert midPoint(n, x, y, mid);
+
+  
+
+  /*
+  procedure adjustThemEntry() {
+    
+    let val: int;
+    let i: int;
+    for (x: int) with idx in (them) {
+      if (idx == i) {
+        x = val;
+      }
+    }
+  }
+  */
+
+  assume 0 <= i3 && i3 < n;
+	y[i3] = other4;
+	updateLoc(n,x,x,y,mid,i3,2);
+  updateLoc(n,mid,x,y,mid,i3,2);
+	assert midPoint(n, x, y, mid);
+
+	
+}

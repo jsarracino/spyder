@@ -1,0 +1,39 @@
+Component Main {
+  
+  data xss: int[][];
+  data yss: int[][];
+  data mss: int[][];
+
+
+  procedure incX() {
+    for (xs: int[], ys: int[], ms: int[]) in (xss, yss, mss) {
+      for (x: int, y: int, m: int) in (xs, ys, ms) {
+        x = x + 1;
+        y = y + 1;
+        m = m + 1;
+      } 
+    }
+  }
+
+  procedure incY() {
+    for (ys: int[], xs: int[], ms: int[]) in (yss, xss, mss) {
+      for (y: int, x: int, m: int) in (ys, xs, ms) {
+        y = y + 1;
+        x = x + 1;
+        m = m + 1;
+      }
+    }
+  }
+
+  procedure incM() {
+    for (ms: int[], xs: int[], ys: int[]) in (mss, xss, yss) {
+      for (m: int, x: int, y: int) in (ms, xs, ys) {
+        m = m + 1;
+        x = x + 1;
+        y = y + 1;
+      }
+    }
+  }
+
+  
+}

@@ -28,6 +28,7 @@ rebuildFix blk = Imp.Seq $ foldl worker [] blk
 
 rebuildExpr :: Expression -> Imp.Expr
 rebuildExpr (Pos _ (Literal (IntValue v))) = Imp.IConst $ fromIntegral v
+rebuildExpr (Pos _ (Literal (BoolValue v))) = Imp.BConst v
 rebuildExpr (Pos _ (Var v)) = Imp.VConst v
 rebuildExpr (Pos _ (BinaryExpression o l r)) = Imp.BinOp o' (rebuildExpr l) (rebuildExpr r)
   where
@@ -55,4 +56,4 @@ rebuildExpr (Pos _ (UnaryExpression o i)) = Imp.UnOp o' (rebuildExpr i)
       Not -> Imp.Not
       otherwise -> error $ "unsupported binop "  -- ++ show o
 
-rebuildExpr e = error $ "unsupported expr " ++ show e
+rebuildExpr e = error $ "unsupported expr " -- ++ show e

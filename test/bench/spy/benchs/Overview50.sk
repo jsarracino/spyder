@@ -1,0 +1,150 @@
+
+//generator int[n] arrExprSimpl(int n, int)
+
+generator int expr(int x, int y, int z, int p, int bnd){
+	assert bnd > 0;
+	generator int sum(){
+		return {| x | y | z | p |} + {| x | y | z | p | ?? | - ?? |};
+	}
+	if(??) { return sum(); }
+	else { return sum() * expr(x,y,z,p,bnd-1); }
+}
+
+void arrsAssume(int n, int[n] ds, int[n] ws, int[n] ts) {
+	for (int i = 0; i < n; ++i) {
+    assume 7 * ds[i] == ws[i];
+    if (i == 0) {
+      assume ts[i] == ds[i];
+    } else {
+      assume ts[i] == ds[i] + ts[i-1];
+    }
+  }
+}
+
+void arrsAssert(int n, int[n] ds, int[n] ws, int[n] ts) {
+	for (int i = 0; i < n; ++i) {
+    assert 7 * ds[i] == ws[i];
+    if (i == 0) {
+      assert ts[i] == ds[i];
+    } else {
+      assert ts[i] == ds[i] + ts[i-1];
+    }
+  }
+}
+
+generator void fixArrs(int n, ref int[n] ds, ref int[n] ws, ref int[n] ts) {
+  for (int i = 0; i < n; ++i) {
+    ws[i] = expr(i, ds[i], ws[i], ts[i], 1);
+    if (i == 0) {
+      ts[i] = expr(i, ds[i], ws[i], ts[i], 1);
+    } else {
+      ts[i] = expr(ts[i-1], ds[i], ws[i], ts[i], 2);
+    }
+  }
+}
+
+generator boolean bexpr(int x, int y, boolean c, int bound) {
+  assert bound >0 ;
+  generator boolean term() {
+    return {| (x | y) (> | < | <= | >=) (x | y | ??) |};
+  }
+  if (??) {return {| true | false | c | term() |}; }
+  else {
+    return term() && bexpr(x, y, c, bound-1);
+  }
+}
+
+generator void fixColors(int n, ref int[n] vs, ref boolean[n] cs) {
+  for (int i = 0; i < n; ++i) {
+    boolean guard = bexpr(i, vs[i], cs[i], 1);
+    if (guard) {
+      cs[i] = bexpr(i, vs[i], cs[i], 1);
+    } else {
+      cs[i] = bexpr(i, vs[i], cs[i], 1);
+    }
+  }
+}
+
+void buildArrs(int n, ref int[n] days, ref int[n] weeks, ref int[n] totals) {
+  for (int i = 0; i < n; ++i) {
+    if (i % 2 == 0) {
+      days[i] = i;
+    } else {
+      days[i] = -i;
+    }
+    weeks[i] = 7 * days[i];
+
+    if (i == 0) {
+      totals[i] = days[i];
+    } else {
+      totals[i] = days[i] + totals[i-1];
+    }
+  }
+}
+
+void buildColors(int n, ref int[n] vals, ref boolean[n] colors) {
+  for (int i = 0; i < n; ++i) {
+    if (vals[i] < 0) {
+      colors[i] = false;
+    } else {
+      colors[i] = true;
+    }
+  }
+}
+
+void assumeColors(int n, ref int[n] vals, ref boolean[n] colors) {
+  for (int i = 0; i < n; ++i) {
+    if (vals[i] < 0) {
+      assume colors[i] == false;
+    } else {
+      assume colors[i] == true;
+    }
+  }
+}
+
+void assertColors(int n, ref int[n] vals, ref boolean[n] colors) {
+  for (int i = 0; i < n; ++i) {
+    if (vals[i] < 0) {
+      assert colors[i] == false;
+    } else {
+      assert colors[i] == true;
+    }
+  }
+}
+
+void adjustForCola(int n, ref int[n] it, int cola) {
+  for (int i = 0; i < n; ++i) {
+    it[i] = it[i] * cola;
+  }
+}
+
+harness void sketch () {
+  int n = 50;
+  int[n] days;
+  int[n] weeks;
+  int[n] totals;
+
+  buildArrs(n, days, weeks, totals);
+
+  boolean[n] rowColors;
+  boolean[n] totalColors;
+  
+  buildColors(n, days, rowColors);
+  buildColors(n, totals, totalColors);
+
+
+  arrsAssume(n, days, weeks, totals);
+  assumeColors(n, days, rowColors);
+  assumeColors(n, totals, totalColors);
+
+  adjustForCola(n, days, 2);
+
+  fixArrs(n, days, weeks, totals);
+  fixColors(n, days, rowColors);
+  fixColors(n, totals, totalColors);
+
+  arrsAssert(n, days, weeks, totals);
+  assertColors(n, days, rowColors);
+  assertColors(n, totals, totalColors);
+	
+}

@@ -11,12 +11,17 @@ import pickle
 from subprocess import call, check_output, STDOUT
 from colorama import init, Fore, Back, Style
 
+import json
+
 # Globals
 if platform.system() in ['Linux', 'Darwin']:
     TIMEOUT_CMD = 'gtimeout'                                     # Timeout command
-    TIMEOUT = '5m'                                             # Timeout value (seconds)   
+    TIMEOUT = '10m'                                             # Timeout value (seconds)   
     SPYDER_CMD = ['/usr/bin/time', '-p', TIMEOUT_CMD, TIMEOUT, './Script.hs']                             # Command to call Spyder
     SKETCH_CMD = ['/usr/bin/time', '-p', TIMEOUT_CMD, TIMEOUT, './sketch']
+    SPYDER_BENCH = ['./Script.hs', '-b', 'Spy']
+
+JSON_FILE = 'results.json'
  
 WC_CMD = "wc -l"
 LOGFILE = 'results.log'                                         # Log file
@@ -29,17 +34,18 @@ ORACLE_FILE = 'solutions'                                       # Solutions file
 SPYDER_OPTS = ['-i']                              # Options to use for Spyder benchmarks
 SKETCH_OPTS = ['']
 SKETCH_SIZES = [3,10,50]
+# SKETCH_SIZES = []
 FNULL = open(os.devnull, 'w')                                   # Null file
 
 class Benchmark:
-    def __init__(self, name, description, redo=False, components=''):
+    def __init__(self, name, description, edited=False, sktimeout=False):
         self.name = name                # Id
         self.description = description  # Description (in the table)
-        self.components = components    # Description of components used (in the table)
-        self.redo = redo
+        self.edited = edited
+        self.sktimeout = sktimeout
 
     def str(self):
-        return self.name + ': ' + self.description + ' ' + str(self.components)
+        return self.name + ': ' + self.description
 
 class BenchmarkGroup:
     def __init__(self, name, default_options, benchmarks):
@@ -49,35 +55,47 @@ class BenchmarkGroup:
 
 ALL_BENCHMARKS = [
     BenchmarkGroup("Numerical Programs", [], [
-        Benchmark('Midpoint', 'midpoint','Mid'),
-        Benchmark('Midpoint_Neq', 'distinct mid','Mid-NE'),
-        Benchmark('Arrs1D_Eq', 'equal arrays','Eq-1D'),
-        Benchmark('Arrs1D_Mid', 'midpoint arrays','Mid-Arr'),
-        Benchmark('Arrs2D_Eq', 'equal arrays','Eq-2D')
+        # these all work, kinda. the times are wonky? and so are sizes?
+        # Benchmark('Midpoint_2', '2 variable midpoint'),
+        Benchmark('Midpoint_3', '3 variable midpoint'),
+        Benchmark('Midpoint_3_dist', '3 variable distinct midpoint'),
+        Benchmark('Midpoint_3_dist_1D', '3 variable distinct midpoint 1D array', sktimeout=True),
+        # Benchmark('Bound_2', '2 bounded variables'),
+        # Benchmark('Bound_3', '3 bounded variables'),
+        # Benchmark('Bound_3_1D', '3 bounded variables'),
+
+        # this doesn't work (type error in test program??)
+        # Benchmark('Midpoint_3_dist_2D', '3 variable distinct midpoint 2D array'),
+        
         ]),
-    BenchmarkGroup("Web Applications",  [], [
-        Benchmark('GoL1D', '1D GoL', 'cells2colors'),
-        Benchmark('Budgeting','overview', 'conversions'),
-        Benchmark('Expenses','split costs', 'splitting')
-        ])
+    # BenchmarkGroup("Web Applications",  [], [
+        # Benchmark('GoL1D', '1D GoL', edited=True),
+        # Benchmark('GoL1D_Buttons', '1D GoL with buttons', edited=True),
+        # Benchmark('Expenses','split costs', edited=True),
+        # Benchmark('Expenses_1D','split costs 1D', edited=True, sktimeout=True),
+        # Benchmark('Overview','overview example', edited=True, sktimeout=True),
+        # type error in test program? 2d problem.
+        # Benchmark('GoL2D', '2D GoL with buttons', edited=True),
+        # these don't work yet
+        # Benchmark('Expenses_1D_Sum','split costs 1D', edited=True, sktimeout=True),
+        # Benchmark('Expenses_1D_Sum_Color','split costs 1D with color', edited=True, sktimeout=True),
+        # ])
 ]
 
 class SynthesisResult:
-    def __init__(self, name, source_size, inv_size, spyder_holes, time, sktime, overhead):
+    def __init__(self, name, spyder_holes, spyder_patches, time, sktime, edited):
         self.name = name                        # Benchmark name
-        self.spyder_source_size = source_size   # Size of Spyder source code
-        self.spyder_invariant_size = inv_size   # Cumulative invariant size (in AST nodes)
-        # self.spyder_lines = spyder_lines        # Number of lines inserted
         self.spyder_holes = spyder_holes        # Number of holes
+        self.spyder_patch_size = spyder_patches
         self.spyder_time = time                 # Synthesis time (seconds)
         self.sketch_time = sktime            # Sketch synthesis times (seconds)
-        self.overhead = overhead
+        self.edited = edited
 
     def str(self):
         return self.name + ', ' + '{0:0.2f}'.format(self.spyder_time) # + ', '  + self.code_size + ', ' + self.spec_size + ', ' + self.measure_count
 
 spy_cursor = 0
-def run_benchmark(name, opts, default_opts):
+def run_benchmark(name, opts, default_opts, edited, runSK):
     '''Run benchmark name with command-line options opts (use default_opts with running the common context variant); record results in the results dictionary'''
 
     global spy_cursor
@@ -85,103 +103,89 @@ def run_benchmark(name, opts, default_opts):
       
       logfile.write(name + '\n')
       logfile.seek(0, os.SEEK_END)
-      # Run Spyder on the benchmark:
       
       print("BENCH: running spyder on input file %s.spy" % name, file=spy_log, flush=True)
+    #   print("current directory: %s" % )
       start = time.time()
       call(SPYDER_CMD + SPYDER_OPTS + ['/Users/john/spyder/test/bench/spy/benchs/' + name + '.spy'], stdout=spy_log, stderr=spy_log)
-      end = time.time()
-      os.chdir('/Users/john/sketch-1.7.5/sketch-frontend')
-      for size in SKETCH_SIZES:
-          opts = list(SKETCH_OPTS)
-          opts.append("--fe-no-output-print")
-          opts.append("--bnd-unroll-amnt=" + str(size))
-          print('/Users/john/spyder/test/bench/spy/benchs/' + name + str(size) + '.sk')
-          sketch_call = call(SKETCH_CMD + ['--bnd-unroll-amnt=' + str(size)] + ['/Users/john/spyder/test/bench/spy/benchs/' + name + str(size) + '.sk'], stdout=sk_log, stderr=sk_log)
-      os.chdir('/Users/john/spyder')
+      if runSK:
+        end = time.time()
+        os.chdir('/Users/john/sketch-1.7.5/sketch-frontend')
+      
+        for size in SKETCH_SIZES:
+            opts = list(SKETCH_OPTS)
+            opts.append("--fe-no-output-print")
+            opts.append("--bnd-unroll-amnt=" + str(size))
+            print('/Users/john/spyder/test/bench/spy/benchs/' + name + str(size) + '.sk')
+            call(SKETCH_CMD + ['--bnd-unroll-amnt=' + str(size)] + ['/Users/john/spyder/test/bench/spy/benchs/' + name + str(size) + '.sk'], stdout=sk_log, stderr=sk_log)
+        os.chdir('/Users/john/spyder')
+      
       
 
-      print(["{0:0.2f}".format(end - start)])
+        print(["{0:0.2f}".format(end - start)])
+      else:
+        print("skipping sketch")
       if False: # Synthesis failed
           print(*[Back.BLACK + Fore.RED + Style.BRIGHT + 'FAIL' + Style.RESET_ALL])
-          results[name] = SynthesisResult(name, (end - start), '-', '-', '-', '-', 0)
+          results[name] = SynthesisResult(name, (end - start), '-', '-', '-', '-', 0, False)
       else: # Synthesis succeeded: code metrics from the output and record synthesis time
-          sp_lastLines = os.popen("tail -n 8 %s" % SPY_LOGFILE).read().split('\n')
-          sk_lastLines = os.popen("tail -n 8 %s" % SK_LOGFILE).read().split('\n')
+        #   sp_lastLines = os.popen("tail -n 8 %s" % SPY_LOGFILE).read().split('\n')
+        #   sk_lastLines = os.popen("tail -n 8 %s" % SK_LOGFILE).read().split('\n')
           
           spy_log.seek(spy_cursor)
           spy_contents = spy_log.read()
-          spy_lines = spy_contents.split('\n')
           spy_cursor = spy_log.tell()
 
           sk_log.seek(0)
           sk_contents = sk_log.read()
-          sk_times = list(map(lambda x: x.split(' ')[-1][:-1], re.findall("real\s*\d+\.\d+\s*", sk_contents)))
-            
+          if not runSK:
+            sk_times = []
+          else:
+            sk_times = list(map(lambda x: x.split(' ')[-1][:-1], re.findall(r"real\s*\d+\.\d+\s*", sk_contents)))
 
-          
-
-        #   spyder_time = float(sp_lastLines[-3].split(' ')[-1])
-          spyder_time = list(map(lambda x: x.split(' ')[-1][:-1], re.findall("real\s*\d+\.\d+\s*", spy_contents)))[-1]
-          spyder_source_size = list(map(lambda x: x.split(' ')[-1][:-1], re.findall("source: size\s*\d+\s*", spy_contents)))[-1]
-          spyder_invariant_size = list(map(lambda x: x.split(' ')[-2][:-1], re.findall("inv: size\s*\d+\s*", spy_contents)))[-1]
-
-          spyder_time = float(spyder_time)
-          spyder_source_size = int(spyder_source_size)
-          spyder_invariant_size = int(spyder_invariant_size)
-
-        #   spyder_source_size = spy_lines[0].split(' ')[-1]
-        #   spyder_invariant_size = spy_lines[1].split(' ')[-1]
-          spyder_holes = len(re.findall("holes: \d+.*$",spy_contents))
-          spy_log.seek(0)
-        #   sk_log.seek(0)
-        #   sketch_time = [str(t) for (t,) in re.findall("(real).*",sk_log.read())]    
-          sketch_time = [] #[0,0,0]
           if len(sk_times) < 2:
-              sketch_time = [0,0,0]
+              sketch_time = [-1,-1,-1]
           else:
               sketch_time = list(map(float, sk_times[-3:-1] + [sk_times[-1]]))
-        #   for line in sk_lastLines:
-        #     #   print("sk line:", line)
-        #       line = line.split(' ')
-        #       if (line[0] == "real"):
-        #           sketch_time.append(float(line[-1]))
-        
 
         #   print(sketch_time)
-          call(SPYDER_CMD + SPYDER_OPTS + ['/Users/john/spyder/test/bench/spy/benchs/' + name + '_repair.spy'], stdout=spy_log, stderr=spy_log)
-          spy_log.seek(0)
-          spy_contents = spy_log.read()
-          overhead = list(map(lambda x: x.split(' ')[-1][:-1], re.findall("source: size\s*\d+\s*", spy_contents)))[-1]
-          overhead = int(overhead)
-          results[name] = SynthesisResult(name, spyder_source_size, spyder_invariant_size, spyder_holes, spyder_time, sketch_time, overhead)
+
+        #   spy_log.seek(0)
+        #   spy_contents = spy_log.read()
+          
+          spyder_holes = len(re.findall(r"holes:",spy_contents))
+          spyder_time = list(map(lambda x: x.split(' ')[-1][:-1], re.findall(r"real\s*\d+\.\d+\s*", spy_contents)))[-1]
+          spyder_time = float(spyder_time)
+          spyder_patches = list(map(lambda x: int(re.search(r"\d+", x)[0]), re.findall(r"size of fix: \s*\d+\s*", spy_contents)))
+        #   print(spyder_patches)
+          spyder_patch_total = sum(map(int, spyder_patches))
+          results[name] = SynthesisResult(name, spyder_holes, spyder_patch_total, spyder_time, sketch_time, edited)
 
           print(*[Back.BLACK + Fore.GREEN + Style.BRIGHT + ' OK ' + Style.RESET_ALL])
 
-      print()
+    #   print()
       
 def format_time(t):
-    if t < 0:
-        return '-'
-    else:
-        return '{0:0.2f}'.format(t)
+    return '{0:0.2f}'.format(t)
 
-# def write_csv():
-    # '''Generate CSV file from the results dictionary'''
-    # with open(CSV_FILE, 'w') as outfile:
-        # for group in groups:
-            # for b in group.benchmarks:
-                # outfile.write (b.name + ',')
-                # result = results [b.name]
-                # outfile.write (result.spec_size + ',')
-                # outfile.write (result.code_size + ',')
-                # outfile.write (format_time(result.time) + ',')
-                # outfile.write ('\n')
-
-def fill_with_blanks():
-  for group in groups:
-      for b in group.benchmarks:
-          results [b.name] = SynthesisResult(b.name, '-', '-', '-', '-', 0.0)
+def write_json():
+    '''Generate JSON file from the results dictionary'''
+    outputs = []
+    for group in groups:
+        for b in group.benchmarks:
+            bench_result = results[b.name]
+            output = {
+                "name": b.name,
+                "patch-size": bench_result.spyder_patch_size,
+                "patch-distr": bench_result.spyder_holes,
+                "spy-time": format_time(bench_result.spyder_time),
+                "sk-times": [format_time(x) for x in bench_result.sketch_time],
+                "edited": bench_result.edited
+            }
+            outputs.append(output)
+    # print(outputs)
+    with open(JSON_FILE, 'w') as outfile:
+        json.dump(outputs, outfile)
 
 
 def diffLines(l, r):
@@ -190,55 +194,6 @@ def diffLines(l, r):
 
     return (wcL, wcR)
 
-
-def write_latex():
-    '''Generate Latex table from the results dictionary'''
-    
-    total_count = 0
-
-    with open(LATEX_FILE, 'w') as outfile:
-        for group in groups:
-            if group.benchmarks.__len__() > 1:
-                outfile.write ('\multirow{')
-                outfile.write (str(group.benchmarks.__len__()))
-                outfile.write ('}{*}{\\parbox{2cm}{\center{')
-                outfile.write (group.name)
-                outfile.write ('}}}')
-            else:
-                outfile.write (' ' + group.name + ' ')            
-
-            for b in group.benchmarks:
-                result = results[b.name]      
-                # print(result.sketch_time)
-                # print(result.spyder_source_size)
-                # print(result.spyder_invariant_size)
-                # print(result.spyder_holes)  
-                # print(result.spyder_time)  
-                # print(result.overhead - result.spyder_source_size)      
-                row = \
-                    ' & ' + b.description +\
-                    ' & ' + str(result.spyder_source_size) +\
-                    ' & ' + str(result.spyder_invariant_size) + \
-                    ' & ' + str(result.overhead - result.spyder_source_size) + \
-                    ' & ' + format_time(result.spyder_time) + \
-                    ' & ' + format_time(result.sketch_time[0]) + \
-                    ' & ' + format_time(result.sketch_time[1]) + \
-                    ' & ' + format_time(result.sketch_time[2]) + ' \\\\'
-                outfile.write (row.replace('_', '\_'))
-                outfile.write ('\n')
-                
-                total_count = total_count + 1
-                
-            outfile.write ('\\hline')
-            
-    print(['Total:', total_count])
-    
-# def cmdline():
-    # import argparse
-    # a = argparse.ArgumentParser()
-    # a.add_argument('--medium', action='store_true')
-    # a.add_argument('--small', action='store_true')
-    # return a.parse_args()
 
 if __name__ == '__main__':
     init()
@@ -271,15 +226,15 @@ if __name__ == '__main__':
                 print(*[b.str() + Back.BLACK + Fore.YELLOW + Style.BRIGHT + 'SKIPPED' + Style.RESET_ALL])
             else:
                 print(*[b.str()])
-                run_benchmark(b.name, [], group.default_options)
+                run_benchmark(b.name, [], group.default_options, b.edited, not b.sktimeout)
                 os.remove(LOGFILE)
                 with open(DUMPFILE, 'wb') as data_dump:
                     pickle.dump(results, data_dump)    
             
     # Generate CSV
-    # write_csv()            
+    write_json()            
     # Generate Latex table
-    write_latex()
+    # write_latex()
 
     # Compare with previous solutions and print the diff
     # if os.path.isfile(ORACLE_FILE) and (not cl_opts.small):

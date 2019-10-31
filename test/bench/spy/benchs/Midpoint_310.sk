@@ -1,4 +1,4 @@
-void incr_mid ( ref int out ) {
+void incr ( ref int out ) {
 	out = out + 1;
 }
 
@@ -15,16 +15,38 @@ void midPoint(int x, int y, int mid) {
 	assert x + y == 2 * mid;
 }
  
-void update(int ox, int nx, int oy, int ny) {
+void update(int ox, int nx) {
 	assert ox != nx;
-	assert oy != ny;
 }
 
 harness void sketch (int x, int y, int mid) {
 	assume x + y == 2 * mid;
-	incr_mid (mid);
+	incr (mid);
 	int x1 = expr(x,y,mid,1);
 	int y1 = expr(x,y,mid,1);
-	update(x, x1, y, y1);
+	update(x, x1);
+	update(y, y1);
 	midPoint(x1, y1, mid);
+
+
+	x = x1;
+	y = y1;
+
+	incr (x);
+	int m1 = expr(x,y,mid,1);
+	y1 = expr(x,y,mid,1);
+	update(mid, m1);
+	update(y, y1);
+	midPoint(x1, y1, m1);
+
+	mid = m1;
+	y = y1;
+
+	incr (y);
+	x1 = expr(x,y,mid,1);
+	m1 = expr(x,y,mid,1);
+	update(x, x1);
+	update(mid, m1);
+	midPoint(x1, y, m1);
+	
 }

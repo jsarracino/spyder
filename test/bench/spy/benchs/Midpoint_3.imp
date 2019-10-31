@@ -1,0 +1,28 @@
+
+
+Component Main {
+  
+  data x: int;
+  data y: int;
+  data m: int;
+
+
+  procedure incX() {
+    x = x + 1;
+    m = x;
+    y = x;
+  }
+  
+  procedure incY() {
+    y = y + 1;
+    x = y;
+    m = y;
+  }
+
+  procedure incM() {
+    m = m + 1;
+    x = m;
+    y = m;
+  }
+  
+}

@@ -1,0 +1,176 @@
+Component Main {
+  // the model
+  // data oldCells : int[]; // bool[]
+  data cells : int[][]; // bool[]
+
+
+  // the view
+  data rendered : int[][]; // color
+  data start : int; // button
+  data stop : int; // button
+  data running : int; // bool
+
+  using Startable(running, start, stop);
+  using TwoDGoL(cells, rendered);
+
+  
+  procedure colorOnClick() {
+    let row: int; 
+    let col: int;
+    for (colors: int[], cell: int[]) with ri in (rendered, cells) {
+      for (color: int, cel: int) with ci in (colors, cell) {
+        if (ri == row && ci == col) {
+          if (color == 0) {
+            color = 1;
+            cel = 1;
+          } else {
+            color = 0;
+            cel = 0;
+          }
+        }
+      }
+    }
+  }
+  
+
+  // from http://jonmillen.com/1dlife/index.html
+
+  // TTT
+  // YXY
+  // ZZZ
+  // a live cell X stays alive if 2 or 3 of T,Y,Z are alive
+  // a live cell X dies if <2 or >3 of T,Y,Z are alive
+  // a dead cell X lives if 3 of T,Y,Z
+  
+  
+  procedure golLogic(){
+    let rBound: int; // don't actually know the range of the cells
+    let cBound: int;
+    let count : int = 0;
+    let T0: int;
+    let T1: int;
+    let T2: int;
+    let Y0: int;
+    let Y2: int;
+    let Z0: int; 
+    let Z1: int;
+    let Z2: int;
+
+    let oldCell: int;
+
+    // TODO
+    for (celli: int[], colori: int[]) with row in (cells, rendered) {
+      for (cell: int, color: int) with col in (celli, colori) {
+
+        
+        if (row == 0) {
+
+          if (row + 1 == rBound) { // no slack
+            // continue
+            if (col == 0) {
+              if (col + 1 == cBound) {
+                // continue
+              } else {
+                count = Z2;
+              }
+            } else {
+              if (col + 1 == cBound) {
+                count = T1;
+              } else {
+                count = T1 + Z1;
+              }
+
+            }
+          } else {
+          if (col == 0) {
+            if (col + 1 == cBound) {
+              count = T1 + Z1;
+            } else {
+              count = T1 + Z1 + T2;
+            }
+          } else {
+            if (col + 1 == cBound) {
+              count = T1 + Z1 + Y0;
+            } else {
+              count = T1 + Z1 + Y0 + T2 + Y2 + Z2;
+            }
+          }
+        } } else {
+
+          if (row + 1 == rBound) { // no slack
+            // continue
+            if (col == 0) {
+              if (col + 1 == cBound) {
+                count = Y0;
+              } else {
+                count = Y0 + Z0;
+              }
+            } else { // col 0 ok
+              if (col + 1 == cBound) { // col 1 ok
+                count = T1;
+              } else { // col 0, 1, 2 ok
+                count = T1 + Z1;
+              }
+
+            }
+          } else {
+          if (col == 0) {
+            if (col + 1 == cBound) {
+              count = T1 + Z1;
+            } else {
+              count = T1 + Z1 + T2;
+            }
+          } else {
+            if (col + 1 == cBound) {
+              count = T0 + Z0 + T1 + Z1 + Y0;
+            } else {
+              count = T0 + Z0 + T1 + Z1 + Y0 + T2 + Y2 + Z2;
+            }
+          }
+        }}
+
+
+        if (oldCell == 0) {
+          if (count == 2 || count == 3) {
+            cell = 1;
+            color = 1;
+          }
+        } else {
+          if (count != 2 && count != 4) {
+            cell = 0;
+            color = 1;
+          }
+        }
+      }
+    }
+  }
+
+  
+  procedure toggleStart() {
+    if (start == 0) {
+      start = 1;
+      stop = 0;
+      running = 1;
+    } else if (start == 1) {
+      start = 0;
+      stop = 1;
+      running = 0;
+    } else {
+    }
+  }
+
+  procedure toggleStop() {
+    if (stop == 0) {
+      stop = 1;
+      start = 0;
+      running = 0;
+    } else if (stop == 1) {
+      stop = 0;
+      start = 1;
+      running = 1;
+    }
+  }
+
+
+  
+}

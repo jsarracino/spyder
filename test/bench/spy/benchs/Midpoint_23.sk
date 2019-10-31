@@ -1,0 +1,37 @@
+void incr ( ref int out ) {
+	out = out + 1;
+}
+
+generator int expr(int x, int y, int bnd){
+	assert bnd > 0;
+	generator int sum(){
+		return {| x | y |} + {| x | y | ?? | - ?? |};
+	}
+	if(??) { return sum(); }
+	else { return sum() * expr(x,y,bnd-1); }
+}
+
+void midPoint(int x, int y) {
+	assert x + y == 10;
+}
+ 
+void update(int ox, int nx) {
+	assert ox != nx;
+}
+
+harness void sketch (int x, int y) {
+	assume x + y == 10;
+	incr (x);
+	int y1 = expr(x,y,1);
+	update(y, y1);
+	midPoint(x, y1);
+
+
+	y = y1;
+
+	incr (y);
+	int x1 = expr(x,y,1);
+	update(x, x1);
+	midPoint(x1, y);
+	
+}

@@ -1,0 +1,50 @@
+Component Midpoint {
+  data lhs : int[];
+  data rhs: int[];
+  data mid: int[];
+
+  relation solveX(xs: int[]) {
+    foreach (y, m) in (ys, ms) {
+      y = y + (2 * m - y) - x && m = m + (2 * m - y) - x
+    }
+  }
+  relation solveY(ys: int[]) {
+    foreach (x, m) in (xs, ms) {
+      x = x + (2 * m - x) - y && m = m + (2 * m - x) - y
+    }
+  }
+  relation solveM(ms: int[]) {
+    foreach (x, y) in (xs, ys) {
+       x = x + ((x + y)/2 - 2 * m) - m && y = y + ((x + y)/2 - 2 * m) - m
+    }
+  }
+  
+}
+
+
+Component Main {
+  
+  data xs: int[];
+  data ys: int[];
+  data ms: int[];
+  
+  procedure incX() {
+    for (x: int) in (xs) {
+      x = x + 1;
+    }
+  }
+
+  procedure incY() {
+    for (y: int) in (ys) {
+      y = y + 1;
+    }
+  }
+
+  procedure incM() {
+    for (m: int) in (ms) {
+      m = m + 1;
+    }
+  }
+
+  
+}

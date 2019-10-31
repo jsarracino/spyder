@@ -95,7 +95,7 @@ executable spyder
   build-depends:       base
                      , spyder
                      , parsec
-                     , pretty
+                     , ansi-wl-pprint
                      , language-boogie
                      , containers
                      , process
@@ -115,7 +115,7 @@ test-suite spyder-test
   build-depends:       base
                      , spyder
                      , parsec
-                     , pretty
+                     , ansi-wl-pprint
                      , language-boogie
                      , containers
                      , HUnit
@@ -130,7 +130,7 @@ executable spyder-tests
   build-depends:       base
                      , spyder
                      , parsec
-                     , pretty
+                     , ansi-wl-pprint
                      , language-boogie
                      , containers
                      , HUnit

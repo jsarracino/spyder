@@ -34,7 +34,7 @@ import Language.Spyder.Synth.Verify   (debugBoogie, checkProg, debugBlock, debug
 import Language.Spyder.Translate.Direct
 import qualified Data.Map.Strict as Map
 import qualified Data.Set.Monad as Set
-import Data.List                      (intersperse, foldl', nub, sortBy, delete)
+import Data.List                      (intersperse, foldl', nub, sortBy, delete, isPrefixOf)
 import Control.Monad
 import Control.Monad.Logic
 import Control.Monad.Stream
@@ -140,8 +140,11 @@ generateFix n cands lhs prog scope = (finalProg, newScope, constBlk ++ lBlock ++
     lv = Pos.gen $ Var lvar
     rv = Pos.gen $ Var rvar
     -- binops = [Pos.gen $ BinaryExpression op lv rv | op <- [Plus, Minus, Times]]
-    binops = [Pos.gen $ BinaryExpression Plus (Pos.gen $ BinaryExpression Times cv lv) rv]
-    unops = [Pos.gen $ UnaryExpression Neg rv, Pos.gen $ BinaryExpression Div rv (Pos.gen $ Literal $ IntValue 2)]
+    binops = 
+      [Pos.gen $ BinaryExpression Plus (Pos.gen $ BinaryExpression Times cv lv) rv]
+      -- [Pos.gen $ BinaryExpression op rv lv | op <- [Plus, Minus]]
+    -- unops = [Pos.gen $ UnaryExpression Neg rv, Pos.gen $ BinaryExpression Div rv (Pos.gen $ Literal $ IntValue 2)]
+    unops = []
    
     
 addConstBounds (Program decs) v = Program $ bounds ++ decs
@@ -187,12 +190,12 @@ type IOExamples = [Map.Map String Value] -- list of states, where each state is 
 repairBlock :: [Expression] -> [Expression] -> Program -> [String] -> [String] -> [String] -> Body -> Block -> Block -> Block -> (Block, Program, Body)
 repairBlock pres posts prog globals lhsVars rhsVars scope blk templ assumpts = debug ret
   where
-    debugCegis = True
-    -- debug x = if not debugCegis then x else unsafePerformIO $! do {
-    --   writeFile "cegis-debug.txt" $! concatMap (++ "\n") outs;
-    --   return x
-    -- }
-    debug x = x
+    debugCegis = False
+    debug x = if not debugCegis then x else unsafePerformIO $! do {
+      writeFile "cegis-debug.txt" $! unlines outs;
+      return x
+    }
+    -- debug x = x
     outs = 
       ("Pres: " ++ show pres)
       : ("Posts: " ++ show posts)
@@ -259,6 +262,11 @@ searchAllConfigs pres posts prog globals scope blk fillme lhses rhses (cand:cand
       | maxVal cand > 1 = debugProg "cegis-search-debug.bpl" 
       | maxVal cand > 2 = error "cand depth exceeded"
       | otherwise = id
+    {-# NOINLINE debugIO #-}
+    debugIO :: IOExamples -> IOExamples
+    -- debugIO is = (unsafePerformIO $ putStrLn $ "examples: " ++ show is) `seq` is
+    debugIO is = is
+    
   
     checkMe = debugger $ optimize $ buildMainSearch globals procNames $ case searchProg of Program x -> Program $ x ++ procs
 
@@ -277,7 +285,7 @@ searchAllConfigs pres posts prog globals scope blk fillme lhses rhses (cand:cand
             if checkProg $ case searchProg of (Program decs) -> optimize $ Program $ decs ++ buildConfVal c ++ [buildMain pres posts globals searchBody] --the candidate seems to work...use expensive check. if that fails, get more expressions
             then buildAns c  -- we have a winner!
             else searchAllConfigs pres posts prog globals scope blk fillme lhses rhses (cands ++ newCands) examples -- get more exprs
-          Right io  -> searchAllConfigs pres posts prog globals scope blk fillme lhses rhses (cand:cands) (io:examples) -- retry current exprs
+          Right io  -> searchAllConfigs pres posts prog globals scope blk fillme lhses rhses (cand:cands) (debugIO $ io:examples) -- retry current exprs
       
       []   -> searchAllConfigs pres posts prog globals scope blk fillme lhses rhses (cands ++ newCands) examples -- can't find a new candidate...O.O
 
@@ -416,11 +424,13 @@ buildIO tc@(TestCase _ mem conMem (Just rtf)) = buildMap ((mem'^.memOld) `Map.un
     initLocalVals :: Map.Map String Expression
     initLocalVals = Map.mapMaybeWithKey (evalLogicals (mem^.memLogical) (rtfMemory rtf ^. memLocals)) (rtfMemory rtf ^.memLocalOld)
     evalLogicals :: Solution -> Store -> Id -> Thunk -> Maybe Thunk
-    evalLogicals logic local var (Pos.Pos x (Logical _ v)) 
+    evalLogicals logic local var (Pos.Pos x (Logical _ v))
+      -- | cegisVar var = Nothing
       | Map.member v logic    = Just $ Pos.Pos x $ Literal $ (Map.!) logic v 
       | Map.member var local  = Just $ (Map.!) local var 
       | otherwise             = error $ "bad logical mapping, can't find " ++ var
     evalLogicals _ _ _ _ = Nothing -- filter out maps... not sure if smart
+    -- cegisVar s = "__cegis__local" `isPrefixOf` s
 
 
     -- takeBaseVal :: Thunk -> Maybe Thunk

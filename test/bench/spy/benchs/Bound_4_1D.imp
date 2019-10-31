@@ -1,0 +1,57 @@
+Component Main {
+  
+  data xs: int;
+  data ys: int;
+  data zs: int;
+  data us: int;
+  
+
+  procedure incX() {
+    for (x: int, y: int, z: int, u: int) in (xs, ys, zs, us) {
+      x = x + 1;
+      y = y + 1;
+      z = z + 1;
+      u = u + 1;
+    }
+  }
+
+  procedure decY() {
+    for (y: int, x: int) in (ys, xs) {
+      y = y - 1;
+      x = x - 1;
+    }
+  }
+
+  procedure incY() {
+    for (y: int, z: int, u: int) in (ys, zs, us) {
+      y = y + 1;
+      z = z + 1;
+      u = u + 1;
+    }
+  }
+
+  procedure decZ() {
+    for (z: int, y: int, x: int) in (zs, ys, xs) {
+      z = z - 1;
+      y = y - 1;
+      x = x - 1;
+    }
+  }
+
+  procedure incZ() {
+    for (z: int, u: int) in (zs, us) {
+      z = z + 1;
+      u = u + 1;
+    }
+  }
+  procedure decU() {
+    for (u: int, z: int, y: int, x: int) in (us, zs, ys, xs) {
+      u = u - 1;
+      z = z - 1;
+      y = y - 1;
+      x = x - 1;
+    }
+  }
+
+  
+}

@@ -1,0 +1,40 @@
+Component Midpoint {
+  data lhs : int;
+  data rhs: int;
+  data mid: int;
+
+  relation solveY(y: int) {
+    x = y && m = y
+  }
+  relation solveX(x: int) {
+    y = x && m = x
+  }
+  relation solveM(m: int) {
+    x = m && y = m
+  }
+  
+}
+
+
+Component Main {
+  
+  data x: int;
+  data y: int;
+  data m: int;
+
+  using Midpoint(x, y, m);
+  using NotEq(x, y);
+
+  procedure incX() {
+    x = x + 1;
+  }
+  
+  procedure incY() {
+    y = y + 1;
+  }
+
+  procedure incM() {
+    m = m + 1;
+  }
+  
+}

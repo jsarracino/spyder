@@ -1,0 +1,87 @@
+Component Main {
+  data me: int[];
+  data them: int[];
+  data mid: int[];
+  data sum: int[];
+
+  data posColor : int;
+  data negColor : int;
+  data colors : int[];
+
+
+  procedure addRowMeThem() {
+    let i: int;
+    let val: int;
+    let val2: int;
+    for (x: int, t: int, m: int, s: int, c: int) with idx in (me, them, mid, sum, colors) {
+      if (idx == i) {
+        x = val;
+        t = val2;
+        m = (val + val2)/2;
+        s = val + val2;
+        if (s >= 0) {
+          c = posColor;
+        } else {
+          c = negColor;
+        }
+      }
+    }
+  }
+
+  procedure addRowMe() {
+    
+    let val: int;
+    let val2: int;
+    let i: int;
+    for (x: int, m: int, t: int, s: int, c: int) with idx in (me, mid, them, sum, colors) {
+      if (idx == i) {
+        x = val;
+        m = (val + t)/2;
+        s = x + t;
+        if (s >= 0) {
+          c = posColor;
+        } else {
+          c = negColor;
+        }
+      }
+    }
+  }
+
+  procedure adjustMeEntry() {
+    
+    let val: int;
+    let i: int;
+    for (x: int, m: int, t: int, s: int, c: int) with idx in (me, mid, them, sum, colors) {
+      if (idx == i) {
+        x = val;
+        m = (val + t)/2;
+        s = x + t;
+        if (s >= 0) {
+          c = posColor;
+        } else {
+          c = negColor;
+        }
+      }
+    }
+  }
+
+  procedure adjustThemEntry() {
+    
+    let val: int;
+    let i: int;
+    for (x: int, m: int, t: int, c: int) with idx in (them, mid, me, colors) {
+      if (idx == i) {
+        x = val;
+        m = (val + t)/2;
+        s = x + t;
+        if (s >= 0) {
+          c = posColor;
+        } else {
+          c = negColor;
+        }
+      }
+    }
+  }
+
+
+}

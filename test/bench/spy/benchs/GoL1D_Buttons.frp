@@ -1,0 +1,162 @@
+Component Startable {
+  data running : int; // bool, = 0 or 1
+  data start : int; // button
+  data stop : int;  // button
+
+  relation solveRunning(r: int) {
+    start = r && stop = -r
+  }
+
+  relation solveStop(s: int) {
+    start = -s && running = -s
+  }
+
+  relation solveStart(s: int) {
+    stop = -s && running = s
+  }
+
+}
+
+
+Component OneDGoL {
+  data cells : int[]; 
+  data rendered : int[];
+
+  // black == 0
+  // white == 1
+
+  relation solveCells(cells: int[]) {
+    foreach (c, r) in (cells, rendered) {
+      r = c
+    }
+  }
+
+  relation solveRendered(rendered: int[]) {
+    foreach (c, r) in (cells, rendered) {
+      c = r
+    }
+  }
+
+}
+
+
+Component Main {
+  // the model
+  // data oldCells : int[]; // bool[]
+  data cells : int[]; // bool[]
+
+
+  // the view
+  data rendered : int[]; // color
+  data start : int; // button
+  data stop : int; // button
+  data running : int; // bool
+
+  using Startable(running, start, stop);
+  using OneDGoL(cells, rendered);
+
+  
+  procedure colorOnClick() {
+    let locIndex: int; // unknown value. we would use a function param but the synthesis part is broken.
+    for (color: int) with idx in (rendered) {
+      if (idx == locIndex) {
+        if (color == 0) {
+          color = 1;
+        } else {
+          color = 0;
+        }
+      }
+    }
+    
+  }
+
+  // from http://jonmillen.com/1dlife/index.html
+
+  // YYXYY
+  // a dead cell X is alive if 2 or 3 of Y are alive
+  // a live cell X stays alive if 2 or 4 of Y are alive
+  
+  
+  procedure golLogic(){
+    let uBound: int; // don't actually know the range of the cells
+    let count : int = 0;
+    let oldCell: int; // oldCells[idx]
+    let oldCellFuture: int; // oldCells[idx+1] 
+    let oldCellFuture2: int; // oldCells[idx+2];
+    let oldCellPrev: int; //oldCells[idx-1]
+    let oldCellPrev2: int; //oldCells[idx-2]
+
+    for (oc: int) in (cells) {
+      oldCell = oc;
+    }
+
+    for (cell: int) with idx in (cells) {
+      if (idx == 0) {
+
+        if (idx + 1 == uBound) { // no slack
+          // continue
+        } else if (idx + 2 == uBound) {
+          // just one cell
+          count = oldCellFuture; //oldCells[idx+1];
+        } else {
+          // two cells
+          count = oldCellFuture + oldCellFuture2; 
+        }
+
+      } else if (idx == 1) {
+        count = oldCell;
+        if (idx + 1 == uBound) {
+          // continue
+        } else if (idx + 2 == uBound) {
+          count = count + oldCellFuture;
+        } else {
+          count = count + oldCellFuture + oldCellFuture2; 
+        }
+
+      } else {
+        count = oldCellPrev + oldCellPrev2;
+
+        if (idx + 1 == uBound) {
+
+        } else if (idx + 2 == uBound) {
+          count = count + oldCellFuture;
+        } else {
+          count = count + oldCellFuture + oldCellFuture2;
+        }
+
+      }
+
+      if (oldCell == 0) {
+        if (count == 2 || count == 3) {
+          cell = 1;
+        }
+      } else {
+        if (count != 2 && count != 4) {
+          cell = 0;
+        }
+      }
+    }
+  }
+
+
+  procedure toggleStart() {
+    if (start == 0) {
+      start = 1;
+    } else if (start == 1) {
+      start = 0;
+    } else {
+
+    }
+  }
+
+  procedure toggleStop() {
+    if (stop == 0) {
+      stop = 1;
+    } else if (stop == 1) {
+      stop = 0;
+    }
+  }
+
+  
+  
+}

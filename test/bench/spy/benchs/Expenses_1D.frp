@@ -1,0 +1,64 @@
+Component Shared {
+  data l: int[];
+  data r: int[];
+  data m: int[];
+
+  relation solveL(l: int[]) {
+    foreach (ll, rr, mm) in (l, r, m) {
+      mm = (ll + rr) / 2
+    }
+    
+  }
+
+  relation solveR(r: int[]) {
+    foreach (ll, rr, mm) in (l, r, m) {
+      mm = (ll + rr) / 2
+    }
+  }
+  
+}
+
+Component Main {
+  data me: int[];
+  data them: int[];
+  data mid: int[];
+  data sum: int[];
+
+  using Shared(me, them, mid);
+
+  procedure addRowMeThem() {
+    let i: int;
+    let val: int;
+    let val2: int;
+    for (x: int, t: int) with idx in (me, them) {
+      if (idx == i) {
+        x = val;
+        t = val2;
+      }
+    }
+  }
+
+  procedure adjustMeEntry() {
+    
+    let val: int;
+    let i: int;
+    for (x: int) with idx in (me) {
+      if (idx == i) {
+        x = val;
+      }
+    }
+  }
+
+  procedure adjustThemEntry() {
+    
+    let val: int;
+    let i: int;
+    for (x: int) with idx in (them) {
+      if (idx == i) {
+        x = val;
+      }
+    }
+  }
+
+
+}

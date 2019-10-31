@@ -1,0 +1,113 @@
+generator int expr(int x, int y, int z, int p, int q, int bnd){
+	assert bnd > 0;
+	generator int sum(){
+		return {| ((x | y | z | p | q) +  (x | y | z | p | q | ??) ) | ?? |};
+	}
+	if(??) { return sum(); }
+	else { return {| expr(x,y,z,p,q,bnd-1) (* | /) sum() |}; }
+}
+
+
+generator void updateLoc(int n, ref int[n] out, int[n] xs, int[n] ys, int[n] zs, int[n] qs, int at, int bound) {
+  out[at] = expr(at, xs[at], ys[at], zs[at], qs[at], bound);
+}
+
+boolean midPoint(int n, int[n] x, int[n] y, int[n] mid, int[n] sum) {
+  boolean out = true;
+  for (int i = 0; i < n; ++i) {
+    out = out && (x[i] + y[i])/2 == mid[i];
+    out = out && x[i] + y[i] == sum[i];
+  }
+	return out;
+}
+
+void buildExpenses(int n, ref int[n] x, ref int[n] y, ref int[n] mid, ref int[n] sum) {
+  for (int i = 0; i < n; ++i) {
+    x[i] = i;
+    y[i] = 5 * i;
+    mid[i] = 3 * i;
+    sum[i] = 6 * i;
+  }
+}
+
+harness void sketch (int i1, int other1, int i2, int other2, int i3, int other3, int other4, int other5) {
+  int n = 50;
+  int[n] x;
+  int[n] y; 
+  int[n] mid;
+  int[n] sum;
+
+  buildExpenses(n, x, y, mid, sum);
+
+	assume midPoint(n, x, y, mid, sum);
+  /*
+  procedure addRowMeThem() {
+    let i: int;
+    let val: int;
+    let val2: int;
+    for (x: int, t: int) with idx in (me, them) {
+      if (idx == i) {
+        x = val;
+        t = val2;
+      }
+    }
+  }
+  */
+
+  assume 0 <= i1 && i1 < n;
+	x[i1] = other1;
+  y[i1] = other2;
+	updateLoc(n,mid,x,y,mid,sum,i1,2);
+  updateLoc(n,sum,x,y,mid,sum,i1,2);
+	assert midPoint(n, x, y, mid, sum);
+
+  /*
+  procedure addRowMeSum() {
+    
+    let val: int;
+    let val2: int;
+    let i: int;
+    for (x: int, t: int) with idx in (me, sum) {
+      if (idx == i) {
+        x = val;
+        t = val2;
+      }
+    }
+  }
+  */
+  
+
+  assume 0 <= i2 && i2 < n;
+	x[i2] = other3;
+  sum[i2] = other5;
+	updateLoc(n,y,x,y,mid,sum,i2,2);
+  updateLoc(n,mid,x,y,mid,sum,i2,2);
+	assert midPoint(n, x, y, mid,sum);
+
+  
+
+  /*
+
+  procedure adjustThemEntry() {
+
+    let val: int;
+    let i: int;
+    for (x: int, t: int) with idx in (them, sum) {
+      if (idx == i) {
+        x = val;
+        t = t;
+      }
+    }
+  }
+  */
+
+  assume 0 <= i3 && i3 < n;
+	y[i3] = other4;
+  sum[i3] = sum[i3];
+	updateLoc(n,x,x,y,mid,sum,i3,2);
+  updateLoc(n,mid,x,y,mid,sum,i3,2);
+	assert midPoint(n, x, y, mid,sum);
+
+
+	
+}

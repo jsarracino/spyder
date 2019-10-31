@@ -1,0 +1,22 @@
+
+
+Component Main {
+  data me: int;
+  data them: int;
+  data mid: int;
+  procedure addRowMeThem() {
+    let val: int;
+    let val2: int;
+    x = val;
+    them = val2;
+    mid = (x + them)/2;
+  }
+
+  procedure addRowMe() {
+    let val: int;
+    x = val;
+    mid = (x + them)/2;
+  }
+
+
+}

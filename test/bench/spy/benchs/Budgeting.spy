@@ -4,11 +4,24 @@ Component DateConv {
 
   relation Days(xs: int[], ys: int[]) {
     foreach (x, y) in (xs, ys) {
-      y = 7 * x
+      y = 2 * x
     }
   }
 
   always Days(ds, ws);
+}
+
+Component Sum {
+  data ds: int[];
+  data su: int[];
+
+  relation Days(xs: int[], ys: int[]) {
+    foreach (x, y) in (xs, ys) {
+      y = prev(y, 0) + x
+    }
+  }
+
+  always Days(ds, su);
 }
 
 Component CondFormat {
@@ -61,6 +74,7 @@ Component Either {
 Component Main {
   data weeks: int[];
   data days: int[];
+  data sums: int[];
 
   data fontColors: int[];
   data bkgColors: int[];
@@ -71,6 +85,7 @@ Component Main {
   data negativeColor: int;
 
   using DateConv(days, weeks);
+  using Sum(days, sums);
 
   
   using CondFormat(positiveColor, negativeColor, weeks, fontColors);
@@ -91,7 +106,6 @@ Component Main {
     }
 
   }
-  
 
   procedure adjustCOLA() {
     let cola: int;
@@ -101,15 +115,13 @@ Component Main {
       }
     }
   }
-
-
+  
+  
   procedure evenBkg() {
     let x : int;
     evenColor = x;
     oddColor = oddColor;
   }
-
-
 
 }
 

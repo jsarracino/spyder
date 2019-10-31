@@ -1,0 +1,44 @@
+Component Bound {
+  data ls: int[];
+  data rs: int[];
+
+  relation bound(xs: int[], ys: int[]) {
+    foreach (x, y) in (xs, ys) {
+      x < y
+    }
+  }
+  
+  always bound(ls, rs);
+  
+}
+
+Component Main {
+  
+  data xs: int;
+  data ys: int;
+  data zs: int;
+
+  using Bound(xs, ys);
+  //using Bound(ys,zs);
+  
+
+  procedure incX() {
+    for (x: int) in (xs) {
+      x = x + 1;
+    }
+  }
+
+  procedure decY() {
+    for (y: int) in (ys) {
+      y = y - 1;
+    }
+  }
+
+  procedure incY() {
+    for (y: int) in (ys) {
+      y = y + 1;
+    }
+  }
+
+  
+}

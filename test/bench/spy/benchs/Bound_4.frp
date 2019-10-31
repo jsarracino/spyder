@@ -1,0 +1,54 @@
+Component Bound {
+  data x: int;
+  data y: int;
+  data z: int;
+  data u: int;
+
+  relation updateX(x: int) {
+    y = x + 1 && z = x + 2 && u = x + 3
+  }
+  relation updateY(y: int) {
+    x = y - 1 && z = y + 1 && u = y + 2
+  }
+  relation updateZ(z: int) {
+    x = z - 2 && y = z - 1 && u = z + 1
+  }
+  relation updateU(u: int) {
+    x = u - 3 && y = u - 2 && z = u - 1
+  }
+  
+}
+
+
+Component Main {
+  
+  data x: int;
+  data y: int;
+  data z: int;
+  data u: int;
+
+  procedure incX() {
+    x = x + 1;
+  }
+
+  procedure decY() {
+    y = y - 1;
+  }
+
+  procedure incY() {
+    y = y + 1;
+  }
+
+  procedure decZ() {
+    z = z - 1;
+  }
+
+  procedure incZ() {
+    z = z + 1;
+  }
+  procedure decU() {
+    u = u - 1;
+  }
+
+  
+}

@@ -1,0 +1,33 @@
+Component Bound {
+  data x: int;
+  data y: int;
+
+  relation solveX(x: int) {
+    y = x + 1
+  }
+
+  relation solveY(y: int) {
+    x = y - 1
+  }
+  
+}
+
+
+Component Main {
+  
+  data x: int;
+  data y: int;
+
+  using Bound(x, y);
+  
+
+  procedure incX() {
+    x = x + 1;
+  }
+
+  procedure decY() {
+    y = y - 1;
+  }
+
+  
+}

@@ -1,0 +1,33 @@
+Component Midpoint {
+  data lhs : int;
+  data rhs: int;
+
+  relation solveY(y: int) {
+    x = 10 - y
+  }
+  relation solveX(x: int) {
+    y = 10 - x
+  }
+  
+  
+}
+
+
+Component Main {
+  
+  data x: int;
+  data y: int;
+
+  using Midpoint(x, y);
+  
+
+  procedure incX() {
+    x = x + 1;
+  }
+
+  procedure incY() {
+    y = y + 1;
+  }
+
+  
+}

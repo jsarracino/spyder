@@ -1,0 +1,33 @@
+Component Midpoint {
+  data lhs : int;
+  data rhs: int;
+
+  relation midPoint(x: int, y: int) {
+    x + y = 10
+  }
+  
+  always midPoint(lhs, rhs);
+  
+}
+
+
+
+
+Component Main {
+  
+  data x: int;
+  data y: int;
+
+  using Midpoint(x, y);
+  
+
+  procedure incX() {
+    x = x + 1;
+  }
+
+  procedure incY() {
+    y = y + 1;
+  }
+
+  
+}

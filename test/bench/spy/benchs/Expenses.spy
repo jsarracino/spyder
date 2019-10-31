@@ -1,78 +1,36 @@
 Component Shared {
-  data l: int[];
-  data r: int[];
-  data m: int[];
-  data s: int[];
+  data l: int;
+  data r: int;
+  data m: int;
 
-  relation Sum(ls: int[], rs: int[], ss: int[]) {
-    foreach (a, b, c) in (ls, rs, ss) {
-      c = a + b
-    }
+  relation Mid(l: int, r: int, m: int) {
+    m = (l + r) / 2
   }
 
-  relation Mid(ls: int[], rs: int[], ms: int[]) {
-    foreach (a, b, c) in (ls, rs, ms) {
-      c = (a + b) / 2
-    }
-  }
-
-  always Sum(l, r, s);
   always Mid(l, r, m);
+  
 }
 
 Component Main {
-  data me: int[];
-  data them: int[];
-  data sum: int[];
-  data mid: int[];
+  data me: int;
+  data them: int;
+  data mid: int;
 
-  using Shared(me, them, mid, sum);
+  using Shared(me, them, mid);
 
   procedure addRowMeThem() {
-    let i: int;
     let val: int;
     let val2: int;
-    for (x: int, t: int) with idx in (me, them) {
-      if (idx == i) {
-        x = val;
-        t = val2;
-      }
-    }
+    me = val;
+    them = val2;
   }
 
-  procedure addRowMeSum() {
-    let i: int;
+  
+  procedure addRowMe() {
     let val: int;
-    let val2: int;
-    for (x: int, t: int) with idx in (me, sum) {
-      if (idx == i) {
-        x = val;
-        t = val2;
-      }
-    }
+    me = val;
   }
-
-  procedure adjustMeEntry() {
-    let i: int;
-    let val: int;
-    for (x: int, t: int) with idx in (me, sum) {
-      if (idx == i) {
-        x = val;
-        t = sum;
-      }
-    }
-  }
-
-  procedure adjustThemEntry() {
-    let i: int;
-    let val: int;
-    for (x: int, t: int) with idx in (them, sum) {
-      if (idx == i) {
-        x = val;
-        t = sum;
-      }
-    }
-  }
+  
 
 
 }

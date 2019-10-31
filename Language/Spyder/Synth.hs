@@ -26,7 +26,7 @@ module Language.Spyder.Synth (
   -- , generate
 ) where
 
-import Prelude hiding (foldl, all, concat, any, concatMap)
+import Prelude hiding (foldl, all, concat, any, concatMap, notElem)
 import Data.Foldable                
 
 
@@ -43,6 +43,8 @@ import qualified Data.Set as Set
 import Language.Boogie.Position               (node, Pos(..), gen)
 import Data.List                              (nub, intersect, (\\), partition)
 -- import qualified Data.Foldable  as FLD
+
+import Language.Spyder.Bench
 
 import Data.Maybe
 import Language.Spyder.Opt 
@@ -90,9 +92,11 @@ fixProcGeneral dims invs program scope globals broken = ret
 
 -- given a program and a basic block *to fix*, run cegis to search for the fix.
 fixProc :: DimEnv -> [Spec.RelExpr] -> [Set.Set String] -> Program -> Body -> [String] -> Block -> (Block, Program, Body)
-fixProc dims invs relVars header body globals broken = fixed
+fixProc dims invs relVars header body globals broken =  fixed
   where
-    fixed = fixBlock dims invs relVars header globals rhsVars Set.empty body [] broken
+    fixed = 
+      let (rb, x, y) = fixBlock dims invs relVars header globals rhsVars Set.empty body [] broken in 
+        (logFixSize rb broken, x, y)
     rhsVars = findInScope header body invs
 
 useVars :: [Spec.RelExpr] -> Set.Set String -> [Spec.RelExpr]
@@ -118,7 +122,8 @@ insertIntoLoop ins _ = ins
 dimzero :: DimEnv -> String -> Bool
 dimzero d s = case Map.lookup s d of 
   Just v -> v == 0
-  Nothing -> error $ "missing dim variables " ++ s
+  Nothing -> True
+  -- Nothing -> error $ "missing dim variables " ++ s
 
 compSpecs t = map (specToBoogie [] . Spec.inlinePrev . t)
 
@@ -145,8 +150,15 @@ checkInvs (staleInvs, fineInvs) globals x@(blk, Program decs, scope@(vs,_)) = ch
 
 {-# NOINLINE assertFixed #-}
 assertFixed :: ([Spec.RelExpr], [Spec.RelExpr]) -> [String] -> (Block, Program, Body) -> (Block, Program, Body)
-assertFixed is gs st = if checkInvs is gs st then st else error "Expected correct program"
+-- assertFixed is gs st = if checkInvs is gs st then st else error "Expected correct program"
+assertFixed is gs st = st
+{-# NOINLINE logFixed #-}
+logFixed :: ([Spec.RelExpr], [Spec.RelExpr]) -> [String] -> (Block, Program, Body) -> (Block, Program, Body)
+logFixed _ _ st = unsafePerformIO (putStrLn "holes: 1") `seq` st
 
+{-# NOINLINE logFixSize #-}
+logFixSize :: Block -> Block -> Block
+logFixSize new old = unsafePerformIO (putStrLn $ "size of fix: " ++ show (size new - size old)) `seq` new
 
 fixBlock :: DimEnv -> [Spec.RelExpr] -> [Set.Set String] -> Program -> [String] -> [String] -> Set.Set String -> Body -> Block -> Block -> (Block, Program, Body)
 fixBlock dims invs relVars header globals rhsVars stales scope prefix fixme = fixResult inner
@@ -174,7 +186,7 @@ fixBlock dims invs relVars header globals rhsVars stales scope prefix fixme = fi
 
         (suffix, prog', bod') = createFix dims staleInvs prog globals candVars (filter (dimzero dims) rhsVars) scope' blk 
 
-        fixed = assertFixed (staleInvs, fineInvs) globals (makeAssumpts pres ++ suffix, prog', bod')
+        fixed = logFixed (staleInvs, fineInvs) globals (makeAssumpts pres ++ suffix, prog', bod')
 
     initState = (prefix, [], header, scope)
     wrapFixStmt :: (Block, Block, Program, Body) -> LStatement -> (Block, Block, Program, Body)
@@ -281,7 +293,7 @@ fixBlock dims invs relVars header globals rhsVars stales scope prefix fixme = fi
 
         (rblk, rprog, rbod, _, _) = foldl' buildRet (oldblk, prog, scope, [], dims) problems
 
-        ret = (rblk, rprog, rbod)
+        ret = ( rblk, rprog, rbod)
 
         
        
@@ -293,27 +305,47 @@ fixBlock dims invs relVars header globals rhsVars stales scope prefix fixme = fi
           where
 
             newInvs = curInvs ++ locInvs
-            (pres, posts) = (compSpecs Spec.weakenPrev (if null curInvs then invs else curInvs), compSpecs id newInvs)
+            
 
 
             (env', bindings, specInvs, lvs, skel) = generateSubProblems env (lvalues, locInvs) Map.empty []
 
-            invRels = relatedFromInvs locInvs
-            isStale = varRelated invRels (gatherVars newInvs)
+            invRels = relatedFromInvs specInvs
+            isStale = varRelated invRels (gatherVars (curInvs ++ specInvs))
 
             lvs' = Set.filter (\s -> isStale s && dimzero env' s) lvs
 
             snip = concatMap genSkel lvs'
+            snippets = genCegPs (Set.toList lvs') specInvs
             assumpts = []
 
-            (fixed, prog', bod') = repairBlock pres posts prog globals (Set.toList lvs') (gatherVars newInvs) bod blk snip assumpts
-            fixed' = if null assumpts then fixed else trimCond fixed
-            fixes = parseFixes (Set.toList lvalues) fixed'
+            withSpec = joinEnvs env' bod
+
+
+            (results, prog', bod') = foldl inner ([], prog, withSpec) snippets
+
+            inner :: ([Block], Program,Body) -> ([Spec.RelExpr],Block) -> ([Block], Program,Body)
+            inner (acc, p, b) (is, snip) = (fixed:acc, p', b')
+              where
+                (assumpts, snip') = completeCond (Set.toList lvs') snip
+                (pres, posts) = (compSpecs Spec.weakenPrev (if null is then invs else is), compSpecs id is)
+                (fixed, p', b') = repairBlock pres posts p globals (Set.toList lvs') (filter (dimzero env') $ gatherVars $ is ++ curInvs) b blk snip' assumpts
+                -- fixed' = if null assumpts then fixed else trimCond fixed
+                -- fixes = parseFixes (Set.toList lvalues) fixed'
+                -- fix = concat $ Map.elems fixes
+                -- cond = foldl ander (gen tt) $ map (specToBoogie []) invs 
+
+
+                -- ander l r = gen $ BinaryExpression And l r
+                -- sk' = rebuildBlock sk fixes
+
+
+                
 
             (itws, b) = bod'
 
 
-            newSpyBlk = combineSynSolutions env' skel (rebuildFix $ concat $ Map.elems fixes)
+            newSpyBlk = combineSynSolutions env' skel $ rebuildFix $ concat results --(rebuildFix $ concatConds results)
             (blk', itws') = translateBlock (newSpyBlk, concat itws)
 
             -- snippets = genCegPs (Set.toList lvs') locInvs
@@ -331,9 +363,19 @@ fixBlock dims invs relVars header globals rhsVars stales scope prefix fixme = fi
         --         sk' = rebuildBlock sk fixes
 
 
+joinEnvs :: DimEnv -> Body -> Body
+joinEnvs env (itws, b) = (itws', b)
+   where
+    newITWs = genDims env
+    oldNames = map itwId $ concat itws
+    itws' = itws ++ [filter (\itw -> itwId itw `notElem` oldNames) newITWs]
 
 
-
+-- concatConds :: [(Expression, Block)] -> Block
+-- concatConds = foldl worker []
+--   where
+--     worker :: Block -> (Expression, Block) -> Block
+--     worker blk (e, fx) = blk ++ singletonBlock (gen $ If (Expr e) fx Nothing)
 
 calculateCegisProblems :: Set.Set String -> Set.Set String -> [Spec.RelExpr] -> [(Set.Set String, [Spec.RelExpr])]
 calculateCegisProblems srcs lvars invs = schedule

@@ -11,10 +11,7 @@ Spyder uses Stack -- to build, run
 `stack build`.
 ## Running
 To run Spyder, run
-`stack exec -- spyder -i <path-to-input-file> -o <path-to-output-file>`.
-
-Alternatively we have a simple script for running from GHCI:
-`./Script.hs -i <path-to-input-file> -o <path-to-output-file>`
+`./Script.hs -i <path-to-input-file> -o <path-to-output-file>`.
 
 Some examples are in `test/bench/spy/examples/`, e.g. `test/bench/spy/examples/num-basic.spy`.
 

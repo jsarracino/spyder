@@ -6,10 +6,10 @@ module Language.Spyder.Pretty (
   pretty
 ) where
 
-import Language.Spyder.AST.Component
+import Language.Spyder.AST
 
 import Text.PrettyPrint.ANSI.Leijen
 
 
-instance (Pretty Component) where
+instance (Pretty Program) where
   pretty = error "todo"

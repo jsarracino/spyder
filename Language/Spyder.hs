@@ -100,12 +100,12 @@ runOpts (BenchSize _ inf) = do {
     spy = Parser.fromFile inf
 
 runOpts (Parse inf) = putStrLn =<< Parser.tryParsing <$> readFile inf 
-runOpts (BenchDiff inp outp) = do {
-  inf <- Parser.fromFile inp;
-  writeFile (outp ++ "-spec") $ show $ specTree inf;
-  writeFile (outp ++ "-impl") $ show $ implTree inf;
-  writeFile outp $ show $ treeify inf;
-}
+-- runOpts (BenchDiff inp outp) = do {
+--   inf <- Parser.fromFile inp;
+--   writeFile (outp ++ "-spec") $ show $ specTree inf;
+--   writeFile (outp ++ "-impl") $ show $ implTree inf;
+--   writeFile outp $ show $ treeify inf;
+-- }
 
 parseOpts :: Parser SpyOptions
 parseOpts = normal <|> (df *> diff) <|> sizebench <|> parse 

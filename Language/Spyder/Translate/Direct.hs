@@ -171,10 +171,10 @@ translateStmt (Imp.For vs idxDec arrs bod, vars) =
     assertTT = BST.SpecClause BST.Inline False $ Pos.gen BST.tt
 
 translateStmt (Imp.Assgn lid rhs, vars) = ([BST.Assign [(lid, [])] [transWithGen rhs]], vars)
-translateStmt (Imp.While c bod, vars) = ([BST.While (BST.Expr c') [] bod'], vars')
-  where
-    c' = transWithGen c
-    (bod', vars') = translateBlock (bod, vars)
+-- translateStmt (Imp.While c bod, vars) = ([BST.While (BST.Expr c') [] bod'], vars')
+--   where
+--     c' = transWithGen c
+--     (bod', vars') = translateBlock (bod, vars)
 translateStmt (Imp.Cond c tr fl, vars) = ([BST.If cond ts fls], vars'')
   where
     cond = BST.Expr (transWithGen c)
@@ -217,39 +217,40 @@ genSig (DerivComp nme decs, x) = Map.fromList $ map worker decs'
     -- a map from variables to dimensions
 type CompileState = ([Spec.RelExpr], Map.Map String String, DimEnv)
 translateProg :: Program -> (BST.Program, CompileState)
-translateProg prog@(comps, MainComp decls) = (debugProg "compile-debug.bpl" outProg, outState)
-  where 
-    -- globalVars = mangleVars "Main" $ gatherDDecls decls
-    globalVars = gatherDDecls decls
-    varMap = Map.fromList $ zipWith stripTy2 (gatherDDecls decls) globalVars
-    stripTy2 (l, _) (r, _) = (l, r)
-    vDecls = globalVars >>= translateVDecl
+translateProg = error "TODO"
+-- translateProg prog@(comps, MainComp decls) = (debugProg "compile-debug.bpl" outProg, outState)
+--   where 
+--     -- globalVars = mangleVars "Main" $ gatherDDecls decls
+--     globalVars = gatherDDecls decls
+--     varMap = Map.fromList $ zipWith stripTy2 (gatherDDecls decls) globalVars
+--     stripTy2 (l, _) (r, _) = (l, r)
+--     vDecls = globalVars >>= translateVDecl
 
-    comps' = map (processUsing varMap comps) (filter takeUsing decls) 
-    relDecls = (comps' `zip` [0..]) >>= translateRels
+--     comps' = map (processUsing varMap comps) (filter takeUsing decls) 
+--     relDecls = (comps' `zip` [0..]) >>= translateRels
 
-    relSigs = Map.unions $ map genSig (comps' `zip` [0..])
+--     relSigs = Map.unions $ map genSig (comps' `zip` [0..])
 
-    invs = (comps' `zip` [0..]) >>= buildInvs relSigs
+--     invs = (comps' `zip` [0..]) >>= buildInvs relSigs
 
-    globalDims = addDims Map.empty globalVars
+--     globalDims = addDims Map.empty globalVars
 
-    procs = map (alphaProc varMap) $ filter takeProcs decls
+--     procs = map (alphaProc varMap) $ filter takeProcs decls
 
-    procDecls = map (translateProc . completeLoop (relatedVars prog) globalDims) procs
+--     procDecls = map (translateProc . completeLoop (relatedVars prog) globalDims) procs
 
-    withModifies = map (addModifies (map fst globalVars)) procDecls
-    withRequires = map (addRequires invs) withModifies
-    withContracts = map (addEnsures invs) withRequires
+--     withModifies = map (addModifies (map fst globalVars)) procDecls
+--     withRequires = map (addRequires invs) withModifies
+--     withContracts = map (addEnsures invs) withRequires
 
-    outState = (map fst invs, varMap, globalDims)
-    outProg = BST.Program $ map Pos.gen $ vDecls ++ relDecls ++ withContracts
+--     outState = (map fst invs, varMap, globalDims)
+--     outProg = BST.Program $ map Pos.gen $ vDecls ++ relDecls ++ withContracts
 
 
-    takeUsing MainUD{} = True
-    takeUsing _ = False
-    takeProcs ProcDecl{} = True
-    takeProcs _ = False
+--     takeUsing MainUD{} = True
+--     takeUsing _ = False
+--     takeProcs ProcDecl{} = True
+--     takeProcs _ = False
 
 buildInvs :: Map.Map String ([String], Spec.RelExpr) -> (Component, Int) -> [(Spec.RelExpr, [String])]
 buildInvs funcs (DerivComp nme decs, x) = exprs `zip` dims
@@ -332,12 +333,12 @@ processUsing vs comps (MainUD (nme, args)) = case usedComp of
     args' = map (vs Map.!) args
     renamedComp c  = case instantiate args' c of (DerivComp nme decs) -> DerivComp nme decs
 
--- convert an array lvalue to an identifier and list of arguments
-simplArrAccess :: Imp.Expr -> (String, [Imp.Expr])
-simplArrAccess e = worker (e, [])
-  where worker (Imp.VConst s, args) = (s, args)
-        worker (Imp.Index l r, args) = worker (l, r:args)
-        worker (x, _) = error $ "tried to convert to array access: " ++ show x
+-- -- convert an array lvalue to an identifier and list of arguments
+-- simplArrAccess :: Imp.Expr -> (String, [Imp.Expr])
+-- simplArrAccess e = worker (e, [])
+--   where worker (Imp.VConst s, args) = (s, args)
+--         worker (Imp.Index l r, args) = worker (l, r:args)
+--         worker (x, _) = error $ "tried to convert to array access: " ++ show x
 
         
         

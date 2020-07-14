@@ -35,10 +35,7 @@ import Data.List
 -- two vars are *related* if there is a transitive data dependency between the two wrt relations.
 -- the idea is if one var in a set of related vars is modified, so should the others
 relatedVars :: Program -> [Set.Set String]
-relatedVars (_, MainComp decs) = filter (not . Set.null) $ map worker decs 
-  where
-    worker (MainUD (_, rhs)) = Set.fromList rhs
-    worker _ = Set.empty
+relatedVars prog = map (\x -> Set.fromList $ gatherVars [x]) (invs prog) 
 
 
 relatedFromInvs :: [RelExpr] -> [Set.Set String]
@@ -138,9 +135,9 @@ completeLoop rels dims (ProcDecl nme formals (Imp.Seq ss)) = ProcDecl nme formal
       let (tr, dims', _) = foldl worker ([], dims, rels) l 
           (fl, dims'', _) = foldl worker ([], dims', rels) r in
       (acc ++ [Imp.Cond c (Imp.Seq tr) (Imp.Seq fl)], dims'', rels)
-    worker (acc, dims, rels) (Imp.While c (Imp.Seq ss)) = 
-      let (ss', dims', _) = foldl worker ([], dims, rels) ss in 
-        (acc ++ [Imp.While c $ Imp.Seq ss'], dims', rels)
+    -- worker (acc, dims, rels) (Imp.While c (Imp.Seq ss)) = 
+    --   let (ss', dims', _) = foldl worker ([], dims, rels) ss in 
+    --     (acc ++ [Imp.While c $ Imp.Seq ss'], dims', rels)
     worker (acc, d, r) x = (acc ++ [x], d, r)
         
     takeName (Imp.VConst v) = fromMaybe v $ stripPrefix "Main$" v 

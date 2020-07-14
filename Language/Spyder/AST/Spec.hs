@@ -98,20 +98,3 @@ desugConds (RelUnop o i) = map (RelUnop o) $ desugConds i
 desugConds (Foreach vs i ars b) = map (Foreach vs i ars) $ desugConds b
 -- desugConds (RelApp s i) = RelApp s $ map desugConds i TODO
 desugConds x = [x]
-
--- RelApp "prev_var" [RelVar ("prev_" ++ v), i, RelVar idx]
-
--- convertImpl :: RelExpr -> RelExpr
-
--- convertImpl (RelBinop Imp a b) = RelBinop Or $ RelUnop Not (convertImpl a) $ convertImpl b
--- convertImpl (RelBinop o a b ) = RelBinop o (convertImpl a) $ convertImpl b
--- convertImpl (RelCond )
--- convertImpl (RelUnop o i) = RelUnop o $ convertImpl i
--- convertImpl 
-
--- -- given an expression, calculate a normal form by converting the expression into a list of implications
--- calculateImplForm :: RelExpr -> [(RelExpr,RelExpr)]
--- calculateImplForm (RelCond c t f) = 
---   [(RelBinop And tt c, tb) | (tt,tb) <- calculateImplForm t] ++ [(RelBinop And ff (RelUnop Not c), fb) | (ff,fb) <- calculateImplForm f]
-
--- calculateImplForm (RelBinop Imp l r) =  

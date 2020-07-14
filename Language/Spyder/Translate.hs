@@ -33,56 +33,57 @@ import System.IO.Unsafe
 
 
 toBoogie :: Bool -> Program -> BST.Program
-toBoogie plain prog@(comps, MainComp decls) = outProg'
-  where
+toBoogie = error "TODO"
+-- toBoogie plain prog@(comps, MainComp decls) = outProg'
+--   where
     
-    (bprog, (invs, varMap, dims)) = translateProg prog
-    boogDecs = case (bprog, fromBoogUS "lib.bpl") of (BST.Program l, BST.Program r) -> map Pos.node $ l ++ r
+--     (bprog, (invs, varMap, dims)) = translateProg prog
+--     boogDecs = case (bprog, fromBoogUS "lib.bpl") of (BST.Program l, BST.Program r) -> map Pos.node $ l ++ r
     
-    reledVars = alphaRels (relatedVars prog) varMap
-    -- attempt to gen the program. if the initial translated program verifies, then we're good to go. otherwise, 
-    -- for each procedure that doesn't verify, synthesize a fix.
-    boogHeader :: [BST.BareDecl]
-    boogHeader = filter takeHeader boogDecs 
+--     reledVars = alphaRels (relatedVars prog) varMap
+--     -- attempt to gen the program. if the initial translated program verifies, then we're good to go. otherwise, 
+--     -- for each procedure that doesn't verify, synthesize a fix.
+--     boogHeader :: [BST.BareDecl]
+--     boogHeader = filter takeHeader boogDecs 
 
-    funcs = filter takeProc boogDecs
-    globals = filter takeGlobal boogDecs >>= getName
+--     funcs = filter takeProc boogDecs
+--     globals = filter takeGlobal boogDecs >>= getName
 
-    (okProcs, brokenProcs) = partition (checkBoogie . linkHeader) funcs
+--     (okProcs, brokenProcs) = partition (checkBoogie . linkHeader) funcs
     
-    linkHeader :: BST.BareDecl -> BST.Program
-    linkHeader pd = BST.Program $ map Pos.gen $ boogHeader ++ [pd]
+--     linkHeader :: BST.BareDecl -> BST.Program
+--     linkHeader pd = BST.Program $ map Pos.gen $ boogHeader ++ [pd]
 
-    outProg = unsafePerformIO $ foldM repProc (BST.Program $ map Pos.gen $ boogHeader ++ okProcs) brokenProcs
+--     outProg = unsafePerformIO $ foldM repProc (BST.Program $ map Pos.gen $ boogHeader ++ okProcs) brokenProcs
 
-    decs = case outProg of BST.Program x -> map Pos.node x
-    outProg' = BST.Program $ map Pos.gen $ filter takeProc decs
+--     decs = case outProg of BST.Program x -> map Pos.node x
+--     outProg' = BST.Program $ map Pos.gen $ filter takeProc decs
 
 
-    repProc :: BST.Program -> BST.BareDecl -> IO BST.Program
-    repProc p (BST.ProcedureDecl nme tyargs formals rets contr (Just bod@(oldvars, fixme))) = do {
-      putStrLn $ "COMPLETING: " ++ nme;
-      let !ret = optimize $! BST.Program $! decs ++ [newProc] in do {
-        putStrLn "Done!";
-        return ret;
-      }
-    }
-      where
-        decs = case newProg of BST.Program i -> i
-        dims' = dims `addITWs` oldvars
-        newProc = Pos.gen $! BST.ProcedureDecl nme tyargs formals rets contr (Just (newvars, fixed))
-        (fixed, newProg, (newvars, _)) = if plain 
-          then  (fixme, p, bod)
-          else fixProc dims' invs reledVars p bod globals fixme 
+--     repProc :: BST.Program -> BST.BareDecl -> IO BST.Program
+--     repProc p (BST.ProcedureDecl nme tyargs formals rets contr (Just bod@(oldvars, fixme))) = do {
+--       putStrLn $ "COMPLETING: " ++ nme;
+--       let !ret = optimize $! BST.Program $! decs ++ [newProc] in do {
+--         putStrLn "Done!";
+--         return ret;
+--       }
+--     }
+--       where
+--         decs = case newProg of BST.Program i -> i
+--         dims' = dims `addITWs` oldvars
+--         newProc = Pos.gen $! BST.ProcedureDecl nme tyargs formals rets contr (Just (newvars, fixed))
+--         (fixed, newProg, (newvars, _)) = if plain 
+--           then  (fixme, p, bod)
+--           else fixProc dims' invs reledVars p bod globals fixme 
         
         
-    takeHeader = not . takeProc -- everything but procedures
-    takeProc x@BST.ProcedureDecl{} = True
-    takeProc _ = False   -- just procedures
-    takeGlobal x@BST.VarDecl{} = True
-    takeGlobal _ = False -- just variables
-    getName :: BST.BareDecl -> [String]
-    getName (BST.VarDecl x) = map BST.itwId x
+--     takeHeader = not . takeProc -- everything but procedures
+--     takeProc x@BST.ProcedureDecl{} = True
+--     takeProc _ = False   -- just procedures
+--     takeGlobal x@BST.VarDecl{} = True
+--     takeGlobal _ = False -- just variables
+--     getName :: BST.BareDecl -> [String]
+--     getName (BST.VarDecl x) = map BST.itwId x
 
 
 

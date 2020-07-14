@@ -1,4 +1,4 @@
-# Spyder -- synthesis of web model-view programs
+# Spyder -- language support for data invariants
 
 ## Building
 Spyder requires Boogaloo and Boogie as submodules, as well as a local installation of z3. Boogaloo is hosted on mercurial, so you have to first clone

@@ -71,10 +71,10 @@ translateExpr (Imp.BinOp o l r) = BST.BinaryExpression op l' r'
         (l', r') = (transWithGen l, transWithGen r)
 translateExpr (Imp.UnOp o i) =
   BST.UnaryExpression (translateUop o) (transWithGen i)
-translateExpr (Imp.Index ar i) =
-  BST.MapSelection (transWithGen ar) [transWithGen i]
-translateExpr (Imp.App (Imp.VConst f) r) = BST.Application f (map transWithGen r)
-translateExpr (Imp.AConst _) = undefined "Error: translation assumes array constants have been desugared"
+-- translateExpr (Imp.Index ar i) =
+--   BST.MapSelection (transWithGen ar) [transWithGen i]
+-- translateExpr (Imp.App (Imp.VConst f) r) = BST.Application f (map transWithGen r)
+-- translateExpr (Imp.AConst _) = undefined "Error: translation assumes array constants have been desugared"
 
 translateITW :: Imp.VDecl -> BST.IdTypeWhere
 translateITW (v, t) = BST.IdTypeWhere v (translateTy t) (Pos.gen BST.tt)

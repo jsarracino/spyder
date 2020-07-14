@@ -1,0 +1,21 @@
+data x: int ;;
+data y: int ;;
+data m: int ;;
+
+invariant ((x + y) / 2) = m ;;
+
+
+procedure incM() {
+  let z: int;
+  m = m + 1;
+
+  if (z > 0) {
+    m = m + 1;
+  } else {
+    m = m;
+  }
+}
+
+procedure incY() {
+  y = y + 1;
+}

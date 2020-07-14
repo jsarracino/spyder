@@ -5,12 +5,9 @@ module Language.Spyder.Parser.Parser (
   , block
   , relDeclP
   , relP
-  , comp
   , spaced
   , typ
   , dataDeclP
-  , mainCompP
-  , derivCompP
   , loopP
   , elifP
   , condP
@@ -25,10 +22,12 @@ import Language.Spyder.Parser.Lexer         (spyderLexer, Parser)
 import Language.Spyder.AST.Component
 import qualified Language.Spyder.AST.Imp  as Imp
 import qualified Language.Spyder.AST.Spec as Spec
-import Language.Spyder.AST                  (Program)
+import Language.Spyder.AST                  (Program(..), Procedure(..))
 
 import Control.Monad                        (liftM, liftM2)
 import Data.List                            (partition)
+
+import Data.Maybe                           (catMaybes)
 
 import Language.Boogie.Parser as BP
 -- import
@@ -57,19 +56,19 @@ bools = tru <|> fls
     tru = do {res "true"; return True }
     fls = do {res "false"; return False }
 
-arrAccess = do {
-  pref <- liftM Imp.VConst ident;
-  rhs <- many1 $ brackets expr;
-  return $ foldl Imp.Index pref rhs
-}
-arrPrim = liftM Imp.AConst (brackets $ commas expr)
+-- arrAccess = do {
+--   pref <- liftM Imp.VConst ident;
+--   rhs <- many1 $ brackets expr;
+--   return $ foldl Imp.Index pref rhs
+-- }
+-- arrPrim = liftM Imp.AConst (brackets $ commas expr)
 
 exprTerm :: Parser Imp.Expr
 exprTerm    =  parens expr
   <|> try (liftM Imp.IConst ints)
   <|> try (liftM Imp.BConst bools)
-  <|> try arrPrim
-  <|> try arrAccess
+  -- <|> try arrPrim
+  -- <|> try arrAccess
   <|> try (liftM Imp.VConst ident)
   <?> "simple expr"
 
@@ -198,13 +197,13 @@ loopP = do {
   return $ Imp.For vs idx arrs body
 }
 
-whileP :: Parser Imp.Statement
-whileP = do {
-  res "while";
-  cond <- parens expr;
-  body <- braces block;
-  return $ Imp.While cond body
-}
+-- whileP :: Parser Imp.Statement
+-- whileP = do {
+--   res "while";
+--   cond <- parens expr;
+--   body <- braces block;
+--   return $ Imp.While cond body
+-- }
 
 declP :: Parser Imp.Statement
 declP = do {
@@ -241,87 +240,72 @@ stmt :: Parser Imp.Statement
 stmt =
       try declP
   <|> try loopP
-  <|> try whileP
+  -- <|> try whileP
   <|> try condP
   <|> try (liftM2 Imp.Assgn ident ((symb "=" >> expr) `followedBy` semi))
   <?> "Statement"
 
-derivCompP :: Parser DerivDecl
-derivCompP = 
-      try (liftM DeriveDDecl dataDeclP)
-  <|> try relDeclP
-  <|> try alwaysP
-  <?> "Component Member"
-
-
-alwaysP :: Parser DerivDecl
-alwaysP = res "always" >> liftM InvClaus relP `followedBy` semi
-
-usingP :: Parser UseClause
-usingP = do {
-  res "using";
-  cname <- ident;
-  args <- parens $ ident `sepBy` comma;
-  semi;
-  return (cname, args )
-}
-
 dataDeclP :: Parser Imp.VDecl
-dataDeclP = res "data" >> vdecl `followedBy` semi
+dataDeclP = res "data" >> vdecl 
   
-
 relP :: Parser Spec.RelExpr 
 relP = relexpr
 
-mainCompP :: Parser MainDecl
-mainCompP = 
-      try (liftM MainDDecl dataDeclP)
-  <|> try procP
-  <|> try (liftM MainUD usingP)
-  <?> "Main decl parser"
 
-relDeclP :: Parser DerivDecl
+relDeclP :: Parser Spec.RelExpr
 relDeclP = do {
-  res "relation";
-  name <- ident;
-  formals <- parens $ commas vdecl;
-  bod <- braces relP;
-  return $ RelDecl name formals bod;
+  res "invariant";
+  spaces;
+  r <- relP;
+  return r;
 }
 
 
-procP :: Parser MainDecl
+procP :: Parser Procedure
 procP = do {
   res "procedure";
   name <- ident;
   args <- parens $ commas vdecl;
   bod <- braces block;
-  return $ ProcDecl name args bod
+  return $ Proc name args bod
 }
 
-comp :: Parser Component
-comp = do {
-  res "Component";
-  name <- ident;
-  if name=="Main" then do {
-    decls <- braces $ spaced mainCompP;
-    return $ MainComp decls
-  } else do {
-    decls <- braces $ spaced derivCompP;
-    return $ DerivComp name decls
-  }
-}
+muncher :: Parser a -> Parser String
+muncher end = manyTill anyChar end
 
+munchOne :: Parser a -> Parser b -> Parser (Maybe a)
+munchOne it end = 
+      ((try it) >>= pure . Just)
+  <|> ((muncher end) >>= (\_ -> pure Nothing))
 
+data ProgInter = L Imp.VDecl | M Spec.RelExpr | R Procedure
 
+progOne :: Parser (Maybe ProgInter)
+progOne = munchOne worker (res ";;")
+  where
+    worker = ddp <|> rp <|> pp
+    ddp = do {
+      x <- dataDeclP;
+      pure $ L x
+    }
+    rp = do {
+      x <- relDeclP;
+      pure $ M x
+    }
+    pp = do {
+      x <- procP;
+      pure $ R x
+    }
 
+progAll :: Parser [ProgInter]
+progAll = liftM catMaybes (many1 progOne)
 
 prog :: Parser Program
-prog = do {
-  spaces;
-  comps <- spaced comp;
-  let ([it], others) = partition takeMain comps in 
-    return (others, it)
-} where
-    takeMain MainComp{} = True
-    takeMain _ = False
+prog = liftM worker progAll
+  where
+    worker :: [ProgInter] -> Program
+    worker = foldl folder (Program [] [] [])
+    folder :: Program -> ProgInter -> Program
+    folder p (L x) = Program (x : vars p) (invs p) (procs p)
+    folder p (M x) = Program (vars p) (x : invs p) (procs p)
+    folder p (R x) = Program (vars p) (invs p) (x : procs p)

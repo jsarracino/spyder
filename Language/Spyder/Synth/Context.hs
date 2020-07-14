@@ -34,7 +34,6 @@ gatherNumsDDec :: DerivDecl -> [Int]
 gatherNumsDDec (DeriveDDecl _) = []
 gatherNumsDDec (RelDecl _ _ bod) = undefined "TODO" --gatherNumsBE bod
 gatherNumsDDec (InvClaus bod) = undefined "TODO" --gatherNumsBE bod
--- TODO: arrays
 gatherNumsMDec :: MainDecl -> [Int]
 gatherNumsMDec (MainDDecl _) = []
 gatherNumsMDec (ProcDecl _ _ (Seq stmts)) = stmts >>= gatherNumsStmt 
@@ -45,7 +44,7 @@ gatherNumsStmt (Decl _ (Just e)) = gatherNumsExpr e
 gatherNumsStmt (Decl _ Nothing) = []
 gatherNumsStmt (Assgn l r) = [VConst l, r] >>= gatherNumsExpr
 gatherNumsStmt (For _ _ rhs (Seq bod)) = (rhs >>= gatherNumsExpr) ++ (bod >>= gatherNumsStmt)
-gatherNumsStmt (While c (Seq bod)) = gatherNumsExpr c ++ (bod >>= gatherNumsStmt)
+-- gatherNumsStmt (While c (Seq bod)) = gatherNumsExpr c ++ (bod >>= gatherNumsStmt)
 
 gatherNumsExpr :: Expr -> [Int]
 gatherNumsExpr = undefined "TODO"

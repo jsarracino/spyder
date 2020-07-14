@@ -7,9 +7,7 @@ module Language.Spyder.Parser (
   , str2Block
   , str2Dec
   , str2Rel
-  , str2Comp
   , fromFile
-  -- , fromBoogieFile
   , fromBoogUS
   , tryParsing
 ) where
@@ -33,7 +31,7 @@ str2A p s = case parse p "" s of
   Left msg -> error $ "couldn't parse because " ++ show msg
 
 tryParsing :: String -> String
-tryParsing s = case parse Parser.comp "" s of 
+tryParsing s = case parse Parser.prog "" s of 
   Right x -> show $ pretty x
   Left msg -> show msg
 
@@ -43,7 +41,6 @@ str2Prog = str2A Parser.prog
 str2Block = str2A Parser.block
 str2Dec = str2A Parser.relDeclP
 str2Rel = str2A Parser.relP
-str2Comp = str2A Parser.comp
 
 fromFile :: FilePath -> IO Program
 fromFile inp = liftM str2Prog (readFile inp)

@@ -109,23 +109,25 @@ treeProcs prog = Tree "Procs" $ map treeify (procs prog)
 instance Treeify Procedure where
   treeify stmt = error "TODO"
 
+bworker :: (String, String) -> Tree
+bworker (v, a) = Tree "Binding" [Tree "Iter" [Tree ("Var" ++ v) []], Tree "Coll" [Tree ("Var" ++ a) []]]
+
 instance Treeify Imp.Statement where
   treeify (Imp.Decl vd (Just e)) = Tree "Decl" [treeify vd, treeify e]
   treeify (Imp.Decl vd Nothing) = Tree "Decl" [treeify vd]
   treeify (Imp.Assgn l e) = Tree "Assign" [Tree ("lhs_" ++ l) [], Tree "rhs" [treeify e]]
-  treeify (Imp.For vs (Just i) arrs (Imp.Seq ss)) = Tree "For" 
+  treeify (Imp.For binds (Just i) (Imp.Seq ss)) = Tree "For" 
     [
-      Tree "vs" $ map treeify vs,
+      Tree "binds" $ map bworker binds,
       Tree ("iter_" ++ i) [],
-      Tree "arrs" $ map treeify arrs,
       Tree "body" $ map treeify ss
     ]
-  treeify (Imp.For vs Nothing arrs (Imp.Seq ss)) = Tree "For"
-    [
-      Tree "vs" $ map treeify vs,
-      Tree "arrs" $ map treeify arrs,
-      Tree "body" $ map treeify ss
-    ]
+  -- treeify (Imp.For vs Nothing arrs (Imp.Seq ss)) = Tree "For"
+  --   [
+  --     Tree "vs" $ map treeify vs,
+  --     Tree "arrs" $ map treeify arrs,
+  --     Tree "body" $ map treeify ss
+  --   ]
   treeify (Imp.Cond c (Imp.Seq st) (Imp.Seq sf)) = Tree "ITE" 
     [
       Tree "Expr" [treeify c],

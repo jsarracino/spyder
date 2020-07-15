@@ -20,7 +20,7 @@ stripLt (Seq ss) = Seq $ map stmtWorker ss
   where
     stmtWorker (Decl d rhs) = Decl d $ liftM exprWorker rhs
     stmtWorker (Assgn l r) = Assgn l (exprWorker r)
-    stmtWorker (For vs idx arrs bod) = For vs idx (map exprWorker arrs) (stripLt bod)
+    stmtWorker (For binds idx bod) = For binds idx (stripLt bod)
     stmtWorker (Cond c tr fl) = Cond (exprWorker c) (stripLt tr) (stripLt fl)
     exprWorker x@(VConst _) = x
     exprWorker x@(IConst _) = x
@@ -34,7 +34,7 @@ gatherDecls :: Block -> Set VDecl
 gatherDecls (Seq ss) = foldl union empty (map stmtWorker ss)
   where
     stmtWorker (Decl d _) = singleton d
-    stmtWorker (For _ _ _ bod) = gatherDecls bod 
+    stmtWorker (For _ _ bod) = gatherDecls bod 
     -- stmtWorker (While _ bod) = gatherDecls bod
     stmtWorker (Assgn _ _) = empty
     stmtWorker (Cond _ tr fl) = gatherDecls tr `union` gatherDecls fl

@@ -35,7 +35,7 @@ data RelExpr =
   | RelApp String [RelExpr]       -- function calls (not procedure calls)
   | Foreach [String] (Maybe String) [String] RelExpr  -- foreach (x,y,z) [with idx] in (p, q,s) {<expr>}
   | Prev String RelExpr -- prev(var, ifEmpty)
-  | RelCond RelExpr RelExpr RelExpr -- wo
+  | RelCond RelExpr RelExpr RelExpr 
   deriving (Eq, Show, Ord)
 
 

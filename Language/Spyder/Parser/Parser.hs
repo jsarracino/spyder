@@ -95,12 +95,14 @@ relApp = do {
 relForeach :: Parser Spec.RelExpr
 relForeach = do {
   res "foreach";
-  vs <- parens $ commas ident;
+  binds <- bindings;
+  spaces;
+  res "with";
+  spaces;
   idx <- loopIdxP;
-  res "in";
-  arrs <- parens $ commas ident;
+  spaces;
   body <- braces relexpr;
-  return $ Spec.Foreach vs idx arrs body
+  pure $ Spec.Foreach (fst $ unzip binds) idx (snd $ unzip binds) body
 }
 
 specTerm :: Parser Spec.RelExpr
@@ -135,7 +137,7 @@ exprTable   = [
         binary "<" (Imp.BinOp Imp.Lt) AssocLeft, binary "<=" (Imp.BinOp Imp.Le) AssocLeft
       , binary ">" (Imp.BinOp Imp.Gt) AssocLeft, binary ">=" (Imp.BinOp Imp.Ge) AssocLeft
     ]
-  ,   [binary "==" (Imp.BinOp Imp.Eq) AssocLeft, binary "!=" (Imp.BinOp Imp.Neq) AssocLeft]
+  ,   [binary "=" (Imp.BinOp Imp.Eq) AssocLeft, binary "!=" (Imp.BinOp Imp.Neq) AssocLeft]
   ,   [binary "&&" (Imp.BinOp Imp.And) AssocLeft, binary "||" (Imp.BinOp Imp.Or) AssocLeft]
  ]
 
@@ -189,12 +191,28 @@ loopIdxP = optionMaybe $ res "with" >> ident
 loopP :: Parser Imp.Statement
 loopP = do {
   res "for";
-  vs <- parens $ commas vdecl;
+  binds <- bindings;
   idx <- loopIdxP;
-  res "in";
-  arrs <- parens $ commas expr;
   body <- braces block;
-  return $ Imp.For vs idx arrs body
+  return $ Imp.For binds idx body
+}
+
+commas1 :: Parser a -> Parser [a]
+commas1 p = do {
+  spaces;
+  h <- p;
+  spaces;
+  t <- many (p <* comma);
+  pure $ h : t
+}
+bindings :: Parser [(String, String)]
+bindings = commas1 $ do {
+  v <- ident;
+  spaces;
+  res "in";
+  spaces;
+  r <- ident;
+  pure (v, r)
 }
 
 -- whileP :: Parser Imp.Statement
@@ -256,8 +274,7 @@ relDeclP :: Parser Spec.RelExpr
 relDeclP = do {
   res "invariant";
   spaces;
-  r <- relP;
-  return r;
+  relP;
 }
 
 

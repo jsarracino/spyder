@@ -8,10 +8,13 @@ module Language.Spyder.Translate.Direct (
   , asInt
   , translateProg
   , mangleFunc
+  , emptyScope
+  , buildScope
+  , TransScope(..)
 ) where
 
 
-import Language.Spyder.AST
+import Language.Spyder.AST                  hiding (vars)
 import qualified Language.Spyder.AST.Imp    as Imp
 import qualified Language.Spyder.AST.Spec   as Spec
 import Language.Spyder.AST.Component
@@ -34,27 +37,41 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import Language.Spyder.Util
 
+data TransScope = Scope {tys :: Map.Map String Imp.Type, vars :: [BST.IdTypeWhere]}
+
+emptyScope :: TransScope
+emptyScope = Scope Map.empty []
+
+buildScope :: DimEnv -> [BST.IdTypeWhere] -> TransScope
+buildScope dims = Scope (Map.map buildTy dims)
 
 
-
-translateBlock :: (Imp.Block, [BST.IdTypeWhere])  -> (BST.Block, [BST.IdTypeWhere])
+translateBlock :: (Imp.Block, TransScope)  -> (BST.Block, TransScope)
 translateBlock (Imp.Seq ss, vs) = foldl worker ([], vs) ss
   where 
-    worker :: (BST.Block, [BST.IdTypeWhere]) -> Imp.Statement -> (BST.Block, [BST.IdTypeWhere])
-    worker (olds, vs) s = (olds ++ news, vs')
+    worker :: (BST.Block, TransScope) -> Imp.Statement -> (BST.Block, TransScope)
+    worker (olds, scope) s = (olds ++ news, scope')
       where 
-        (bareS, vs') = translateStmt (s, vs)
+        (bareS, scope') = translateStmt (s, scope)
         news = map (\t -> Pos.gen ([], Pos.gen t)) bareS
+
+
 
 -- for loops, we need to insert multiple statements, so we return a list.
 -- also, we need to introduce variables, so we plumb a scope around.
-translateStmt :: (Imp.Statement, [BST.IdTypeWhere]) -> ([BST.BareStatement], [BST.IdTypeWhere])
+translateStmt :: (Imp.Statement, TransScope) -> ([BST.BareStatement], TransScope)
 -- convert decls into a variable declaration and an assignment. program is NOT alpha-renamed, so name-collisions are a problem.
-translateStmt (Imp.Decl (v, ty) rhs, vs) = (maybeToList assn, vs'')
+translateStmt (Imp.Decl (v, ty) rhs, scope) = (maybeToList assn, scope')
   where 
     assn = (\e -> BST.Assign [(v, [])] [transWithGen e]) `fmap` rhs
+    vs = vars scope
+
     (v', vs') = allocFreshLocal v (translateTy ty) vs
     vs'' = if v /= v' then error "name clash in decl" else vs'
+
+    tys' = Map.insert v' ty (tys scope)
+
+    scope' = Scope tys' vs''
 -- convert 
 --  for (vs) (with given_idx) in (arrs) {
 --    bod
@@ -71,41 +88,45 @@ translateStmt (Imp.Decl (v, ty) rhs, vs) = (maybeToList assn, vs'')
 --    idx := idx + 1;
 --  }
 -- assumes length is stored at arr[-1]
-translateStmt (Imp.For vs idxDec arrs bod, vars) = 
-    (idxInit : dimInit ++ [BST.While (BST.Expr cond) [] (loopInfo ++ [idxPos] ++ iterUpdate ++ loopStart ++ bod' ++ loopEnd ++ arrUpdate ++ [idxUpdate])], vars')
+translateStmt (Imp.For decls idxDec bod, scope) = 
+    (idxInit : dimInit ++ [BST.While (BST.Expr cond) [] (loopInfo ++ [idxPos] ++ iterUpdate ++ loopStart ++ bod' ++ loopEnd ++ arrUpdate ++ [idxUpdate])], scope')
   where
-    decls = vs `zip` arrs
-    
+    (vs, arrs) = unzip decls
     --loopVars :: [BST.IdTypeWhere]
-    (idx, withIdx) = allocFreshLocal "__loop_idx" BST.IntType vars
-    (newVars, lvars) = foldl buildLVars (withIdx, []) decls
+    (idx, withIdx) = allocFreshLocal "__loop_idx" BST.IntType (vars scope)
+    (newVars, lvars) = foldl buildLVars (Scope (Map.insert idx Imp.IntTy (tys scope)) withIdx, []) decls
     -- allocate new variables for the loop vars. keep track of the names for later.
-    buildLVars :: ([BST.IdTypeWhere], [String]) -> (Imp.VDecl, Imp.Expr) -> ([BST.IdTypeWhere], [String])
-    buildLVars (vs, lvars) ((name, ty), _) = (vs', lvars ++ [lvar])
+    buildLVars :: (TransScope, [String]) -> (String, String) -> (TransScope, [String])
+    buildLVars (scope, lvars) (name, arr) = (scope', lvars ++ [lvar])
       where 
-        (lvar, vs') = allocFreshLocal name (translateTy ty) vs
+        arrty = (Map.!) (tys scope) arr
+        lvty = case arrty of 
+          Imp.ArrTy x -> x
+          _ -> error "loop iteration over non-loop variable"
+        (lvar, vs') = allocFreshLocal name (translateTy lvty) (vars scope)
+        scope' = Scope (Map.insert lvar lvty (tys scope)) vs'
       
     -- TODO: for arrays, need to allocate new length variables for each array, as well as assign the upper n-1 dims of RHS
     -- to the LHS
     -- e.g. if RHS is [[1,2],[3,4]], and LHS is foo, foo$dim0 := 2.
 
-    
+    vtys = map ((Map.!) (tys newVars)) lvars
 
-    dimInfo = zip3 lvars (map snd vs) arrs
+    dimInfo = zip3 lvars vtys arrs
 
     -- allocate new variables for loop var dimensions.
-    allocDims :: ([BST.IdTypeWhere], [[String]]) -> (String, Imp.Type, Imp.Expr) -> ([BST.IdTypeWhere], [[String]])
-    allocDims (vs, dimvs) (lvar, lvTy, Imp.VConst arrv) = (vs', dimvs ++ [lDims])
+    allocDims :: (TransScope, [[String]]) -> (String, Imp.Type, String) -> (TransScope, [[String]])
+    allocDims (scope, dimvs) (lvar, lvTy, arrv) = (scope', dimvs ++ [lDims])
       where
         dimNames = map (\i -> lvar ++ "$dim" ++ show i) [0..(dim lvTy - 1)]
         
 
-        (vs', lDims) = foldl worker (vs, []) dimNames
+        (scope', lDims) = foldl worker (scope, []) dimNames
 
-        worker :: ([BST.IdTypeWhere], [String]) -> String -> ([BST.IdTypeWhere], [String])
-        worker (vs'', acc) nme = 
-          let (rname, rvs) = allocFreshLocal nme BST.IntType vs'' in
-            (rvs, acc ++ [rname])
+        worker :: (TransScope, [String]) -> String -> (TransScope, [String])
+        worker (scope'', acc) nme = 
+          let (rname, rvs) = allocFreshLocal nme BST.IntType (vars scope'') in
+            (Scope (Map.insert rname Imp.IntTy (tys scope'')) rvs, acc ++ [rname])
 
     (newVars', allDims) = foldl allocDims (newVars, []) dimInfo
 
@@ -128,25 +149,25 @@ translateStmt (Imp.For vs idxDec arrs bod, vars) =
         expr = Pos.gen $ BST.BinaryExpression BST.Geq (Pos.gen $ BST.Var name) (Pos.gen $ BST.numeral 0)
     buildIdxUp :: String -> BST.BareStatement
     buildIdxUp name = BST.Assign [(name, [])] [Pos.gen $ BST.BinaryExpression BST.Plus (Pos.gen $ BST.Var name) (Pos.gen $ BST.numeral 1)]
-    buildIterUp :: (Imp.VDecl, Imp.Expr) -> BST.BareStatement
-    buildIterUp ((l, _), r) = BST.Assign [(l, [])] [Pos.gen $ BST.MapSelection (transWithGen r) [Pos.gen $ BST.Var idx]]
-    buildArrUp :: (Imp.VDecl, Imp.Expr) -> BST.BareStatement
-    buildArrUp ((r, _), Imp.VConst l) = BST.Assign [(l, [[Pos.gen $ BST.Var idx]])] [Pos.gen $ BST.Var r]
+    buildIterUp :: (String, String) -> BST.BareStatement
+    buildIterUp (l, r) = BST.Assign [(l, [])] [Pos.gen $ BST.MapSelection (transWithGen $ Imp.VConst r) [Pos.gen $ BST.Var idx]]
+    buildArrUp :: (String, String) -> BST.BareStatement
+    buildArrUp (r, l) = BST.Assign [(l, [[Pos.gen $ BST.Var idx]])] [Pos.gen $ BST.Var r]
 
-    buildDims :: (String, Imp.Type, Imp.Expr) -> [BST.BareStatement]
-    buildDims (nme, ty, Imp.VConst arr) = [BST.Assign [(nme ++ "$dim" ++ show suf, [])] [Pos.gen $ BST.Var $ arr ++ "$dim" ++ show suf ] | suf <- dims]
+    buildDims :: (String, Imp.Type, String) -> [BST.BareStatement]
+    buildDims (nme, ty, arr) = [BST.Assign [(nme ++ "$dim" ++ show suf, [])] [Pos.gen $ BST.Var $ arr ++ "$dim" ++ show suf ] | suf <- dims]
       where dims = [0..dim ty - 1]
 
     idxSub = Map.fromList $ case idxDec of
       Just idxVar -> [(idxVar, idx)]
       Nothing     -> []
 
-    (bod', vars') = translateBlock (alphaBlock idxSub bod, newVars')
+    (bod', scope') = translateBlock (alphaBlock idxSub bod, newVars')
 
     cond = foldl buildCond (Pos.gen BST.tt) arrs
 
-    buildCond :: BST.Expression -> Imp.Expr -> BST.Expression
-    buildCond e (Imp.VConst arr) = Pos.gen $ BST.BinaryExpression BST.And e (Pos.gen $ idx `lt` arr)
+    buildCond :: BST.Expression -> String -> BST.Expression
+    buildCond e arr = Pos.gen $ BST.BinaryExpression BST.And e (Pos.gen $ idx `lt` arr)
       where
         lt l r = BST.UnaryExpression BST.Not $ Pos.gen $ BST.BinaryExpression BST.Geq (Pos.gen $ BST.Var l) $ Pos.gen $ len arr
     len :: String -> BST.BareExpression
@@ -160,10 +181,7 @@ translateStmt (Imp.For vs idxDec arrs bod, vars) =
 
     -- this is for synthesis later
 
-    arrNames = map extrName arrs
-    extrName (Imp.VConst v) = v
-
-    loopInfo = buildPred "forInfo" $ idx : (lvars ++ arrNames)
+    loopInfo = buildPred "forInfo" $ idx : (lvars ++ arrs)
     loopStart = buildPred "forBegin" []
     loopEnd = buildPred "forEnd" []
 
@@ -189,8 +207,8 @@ translateProc (ProcDecl nme formals body) = BST.ProcedureDecl nme [] formals' []
   where
     formals' = map translateITW formals
     bod = generateBoogieBlock body
-    (body', decs) = translateBlock (Imp.Seq bod, [])
-    decs' = map (\x -> [x]) decs
+    (body', scope) = translateBlock (Imp.Seq bod, emptyScope)
+    decs' = map (\x -> [x]) (vars scope)
     inv = []
 
 translateRels :: (Component, Int) -> [BST.BareDecl]

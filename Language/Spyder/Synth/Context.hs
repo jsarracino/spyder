@@ -43,7 +43,7 @@ gatherNumsStmt :: Statement -> [Int]
 gatherNumsStmt (Decl _ (Just e)) = gatherNumsExpr e
 gatherNumsStmt (Decl _ Nothing) = []
 gatherNumsStmt (Assgn l r) = [VConst l, r] >>= gatherNumsExpr
-gatherNumsStmt (For _ _ rhs (Seq bod)) = (rhs >>= gatherNumsExpr) ++ (bod >>= gatherNumsStmt)
+-- gatherNumsStmt (For binds _ (Seq bod)) = (map snd binds >>= gatherNumsExpr) ++ (bod >>= gatherNumsStmt)
 -- gatherNumsStmt (While c (Seq bod)) = gatherNumsExpr c ++ (bod >>= gatherNumsStmt)
 
 gatherNumsExpr :: Expr -> [Int]

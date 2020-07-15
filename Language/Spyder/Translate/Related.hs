@@ -84,6 +84,14 @@ addDim env (v, ty) = Map.insert v (dim ty) env
 addDims :: DimEnv -> [Imp.VDecl] -> DimEnv
 addDims = foldl addDim
 
+addArrDim :: DimEnv -> (String, String) -> DimEnv
+addArrDim dims (iter, arr) = Map.insert iter (dim-1) dims
+   where
+     dim = (Map.!) dims arr
+
+addArrDims :: DimEnv -> [(String, String)] -> DimEnv
+addArrDims = foldl addArrDim
+
 genDims :: DimEnv -> [BST.IdTypeWhere]
 genDims env = map worker $ Map.toList env
   where
@@ -109,22 +117,22 @@ completeLoop rels dims (ProcDecl nme formals (Imp.Seq ss)) = ProcDecl nme formal
   where
     (ss', _, _) = foldl worker ([], dims, rels) ss
     worker :: ([Imp.Statement], DimEnv, [Set.Set String]) -> Imp.Statement -> ([Imp.Statement], DimEnv, [Set.Set String])
-    worker (acc, dims, rels) (Imp.For vs idx arrs (Imp.Seq bod)) = (acc ++ [Imp.For vs' idx arrs' $ Imp.Seq bod'], finalDims, rels)
+    worker (acc, dims, rels) (Imp.For binds idx (Imp.Seq bod)) = (acc ++ [Imp.For binds' idx $ Imp.Seq bod'], finalDims, rels)
       where
-        names' = map fst vs'
-        arrNames = map takeName arrs
-        neededArrs = filter (eqDims dims $ head arrNames) $ computeRels arrNames rels \\ arrNames
+        (vs, arrs) = unzip binds
+        binds' = zip vs' arrs'
+        neededArrs = filter (eqDims dims $ head arrs) $ computeRels arrs rels \\ arrs
         (neededVars, dims'') = foldl buildIter ([], dims') neededArrs
         vs' = vs ++ neededVars
-        arrs' = arrs ++ map Imp.VConst neededArrs
-        dims' = addDims dims vs
+        arrs' = arrs ++ neededArrs
+        dims' = addArrDims dims binds
 
-        rels' = rels ++ [Set.fromList names']
+        rels' = rels ++ [Set.fromList vs']
 
         (bod', finalDims, _) = foldl worker ([], dims'', rels') bod
 
-        buildIter :: ([Imp.VDecl], DimEnv) -> String -> ([Imp.VDecl], DimEnv)
-        buildIter (vs, env) arrName = ((vname, vty):vs, env')
+        buildIter :: ([String], DimEnv) -> String -> ([String], DimEnv)
+        buildIter (vs, env) arrName = (vname:vs, env')
           where
             arrDim = (Map.!) env arrName
             vty = buildTy $ arrDim - 1
@@ -139,8 +147,7 @@ completeLoop rels dims (ProcDecl nme formals (Imp.Seq ss)) = ProcDecl nme formal
     --   let (ss', dims', _) = foldl worker ([], dims, rels) ss in 
     --     (acc ++ [Imp.While c $ Imp.Seq ss'], dims', rels)
     worker (acc, d, r) x = (acc ++ [x], d, r)
-        
-    takeName (Imp.VConst v) = fromMaybe v $ stripPrefix "Main$" v 
+  
     eqDims ds s t = (Map.!) ds s == (Map.!) ds t
 
 

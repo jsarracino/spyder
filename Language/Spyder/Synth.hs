@@ -343,10 +343,11 @@ fixBlock dims invs relVars header globals rhsVars stales scope prefix fixme = fi
                 
 
             (itws, b) = bod'
+            itws' = vars scope'
 
 
             newSpyBlk = combineSynSolutions env' skel $ rebuildFix $ concat results --(rebuildFix $ concatConds results)
-            (blk', itws') = translateBlock (newSpyBlk, concat itws)
+            (blk', scope') = translateBlock (newSpyBlk, buildScope env' $ concat itws)
 
             -- snippets = genCegPs (Set.toList lvs') locInvs
 
@@ -412,10 +413,7 @@ generateSubProblems env (lvars, invs) bindings skel =
 combineSynSolutions :: DimEnv -> [([String], String, [String])] -> Imp.Block -> Imp.Block
 combineSynSolutions env [] blk = blk
 combineSynSolutions env ((iters, idx, arrs):skels) inner = 
-  combineSynSolutions env skels $ Imp.Seq [Imp.For iterTups (Just idx) (map Imp.VConst arrs) inner]
-  where
-    iterTups :: [Imp.VDecl]
-    iterTups = map (\s -> (s, buildTy $ (Map.!) env s)) iters
+  combineSynSolutions env skels $ Imp.Seq [Imp.For (zip iters arrs) (Just idx) inner]
 
 
 buildCond :: [([Spec.RelExpr], Block)] -> Block

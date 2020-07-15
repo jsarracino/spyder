@@ -41,10 +41,7 @@ alphaBlock mp (Seq stmts) = Seq $ map recur stmts
     recur (Assgn l r) = Assgn (fwd l mp) (alphaExpr mp r)
     -- recur (While c b) = While (alphaExpr mp c) (alphaBlock mp b)
     recur (Cond c t f) = Cond (alphaExpr mp c) (alphaBlock mp t) (alphaBlock mp f)
-    recur (For decs idx arrs bod) = For decs idx arrs' bod'
-      where 
-        arrs' = map (alphaExpr mp) arrs
-        bod' = alphaBlock mp bod
+    recur (For binds idx bod) = For binds idx $ alphaBlock mp bod
 
 alphaExpr :: Env -> Expr -> Expr
 alphaExpr mp = recur

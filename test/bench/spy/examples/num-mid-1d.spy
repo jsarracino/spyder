@@ -11,7 +11,7 @@ Component Midpoint1d {
 
   relation midArrays(xs: int[], ys: int[], mids: int[]) {
     foreach (x, y, m) in (xs, ys, mids) {
-      x + y = m && x != y
+      x + y = 2 * m && x != y
     }
   }
 

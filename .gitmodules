@@ -1,3 +1,6 @@
 [submodule "boogie"]
 	path = boogie
 	url = git@github.com:boogie-org/boogie.git
+[submodule "boogaloo"]
+	path = boogaloo
+	url = git@github.com:jsarracino/boogaloo.git

@@ -106,7 +106,7 @@ generateFix 0 cands lhs prog scope = (finalProg, scope, newBlock)
   where
     (constVar, withConst) = allocFreshConst prog
     -- assumes lhs is always in cands
-    rhsEs = map (Pos.gen . Var) $ lhs : constVar : delete lhs cands
+    rhsEs = map (Pos.gen . Var) $ constVar : (delete lhs cands)
     (switchVar, newBlock, switchProg) = buildSwitch lhs rhsEs withConst
     finalProg = addConstBounds switchProg constVar
 -- TODO: error in num-cond2.spy with depth=1 (i think)
@@ -120,7 +120,7 @@ generateFix n cands lhs prog scope = (finalProg, newScope, constBlk ++ lBlock ++
 
     -- this grammar: expr ::= ?? * basic + expr | basic
     (recurConst, scopeConst, constBlk) = generateFix 0 [] constVar prog''' scope'''
-    (recurL, scope_, lBlock) = generateFix 0 cands lvar prog'' scope''
+    (recurL, scope_, lBlock) = generateFix 0 cands lvar recurConst scopeConst
     (recurR, scopeR, rBlock) = generateFix (n-1) cands rvar recurL scope_
     
     
@@ -181,6 +181,11 @@ type Candidate = Map.Map String Int -- lhs depths
 type Config = Map.Map String Int    -- control var to value
 type IOExamples = [Map.Map String Value] -- list of states, where each state is a map from (global) variables to values
          
+show_blk :: Block -> String
+show_blk = error "todo"
+
+show_prog :: Program -> String
+show_prog = error "todo"
 -- find a repair for a single lhs expr
 -- params: invariants, program preamble, global variables, lhs of variables, rhs expression seeds, enclosing function scope, basic block for repair, fix template, and assumptions.
 -- returns: the repaired block, a new program, and a new function scope
@@ -196,12 +201,12 @@ repairBlock pres posts prog globals lhsVars rhsVars scope blk templ assumpts = d
     outs = 
       ("Pres: " ++ show pres)
       : ("Posts: " ++ show posts)
-      : ("Prog: " ++ show prog)
+      : ("Prog: " ++ show_prog prog)
       : ("lvars: " ++ show lhsVars)
       : ("rvars: " ++ show rhsVars)
-      : ("prefix: " ++ show blk)
-      : ("template: " ++ show templ)
-      : ("assumptions: " ++ show assumpts)
+      : ("prefix: " ++ show_blk blk)
+      : ("template: " ++ show_blk templ)
+      : ("assumptions: " ++ show_blk assumpts)
       : []
       
     initConfig = Map.fromList []
@@ -212,8 +217,24 @@ repairBlock pres posts prog globals lhsVars rhsVars scope blk templ assumpts = d
         
     initCandDepths = [Map.fromList $ lhsVars `zip` repeat 0]
 
+allMap :: (k -> v -> Bool ) -> Map.Map k v -> Bool
+allMap f m = 
+  Map.foldrWithKey (\k v acc -> acc && f k v) True m 
+
+-- make sure that each IO example is unique
+validateIOExamples :: IOExamples -> Bool
+validateIOExamples [] = True
+validateIOExamples (ex:exs) = 
+  all (uniqIO ex) exs
+
+  where 
+    uniqIO :: Map.Map String Value -> Map.Map String Value -> Bool 
+    uniqIO l r = not $ allMap (\k v -> (Map.!) r k == v) l
+
 -- given a set of invariants, a preamble, global variables, a program scope, a block to fix, lhs variables, rhs variables, a list of candidate depths (for lvariables), and a list of io examples, use cegis to
 -- search for a configuration that correctly edits the variables. returns a fixed block, extended program scope, and extended program.
+
+
 
 -- assumes at least one IO example
 searchAllConfigs :: [Expression] -> [Expression] -> Program -> [String] -> Body -> Block -> Block -> [String] -> [String] -> [Candidate] -> IOExamples -> (Program, Body, Block)
@@ -255,10 +276,10 @@ searchAllConfigs pres posts prog globals scope blk fillme lhses rhses (cand:cand
     maxVal mp = maximum $ Map.elems mp 
     
     -- debugProg "cegis-search-debug.bpl" $!
-    debugger
-      | maxVal cand > 1 = debugProg "cegis-search-debug.bpl" 
-      | maxVal cand > 2 = error "cand depth exceeded"
-      | otherwise = id
+    debugger = debugProg "cegis-search-debug.bpl" 
+      -- | maxVal cand > 1 = debugProg "cegis-search-debug.bpl" 
+      -- | maxVal cand > 2 = error "cand depth exceeded"
+      -- | otherwise = id
   
     checkMe = debugger $ optimize $ buildMainSearch globals procNames $ case searchProg of Program x -> Program $ x ++ procs
 
@@ -277,7 +298,9 @@ searchAllConfigs pres posts prog globals scope blk fillme lhses rhses (cand:cand
             if checkProg $ case searchProg of (Program decs) -> optimize $ Program $ decs ++ buildConfVal c ++ [buildMain pres posts globals searchBody] --the candidate seems to work...use expensive check. if that fails, get more expressions
             then buildAns c  -- we have a winner!
             else searchAllConfigs pres posts prog globals scope blk fillme lhses rhses (cands ++ newCands) examples -- get more exprs
-          Right io  -> searchAllConfigs pres posts prog globals scope blk fillme lhses rhses (cand:cands) (io:examples) -- retry current exprs
+          Right io  -> 
+            if not $ validateIOExamples (io : examples) then error "duplicated IO examples" else
+            searchAllConfigs pres posts prog globals scope blk fillme lhses rhses (cand:cands) (io:examples) -- retry current exprs
       
       []   -> searchAllConfigs pres posts prog globals scope blk fillme lhses rhses (cands ++ newCands) examples -- can't find a new candidate...O.O
 
@@ -356,7 +379,7 @@ buildMain pres posts globals (vs, bod) = Pos.gen $ ProcedureDecl "Main" [] [] []
 -- run in exec mode, searching for a valid configuration.
 boogExec :: Program -> String -> [TestCase]
 boogExec p pname = case typeCheckProgram p of
-              Left typeErrs -> error $ "exec program has typeerrors: " ++ show p
+              Left typeErrs -> error $ "exec program has typeerrors: " ++ show_prog p
               Right context -> runInt context
   where 
     runInt ctx = take 1 $ filter keep . maybeTake exec_max $ int p ctx pname
@@ -377,7 +400,7 @@ boogExec p pname = case typeCheckProgram p of
 -- run in test mode, searching for an invalid configuration.
 boogTest :: Program -> String -> [TestCase]
 boogTest p pname = case typeCheckProgram p of
-              Left typeErrs -> error $ "test program has typeerrors: " ++ show p
+              Left typeErrs -> error $ "test program has typeerrors: " ++ show_prog p
               Right context -> runInt context
   where 
     -- p' = case (fromBoogUS "lib.bpl", p) of (Program l, Program r) -> Program $ l ++ r

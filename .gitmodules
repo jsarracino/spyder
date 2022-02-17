@@ -1,6 +1,3 @@
 [submodule "boogie"]
 	path = boogie
-	url = https://github.com/boogie-org/boogie
-[submodule "language-sketch"]
-	path = language-sketch
-	url = https://github.com/jsarracino/language-sketch.git
+	url = git@github.com:boogie-org/boogie.git

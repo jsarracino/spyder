@@ -20,6 +20,7 @@ import Text.Parsec
 import Control.Monad (liftM)
 
 import qualified Language.Boogie.Parser as BP
+import qualified Language.Boogie.AST as BAST
 
 import System.IO.Unsafe                                         (unsafePerformIO)
 
@@ -41,4 +42,9 @@ str2Comp = str2A Parser.comp
 fromFile :: FilePath -> IO Program
 fromFile inp = liftM str2Prog (readFile inp)
 
-fromBoogUS = BP.fromBoogUS
+fromBoogUS :: FilePath -> BAST.Program
+fromBoogUS fname = unsafePerformIO $ do 
+  inp <- readFile fname
+  case parse BP.program "" inp of 
+    Right res -> return res
+    Left msg -> error $ "couldn't parse boogie because " ++ show msg

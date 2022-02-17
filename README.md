@@ -98,4 +98,4 @@ procedure incM() returns ()
 Intermediate programs are placed in `tmp.bpl`, `check.bpl`, `compile-debug.bpl`, `cegis-test-debug.bpl`, and `cegis-search-debug.bpl`. Feel free to delete these.
 
 ## Details
-For more details, see our [arxiv paper][https://arxiv.org/abs/1904.13049] or chapter 4 of my [PhD thesis][https://escholarship.org/uc/item/9p6896qr].
+For more details, see our [arxiv paper](https://arxiv.org/abs/1904.13049) or chapter 4 of my [PhD thesis](https://escholarship.org/uc/item/9p6896qr).
